@@ -1,0 +1,170 @@
+<resources>
+    <string name="app_name">Сеанс</string>
+
+    <string name="nav_home">Главная</string>
+    <string name="nav_movies">Фильмы</string>
+    <string name="nav_tv_shows">Сериалы</string>
+    <string name="nav_cartoons">Анимация</string>
+    <string name="nav_search">Поиск</string>
+
+    <string name="home_continue_watching">Продолжить просмотр</string>
+    <string name="home_recently_added">Недавно добавленное</string>
+
+    <string name="settings_title">Настройки</string>
+    <string name="settings_smb_sources">Источники SMB</string>
+    <string name="settings_scan_section">Сканирование</string>
+    <string name="settings_rescan_interval">Интервал пересканирования</string>
+    <string name="settings_rescan_off">Отключено</string>
+    <string name="settings_rescan_hours">Каждые %1$d ч</string>
+    <string name="settings_player_section">Плеер</string>
+    <string name="settings_seek_duration">Длительность перемотки</string>
+    <string name="settings_seek_duration_seconds">%1$d с</string>
+    <string name="settings_cache">Кэш</string>
+    <string name="settings_cache_size">Занято: %1$s</string>
+    <string name="settings_cache_size_unknown">Вычисление размера…</string>
+    <string name="settings_cache_clear">Очистить кэш</string>
+    <string name="settings_charging_only">Тяжёлые фоновые задачи только при зарядке</string>
+    <string name="settings_charging_only_description">Генерация превью-кадров для перемотки и фоновое пересканирование библиотеки — не будут запускаться от батареи</string>
+    <string name="settings_poster_caching">Кеширование постеров</string>
+    <string name="settings_poster_caching_description">Хранить загруженные постеры и фоны на устройстве. При отключении все закешированные постеры будут удалены</string>
+    <string name="settings_poster_cache_disable_title">Отключить кеширование постеров?</string>
+    <string name="settings_poster_cache_disable_message">Все постеры и фоны будут удалены из кеша и при следующем открытии библиотеки будут каждый раз подгружаться заново с сервера</string>
+    <string name="settings_poster_cache_disable_confirm">Отключить и очистить</string>
+    <string name="settings_poster_preload_starting">Подготовка…</string>
+    <string name="settings_poster_preload_progress">Загружено %1$d из %2$d</string>
+    <string name="settings_poster_preload_done">Все постеры закешированы</string>
+    <string name="action_cancel">Отмена</string>
+    <string name="settings_downloads">Загрузки</string>
+    <string name="settings_downloads_folder">Место загрузок</string>
+    <string name="settings_downloads_open_folder">Открыть папку</string>
+    <string name="settings_downloads_choose_folder">Выбрать папку</string>
+    <string name="settings_downloads_size">Скачано: %1$s</string>
+    <string name="settings_downloads_clear">Удалить все загрузки</string>
+    <string name="settings_backup">Резервное копирование</string>
+    <string name="settings_version">Версия %1$s (%2$d)</string>
+    <string name="settings_backup_export">Экспорт</string>
+    <string name="settings_backup_import">Импорт</string>
+    <string name="settings_backup_export_success">Резервная копия сохранена</string>
+    <string name="settings_backup_export_error">Не удалось сохранить резервную копию</string>
+    <string name="settings_backup_import_success">Восстановлено источников: %1$d, избранного: %2$d, истории: %3$d</string>
+    <string name="settings_backup_import_error">Не удалось прочитать файл резервной копии</string>
+    <string name="settings_backup_import_password_title">Пароль для «%1$s»</string>
+    <string name="settings_backup_import_password_hint">Пароль (пусто — гостевой доступ)</string>
+    <string name="action_save">Сохранить</string>
+
+    <string name="search_hint">Поиск фильмов и сериалов</string>
+    <string name="search_empty_query">Начните вводить название, актёра или описание</string>
+    <string name="search_no_results">Ничего не найдено</string>
+
+    <string name="library_sort">Сортировка</string>
+    <string name="sort_date_added">По дате добавления</string>
+    <string name="sort_year">По году</string>
+    <string name="sort_title">По алфавиту</string>
+    <string name="sort_rating">По рейтингу</string>
+    <string name="library_genre">Жанр</string>
+    <string name="library_year">Год</string>
+    <string name="library_filter_all">Все</string>
+    <string name="library_empty">Здесь пока ничего нет</string>
+    <string name="library_empty_filtered">Ничего не найдено по выбранным фильтрам</string>
+
+    <string name="favorites_title">Избранное</string>
+    <string name="favorites_empty">Список избранного пуст</string>
+    <string name="history_title">История просмотров</string>
+    <string name="history_empty">Вы ещё ничего не смотрели</string>
+    <string name="history_watched">Просмотрено</string>
+    <string name="history_progress">Просмотрено %1$d%%</string>
+
+    <string name="downloads_title">Загрузки</string>
+    <string name="downloads_empty">Нет загруженных видео</string>
+    <string name="downloads_remove">Удалить загрузку</string>
+    <string name="downloads_queued">В очереди</string>
+    <string name="downloads_progress">Загружается: %1$d%% · %2$s</string>
+    <string name="downloads_progress_detailed">Загружается: %1$d%% · %2$s · %3$s</string>
+    <string name="downloads_completed">Загружено · %1$s</string>
+    <string name="downloads_failed">Ошибка загрузки</string>
+    <string name="details_download">Скачать для просмотра без сети</string>
+    <string name="details_download_cancel">Отменить загрузку</string>
+    <string name="details_download_remove">Удалить загрузку</string>
+    <string name="details_download_retry">Повторить загрузку</string>
+
+    <string name="onboarding_title">Настройка приложения «Сеанс»</string>
+    <string name="onboarding_smb_address">Адрес сервера (хост)</string>
+    <string name="onboarding_smb_address_help">Только IP или имя устройства в локальной сети, например 192.168.2.1 — без \\\\ и без имени папки</string>
+    <string name="onboarding_display_name">Название источника</string>
+    <string name="onboarding_display_name_help">Как источник будет называться в приложении, например «Диск в гостиной». На подключение не влияет</string>
+    <string name="onboarding_share">Имя шары</string>
+    <string name="onboarding_share_help">Имя общей папки на сервере, как оно видно в проводнике: в пути \\\\192.168.2.1\\Movies это «Movies»</string>
+    <string name="onboarding_root_path">Путь внутри шары (необязательно)</string>
+    <string name="onboarding_root_path_help">Только если видео лежат не в корне шары, а во вложенной папке, например Films\\HD. Обычно можно оставить пустым</string>
+    <string name="onboarding_domain">Домен (необязательно)</string>
+    <string name="onboarding_domain_help">Нужен редко — только если сервер требует домен Windows (например WORKGROUP). Для большинства NAS и роутеров оставьте пустым</string>
+    <string name="onboarding_username">Логин (пусто — гостевой доступ)</string>
+    <string name="onboarding_username_help">Оставьте пустым, если шара открыта без пароля (гостевой доступ). Заполните, если сервер запрашивает логин/пароль</string>
+    <string name="onboarding_password">Пароль</string>
+    <string name="onboarding_test_connection">Проверить соединение</string>
+    <string name="onboarding_test_testing">Проверка соединения…</string>
+    <string name="onboarding_test_success">Соединение установлено</string>
+    <string name="onboarding_finish">Начать сканирование</string>
+    <string name="onboarding_save">Сохранить</string>
+    <string name="onboarding_path_preview">Итоговый путь: %1$s</string>
+
+    <string name="scan_progress_title">Сканирование библиотеки</string>
+    <string name="scan_progress_starting">Подключение к источникам…</string>
+    <string name="scan_progress_source">Источник %1$d из %2$d: %3$s</string>
+    <string name="scan_progress_listing">Поиск файлов… найдено %1$d</string>
+    <string name="scan_progress_files">Найдено файлов: %1$d из %2$d</string>
+    <string name="scan_progress_done">Готово</string>
+    <string name="scan_progress_done_count">Готово! Найдено видео: %1$d</string>
+    <string name="scan_progress_failed">Не удалось выполнить сканирование. Проверьте соединение с источником в настройках</string>
+    <string name="scan_progress_continue">Продолжить</string>
+
+    <string name="settings_add_source">Добавить источник</string>
+    <string name="settings_no_sources">Источники не добавлены</string>
+    <string name="settings_delete_source">Удалить</string>
+    <string name="add_source_title">Новый источник SMB</string>
+    <string name="edit_source_title">Источник SMB</string>
+    <string name="edit_source_not_found">Источник не найден</string>
+
+    <string name="category_movies">Фильмы</string>
+    <string name="category_tv_shows">Сериалы</string>
+    <string name="category_cartoons">Мультфильмы</string>
+    <string name="category_cartoon_series">Мультсериалы</string>
+
+    <string name="player_play_pause">Пауза/воспроизведение</string>
+    <string name="player_skip_intro">Пропустить заставку</string>
+    <string name="player_next_episode">Следующая серия</string>
+    <string name="player_retry">Повторить</string>
+    <string name="player_close">Закрыть</string>
+    <string name="player_track_off">Выключено</string>
+    <string name="player_speed">Скорость воспроизведения</string>
+    <string name="player_audio_tracks_title">Аудиодорожка</string>
+    <string name="player_subtitles_title">Субтитры</string>
+    <string name="player_video_info_title">Информация о видео</string>
+    <string name="player_sharpen_toggle">Повышение резкости (GPU)</string>
+    <string name="player_back">Назад</string>
+    <string name="player_subtitles_button">Субтитры</string>
+    <string name="player_audio_tracks_button">Аудиодорожка</string>
+    <string name="player_cast_unavailable">Трансляция (недоступно)</string>
+    <string name="player_settings">Настройки воспроизведения</string>
+    <string name="player_lock">Заблокировать управление</string>
+    <string name="player_unlock">Разблокировать управление</string>
+    <string name="player_aspect_ratio">Соотношение сторон</string>
+    <string name="player_aspect_ratio_fit">По размеру экрана</string>
+    <string name="player_aspect_ratio_zoom">Заполнить экран (обрезка)</string>
+    <string name="player_aspect_ratio_fill">Растянуть</string>
+
+    <string name="details_play">Смотреть</string>
+    <string name="details_favorite_add">Добавить в избранное</string>
+    <string name="details_favorite_remove">Убрать из избранного</string>
+    <string name="details_director">Режиссёр</string>
+    <string name="details_actors">В ролях</string>
+    <string name="details_collection">Другие части</string>
+    <string name="details_similar">Похожие</string>
+    <string name="details_not_found">Не удалось найти этот элемент библиотеки</string>
+    <string name="details_no_description">Без описания</string>
+    <string name="details_back">Назад</string>
+    <string name="details_season">Сезон %1$d</string>
+    <string name="details_episodes">Серии</string>
+
+    <string name="person_title">Фильмография: %1$s</string>
+</resources>

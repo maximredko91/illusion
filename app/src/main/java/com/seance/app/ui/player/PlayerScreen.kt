@@ -1,0 +1,478 @@
+package com.seance.app.ui.player
+
+import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
+import android.media.AudioManager
+import android.view.WindowManager
+import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
+import androidx.lifecycle.viewmodel.compose.viewModel
+import android.util.Rational
+import androidx.media3.ui.AspectRatioFrameLayout
+import androidx.media3.ui.PlayerView
+import com.seance.app.R
+import com.seance.app.data.player.SmbDataSourceFactory
+import com.seance.app.data.repository.DownloadRepository
+import com.seance.app.data.repository.LibraryRepository
+import com.seance.app.data.repository.ThumbnailRepository
+import com.seance.app.data.repository.WatchProgressRepository
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlin.math.abs
+import kotlin.math.roundToInt
+
+private enum class DragMode { NONE, SEEK, BRIGHTNESS, VOLUME }
+
+/** Brightness/volume drags only trigger within this fraction of the screen width from each edge -
+ * the middle stays neutral so it doesn't fight with taps/drags meant for the center controls. */
+private const val EDGE_ZONE_FRACTION = 0.3f
+
+@Composable
+fun PlayerScreen(
+    stableId: String,
+    libraryRepository: LibraryRepository,
+    watchProgressRepository: WatchProgressRepository,
+    thumbnailRepository: ThumbnailRepository,
+    settingsRepository: com.seance.app.data.settings.SettingsRepository,
+    smbDataSourceFactory: SmbDataSourceFactory,
+    downloadRepository: DownloadRepository,
+    onBack: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val context = LocalContext.current
+    val viewModel: PlayerViewModel = viewModel(
+        factory = PlayerViewModel.factory(
+            libraryRepository,
+            watchProgressRepository,
+            thumbnailRepository,
+            settingsRepository,
+            smbDataSourceFactory,
+            downloadRepository,
+            context
+        )
+    )
+    LaunchedEffect(stableId) { viewModel.load(stableId) }
+    val uiState by viewModel.state.collectAsState()
+
+    KeepImmersiveFullscreen()
+    KeepScreenOn()
+
+    var controlsVisible by remember { mutableStateOf(true) }
+    var isLocked by remember { mutableStateOf(false) }
+    var showAudioDialog by remember { mutableStateOf(false) }
+    var showSubtitleDialog by remember { mutableStateOf(false) }
+    var showSpeedDialog by remember { mutableStateOf(false) }
+    var resizeMode by remember { mutableStateOf(AspectRatioFrameLayout.RESIZE_MODE_FIT) }
+    var resizeModeLabel by remember { mutableStateOf<String?>(null) }
+    var playerViewRef by remember { mutableStateOf<PlayerView?>(null) }
+
+    val fitLabel = stringResource(R.string.player_aspect_ratio_fit)
+    val zoomLabel = stringResource(R.string.player_aspect_ratio_zoom)
+    val fillLabel = stringResource(R.string.player_aspect_ratio_fill)
+    fun cycleResizeMode() {
+        resizeMode = when (resizeMode) {
+            AspectRatioFrameLayout.RESIZE_MODE_FIT -> AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+            AspectRatioFrameLayout.RESIZE_MODE_ZOOM -> AspectRatioFrameLayout.RESIZE_MODE_FILL
+            else -> AspectRatioFrameLayout.RESIZE_MODE_FIT
+        }
+        resizeModeLabel = when (resizeMode) {
+            AspectRatioFrameLayout.RESIZE_MODE_FIT -> fitLabel
+            AspectRatioFrameLayout.RESIZE_MODE_ZOOM -> zoomLabel
+            else -> fillLabel
+        }
+    }
+    LaunchedEffect(resizeModeLabel) {
+        if (resizeModeLabel != null) {
+            delay(800)
+            resizeModeLabel = null
+        }
+    }
+
+    // AspectRatioFrameLayout's own measure pass usually re-scales the video surface on rotation,
+    // but when playback is paused (no new decoder frames arriving) that relayout can be missed -
+    // force one explicitly so a paused frame isn't left stretched to the pre-rotation size.
+    val configuration = LocalConfiguration.current
+    LaunchedEffect(configuration.orientation) {
+        playerViewRef?.requestLayout()
+    }
+
+    LaunchedEffect(controlsVisible, uiState.isPlaying) {
+        if (controlsVisible && uiState.isPlaying) {
+            delay(3500)
+            controlsVisible = false
+        }
+    }
+
+    DisposableEffect(Unit) {
+        PipController.isPlayerActive = true
+        onDispose { PipController.isPlayerActive = false }
+    }
+    LaunchedEffect(uiState.videoAspectRatio) {
+        val ratio = uiState.videoAspectRatio
+        if (ratio > 0f) {
+            // PictureInPictureParams requires the ratio to stay within [1/2.39, 2.39].
+            val clamped = ratio.coerceIn(1f / 2.39f, 2.39f)
+            PipController.aspectRatio = Rational((clamped * 1000).toInt(), 1000)
+        }
+    }
+    val isInPip = PipController.isInPipMode
+
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .background(Color.Black)
+    ) {
+        AndroidView(
+            factory = { ctx ->
+                PlayerView(ctx).apply {
+                    useController = false
+                }.also { playerViewRef = it }
+            },
+            update = { view ->
+                view.player = viewModel.player
+                view.resizeMode = resizeMode
+            },
+            modifier = Modifier.fillMaxSize()
+        )
+
+        if (!isInPip) {
+            GestureLayer(
+                enabled = !isLocked,
+                seekDurationMs = uiState.seekDurationMs,
+                onSingleTap = { controlsVisible = !controlsVisible },
+                onDoubleTapSeek = viewModel::seekBy,
+                onSeekByCommit = viewModel::seekBy,
+                modifier = Modifier.fillMaxSize()
+            )
+        }
+
+        if (!isInPip) {
+            resizeModeLabel?.let { label ->
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    GestureIndicator(label = label, fraction = null, modifier = Modifier.align(Alignment.Center))
+                }
+            }
+        }
+
+        if (uiState.isLoading && uiState.error == null) {
+            CircularProgressIndicator(
+                modifier = Modifier.align(Alignment.Center),
+                color = Color.White
+            )
+        }
+
+        if (!isInPip) {
+            if (uiState.showSkipIntro) {
+                SkipIntroBanner(
+                    onSkip = viewModel::skipIntro,
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(24.dp)
+                )
+            }
+
+            when {
+                isLocked -> LockedOverlay(onUnlock = { isLocked = false; controlsVisible = true })
+                controlsVisible -> Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .windowInsetsPadding(WindowInsets.safeDrawing)
+                ) {
+                    TopGradientBar(
+                        title = uiState.title,
+                        episodeLabel = uiState.episodeLabel,
+                        onBack = onBack,
+                        onOpenSubtitles = { showSubtitleDialog = true },
+                        onOpenAudioTracks = { showAudioDialog = true },
+                        onCycleAspectRatio = { cycleResizeMode() },
+                        onOpenSettings = { showSpeedDialog = true }
+                    )
+                    Box(modifier = Modifier.fillMaxSize().weight(1f), contentAlignment = Alignment.Center) {
+                        CenterTransportControls(
+                            isPlaying = uiState.isPlaying,
+                            onTogglePlayPause = viewModel::togglePlayPause
+                        )
+                    }
+                    BottomGradientBar(
+                        currentPositionMs = uiState.currentPositionMs,
+                        durationMs = uiState.durationMs,
+                        bufferedPositionMs = uiState.bufferedPositionMs,
+                        thumbnailFrames = uiState.thumbnailFrames,
+                        hasNextEpisode = uiState.hasNextEpisode,
+                        isLocked = isLocked,
+                        onSeekTo = viewModel::seekTo,
+                        onNextEpisode = viewModel::playNext,
+                        onToggleLock = { isLocked = true; controlsVisible = false }
+                    )
+                }
+            }
+
+            uiState.error?.let { message ->
+                ErrorOverlay(message = message, onRetry = viewModel::retry)
+            }
+        }
+    }
+
+    if (showAudioDialog && !isInPip) {
+        TrackSelectionDialog(
+            title = stringResource(R.string.player_audio_tracks_title),
+            tracks = uiState.audioTracks,
+            allowOff = false,
+            onSelect = { option -> option?.let(viewModel::selectAudioTrack); showAudioDialog = false },
+            onDismiss = { showAudioDialog = false }
+        )
+    }
+    if (showSubtitleDialog && !isInPip) {
+        TrackSelectionDialog(
+            title = stringResource(R.string.player_subtitles_title),
+            tracks = uiState.subtitleTracks,
+            allowOff = true,
+            onSelect = { option -> viewModel.selectSubtitleTrack(option); showSubtitleDialog = false },
+            onDismiss = { showSubtitleDialog = false }
+        )
+    }
+    if (showSpeedDialog && !isInPip) {
+        PlaybackSpeedDialog(
+            currentSpeed = uiState.playbackSpeed,
+            videoFormatSummary = viewModel.currentVideoFormatSummary(),
+            sharpenEnabled = uiState.sharpenEnabled,
+            onSharpenEnabledChange = viewModel::setSharpenEnabled,
+            onSelect = { speed -> viewModel.setPlaybackSpeed(speed); showSpeedDialog = false },
+            onDismiss = { showSpeedDialog = false }
+        )
+    }
+}
+
+@Composable
+private fun LockedOverlay(onUnlock: () -> Unit) {
+    Box(modifier = Modifier.fillMaxSize()) {
+        IconButton(
+            onClick = onUnlock,
+            modifier = Modifier.align(Alignment.BottomEnd).padding(24.dp)
+        ) {
+            Icon(Icons.Default.Lock, contentDescription = stringResource(R.string.player_unlock), tint = Color.White)
+        }
+    }
+}
+
+@Composable
+private fun KeepImmersiveFullscreen() {
+    val view = LocalView.current
+    DisposableEffect(Unit) {
+        val activity = view.context.findActivity()
+        val window = activity?.window
+        val controller = window?.let { WindowCompat.getInsetsController(it, view) }
+        controller?.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        controller?.hide(WindowInsetsCompat.Type.systemBars())
+        onDispose {
+            controller?.show(WindowInsetsCompat.Type.systemBars())
+        }
+    }
+}
+
+@Composable
+private fun KeepScreenOn() {
+    val view = LocalView.current
+    DisposableEffect(Unit) {
+        val activity = view.context.findActivity()
+        activity?.window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        onDispose {
+            activity?.window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        }
+    }
+}
+
+private fun Context.findActivity(): Activity? {
+    var ctx = this
+    while (ctx is ContextWrapper) {
+        if (ctx is Activity) return ctx
+        ctx = ctx.baseContext
+    }
+    return null
+}
+
+@Composable
+private fun GestureLayer(
+    enabled: Boolean,
+    seekDurationMs: Long,
+    onSingleTap: () -> Unit,
+    onDoubleTapSeek: (Long) -> Unit,
+    onSeekByCommit: (Long) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    if (!enabled) {
+        Box(modifier = modifier)
+        return
+    }
+
+    val context = LocalContext.current
+    val activity = remember(context) { context.findActivity() }
+    val audioManager = remember(context) {
+        context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+    }
+    val scope = rememberCoroutineScope()
+
+    var showVolume by remember { mutableStateOf(false) }
+    var showBrightness by remember { mutableStateOf(false) }
+    var volumeFraction by remember { mutableFloatStateOf(0f) }
+    var brightnessFraction by remember { mutableFloatStateOf(0.5f) }
+    var indicatorHideJob: Job? by remember { mutableStateOf<Job?>(null) }
+
+    fun pulseIndicator(onVolume: Boolean) {
+        if (onVolume) showVolume = true else showBrightness = true
+        indicatorHideJob?.cancel()
+        indicatorHideJob = scope.launch {
+            delay(800)
+            showVolume = false
+            showBrightness = false
+        }
+    }
+
+    Box(
+        modifier = modifier
+            .pointerInput(Unit) {
+                detectTapGestures(
+                    onTap = { onSingleTap() },
+                    onDoubleTap = { offset ->
+                        onDoubleTapSeek(if (offset.x < size.width / 2f) -seekDurationMs else seekDurationMs)
+                    }
+                )
+            }
+            .pointerInput(activity) {
+                var mode = DragMode.NONE
+                var startX = 0f
+                var accumulatedDx = 0f
+                var accumulatedDy = 0f
+                var dragStartVolume = 0
+                var dragStartBrightness = 0f
+                val maxVolume = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
+
+                detectDragGestures(
+                    onDragStart = { offset ->
+                        mode = DragMode.NONE
+                        startX = offset.x
+                        accumulatedDx = 0f
+                        accumulatedDy = 0f
+                        dragStartVolume = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)
+                        dragStartBrightness = activity?.let { currentBrightness(it) } ?: 0.5f
+                    },
+                    onDrag = { change, dragAmount ->
+                        change.consume()
+                        accumulatedDx += dragAmount.x
+                        accumulatedDy += dragAmount.y
+                        if (mode == DragMode.NONE) {
+                            if (abs(accumulatedDx) > 24f || abs(accumulatedDy) > 24f) {
+                                val edgeZone = size.width * EDGE_ZONE_FRACTION
+                                mode = if (abs(accumulatedDx) > abs(accumulatedDy)) {
+                                    DragMode.SEEK
+                                } else if (startX <= edgeZone) {
+                                    DragMode.BRIGHTNESS
+                                } else if (startX >= size.width - edgeZone) {
+                                    DragMode.VOLUME
+                                } else {
+                                    // Middle of the screen - not an edge zone, so a vertical drag here
+                                    // adjusts neither brightness nor volume (avoids accidental changes
+                                    // from taps/drags meant for the center controls).
+                                    DragMode.NONE
+                                }
+                            }
+                        }
+                        when (mode) {
+                            DragMode.VOLUME -> {
+                                val fraction = -accumulatedDy / size.height
+                                val newVolume = (dragStartVolume + fraction * maxVolume).roundToInt().coerceIn(0, maxVolume)
+                                audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, newVolume, 0)
+                                volumeFraction = if (maxVolume > 0) newVolume.toFloat() / maxVolume else 0f
+                                pulseIndicator(onVolume = true)
+                            }
+                            DragMode.BRIGHTNESS -> {
+                                val fraction = -accumulatedDy / size.height
+                                val newBrightness = (dragStartBrightness + fraction).coerceIn(0.02f, 1f)
+                                activity?.let { setBrightness(it, newBrightness) }
+                                brightnessFraction = newBrightness
+                                pulseIndicator(onVolume = false)
+                            }
+                            DragMode.SEEK, DragMode.NONE -> Unit
+                        }
+                    },
+                    onDragEnd = {
+                        if (mode == DragMode.SEEK) {
+                            val deltaMs = (accumulatedDx / size.width * 120_000f).toLong()
+                            onSeekByCommit(deltaMs)
+                        }
+                        mode = DragMode.NONE
+                    }
+                )
+            }
+    ) {
+        if (showVolume) {
+            GestureIndicator(label = "Громкость", fraction = volumeFraction, modifier = Modifier.align(Alignment.Center))
+        }
+        if (showBrightness) {
+            GestureIndicator(label = "Яркость", fraction = brightnessFraction, modifier = Modifier.align(Alignment.Center))
+        }
+    }
+}
+
+@Composable
+private fun GestureIndicator(label: String, fraction: Float?, modifier: Modifier = Modifier) {
+    Column(
+        modifier = modifier
+            .background(Color.Black.copy(alpha = 0.6f))
+            .padding(16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        val text = if (fraction != null) "$label ${(fraction * 100).roundToInt()}%" else label
+        Text(text, color = Color.White)
+    }
+}
+
+private fun currentBrightness(activity: Activity): Float {
+    val value = activity.window.attributes.screenBrightness
+    return if (value in 0f..1f) value else 0.5f
+}
+
+private fun setBrightness(activity: Activity, value: Float) {
+    val attrs = activity.window.attributes
+    attrs.screenBrightness = value
+    activity.window.attributes = attrs
+}
