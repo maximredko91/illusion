@@ -6,6 +6,7 @@ import androidx.media3.common.C
 import androidx.media3.datasource.BaseDataSource
 import androidx.media3.datasource.DataSource
 import androidx.media3.datasource.DataSpec
+import com.hierynomus.smbj.common.SMBRuntimeException
 import com.seance.app.data.repository.SmbSourceRepository
 import com.seance.app.data.smb.SmbClient
 import com.seance.app.data.smb.SmbConnection
@@ -121,18 +122,23 @@ class SmbDataSource internal constructor(
     }
 
     /**
-     * A stale/idle-closed SMB session surfaces as an IOException from an otherwise-valid file
+     * A stale/idle-closed SMB session surfaces two different ways from an otherwise-valid file
      * handle - observed happening within ~15s of no reads on this router's NAS share, much
-     * sooner than a normal idle timeout, so a single retry isn't always enough. Retries up to
+     * sooner than a normal idle timeout, so a single retry isn't always enough. smbj's `Share.send`
+     * re-checks `isConnected()` right before every request and throws the unchecked
+     * [SMBRuntimeException] ("... has already been closed") if the session died in the window
+     * between our own isConnected check and this read - that's not an [IOException], so it must be
+     * caught separately or it skips the retry entirely and crashes playback. Retries up to
      * [MAX_RECONNECT_ATTEMPTS] times with a short backoff before giving up for real.
      */
     private fun readWithReconnect(target: ByteArray, maxRead: Int): Int {
         var raf = randomAccessFile ?: return C.RESULT_END_OF_INPUT
-        var lastError: IOException? = null
+        var lastError: Exception? = null
         repeat(1 + MAX_RECONNECT_ATTEMPTS) { attempt ->
             try {
                 return raf.read(target, position, 0, maxRead)
-            } catch (e: IOException) {
+            } catch (e: Exception) {
+                if (e !is IOException && e !is SMBRuntimeException) throw e
                 lastError = e
                 Log.w(TAG, "read failed at position=$position (attempt $attempt), reconnecting: ${e.message}")
                 if (attempt < MAX_RECONNECT_ATTEMPTS) {
