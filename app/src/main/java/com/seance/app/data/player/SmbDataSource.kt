@@ -39,11 +39,26 @@ class SmbDataSourceFactory(
         connections.remove(sourceId)?.let { runCatching { it.close() } }
     }
 
-    private fun connectionFor(sourceId: Long): SmbConnection = connections.getOrPut(sourceId) {
-        runBlocking {
-            val info = sourceRepository.connectionInfoById(sourceId)
-                ?: throw IOException("Unknown SMB source or missing credentials: $sourceId")
-            smbClient.connect(info)
+    /**
+     * A cached connection can go dead between uses - the NAS closes idle SMB sessions
+     * aggressively (observed within ~15s of no reads), and [SmbConnection.isConnected] reflects
+     * that immediately without a network round trip. Reusing a dead connection without checking
+     * fails on the very first operation, and since it stays cached, every retry keeps hitting the
+     * exact same dead session - `getOrPut` alone can't fix this since it only creates when the
+     * key is absent, not when the cached value has gone stale.
+     */
+    private fun connectionFor(sourceId: Long): SmbConnection {
+        connections[sourceId]?.let { existing ->
+            if (existing.isConnected) return existing
+            connections.remove(sourceId, existing)
+            runCatching { existing.close() }
+        }
+        return connections.getOrPut(sourceId) {
+            runBlocking {
+                val info = sourceRepository.connectionInfoById(sourceId)
+                    ?: throw IOException("Unknown SMB source or missing credentials: $sourceId")
+                smbClient.connect(info)
+            }
         }
     }
 

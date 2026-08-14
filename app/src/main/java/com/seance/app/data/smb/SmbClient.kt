@@ -38,6 +38,16 @@ class SmbConnection internal constructor(
 ) : java.io.Closeable {
 
     /**
+     * False once the underlying share/session has been torn down - either explicitly via [close]
+     * or because smbj itself detected the connection is dead (e.g. the NAS closed an idle SMB
+     * session server-side). A cheap, local, non-blocking check - callers reusing a cached
+     * [SmbConnection] must check this before reuse, since attempting an operation on an already
+     * dead share throws immediately rather than transparently reconnecting.
+     */
+    val isConnected: Boolean
+        get() = diskShare.isConnected
+
+    /**
      * Lists exactly one directory level under [path] (videos, subtitles, .nfo, sub-folders,
      * everything) - one SMB round trip. Callers that need the full tree recurse themselves so
      * they can fan sibling directories out across multiple connections instead of one round trip
