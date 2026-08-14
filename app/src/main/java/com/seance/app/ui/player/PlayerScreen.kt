@@ -4,6 +4,7 @@ import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
 import android.media.AudioManager
+import android.os.Build
 import android.view.WindowManager
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGestures
@@ -303,8 +304,25 @@ private fun KeepImmersiveFullscreen() {
         val controller = window?.let { WindowCompat.getInsetsController(it, view) }
         controller?.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
         controller?.hide(WindowInsetsCompat.Type.systemBars())
+
+        // The window already draws under the cutout in landscape (windowLayoutInDisplayCutoutMode
+        // "always" in the manifest handles that). What's still visible there is a separate thing:
+        // Android's automatic status-bar contrast scrim, a faint dark fill the system paints behind
+        // the (currently hidden but swipe-revealable) status bar/cutout band so its icons stay
+        // legible - it's independent of hide(systemBars()) and persists regardless. Measured
+        // on-device as RGB(13,14,18) against our pure-black pillarbox - a visible seam right where
+        // the cutout is. MX Player shows true (0,0,0) here, confirming it disables this scrim.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            window?.isStatusBarContrastEnforced = false
+            window?.isNavigationBarContrastEnforced = false
+        }
+
         onDispose {
             controller?.show(WindowInsetsCompat.Type.systemBars())
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                window?.isStatusBarContrastEnforced = true
+                window?.isNavigationBarContrastEnforced = true
+            }
         }
     }
 }
