@@ -14,6 +14,9 @@
     <string name="settings_smb_sources">Источники SMB</string>
     <string name="settings_scan_section">Сканирование</string>
     <string name="settings_rescan_interval">Интервал пересканирования</string>
+    <string name="settings_rescan_now">Пересканировать библиотеку</string>
+    <string name="settings_rescan_now_description">Найдёт новые файлы и обновит постеры/фанарт для уже добавленных</string>
+    <string name="settings_rescan_now_action">Сканировать</string>
     <string name="settings_rescan_off">Отключено</string>
     <string name="settings_rescan_hours">Каждые %1$d ч</string>
     <string name="settings_player_section">Плеер</string>
@@ -86,6 +89,10 @@
     <string name="details_download_cancel">Отменить загрузку</string>
     <string name="details_download_remove">Удалить загрузку</string>
     <string name="details_download_retry">Повторить загрузку</string>
+    <string name="details_download_remove_confirm_title">Удалить загрузку?</string>
+    <string name="details_download_remove_confirm_message">Скачанный файл «%1$s» будет удалён с устройства.</string>
+    <string name="details_download_remove_confirm_action">Удалить</string>
+    <string name="details_download_error_generic">Не удалось скачать: %1$s</string>
 
     <string name="onboarding_title">Настройка приложения «Сеанс»</string>
     <string name="onboarding_smb_address">Адрес сервера (хост)</string>
@@ -154,6 +161,8 @@
     <string name="player_aspect_ratio_fill">Растянуть</string>
 
     <string name="details_play">Смотреть</string>
+    <string name="details_continue_watching">Продолжить просмотр</string>
+    <string name="details_image_viewer_close">Закрыть просмотр изображения</string>
     <string name="details_favorite_add">Добавить в избранное</string>
     <string name="details_favorite_remove">Убрать из избранного</string>
     <string name="details_director">Режиссёр</string>

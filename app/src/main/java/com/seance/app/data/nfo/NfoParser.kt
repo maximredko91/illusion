@@ -27,11 +27,13 @@ class NfoParser {
         var runtime: Int? = null
         var collectionName: String? = null
         var posterUrl: String? = null
+        var fanartUrl: String? = null
         var season: Int? = null
         var episode: Int? = null
 
         var inActor = false
         var inSet = false
+        var inFanart = false
         var currentActorName: String? = null
         var currentTag: String? = null
 
@@ -50,8 +52,12 @@ class NfoParser {
                     when (currentTag) {
                         "actor" -> inActor = true
                         "set" -> inSet = true
-                        "thumb" -> if (!inActor && posterUrl == null) {
-                            posterUrl = readTextSafely(parser)
+                        "fanart" -> inFanart = true
+                        // Kodi nests the backdrop as <fanart><thumb>url</thumb></fanart> - a
+                        // sibling of the top-level poster <thumb> elements, not a variant of them.
+                        "thumb" -> when {
+                            inFanart -> if (fanartUrl == null) fanartUrl = readTextSafely(parser)
+                            !inActor -> if (posterUrl == null) posterUrl = readTextSafely(parser)
                         }
                     }
                 }
@@ -87,6 +93,7 @@ class NfoParser {
                             inActor = false
                         }
                         "set" -> inSet = false
+                        "fanart" -> inFanart = false
                     }
                     currentTag = null
                     depth--
@@ -111,6 +118,7 @@ class NfoParser {
             runtimeMinutes = runtime,
             collectionName = collectionName,
             posterUrl = posterUrl,
+            fanartUrl = fanartUrl,
             season = season,
             episode = episode
         )

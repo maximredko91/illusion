@@ -7,6 +7,7 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.seance.app.data.local.entity.DownloadEntity
 import com.seance.app.data.local.entity.MediaItemEntity
+import com.seance.app.data.local.entity.WatchProgressEntity
 import com.seance.app.data.repository.DownloadRepository
 import com.seance.app.data.repository.LibraryRepository
 import com.seance.app.data.repository.WatchProgressRepository
@@ -24,6 +25,8 @@ data class DetailsUiState(
     val similar: List<MediaItemEntity> = emptyList(),
     val collection: List<MediaItemEntity> = emptyList(),
     val episodes: List<MediaItemEntity> = emptyList(),
+    /** Director/actor names with more than one title in the library - only these are worth opening a filmography for. */
+    val clickablePersons: Set<String> = emptySet(),
     val isLoading: Boolean = true
 ) {
     /** The show's own name, e.g. "Больница Питт (2025)" - the show folder, not this representative episode's own NFO title. */
@@ -46,6 +49,9 @@ class DetailsViewModel(
     val download: StateFlow<DownloadEntity?> = downloadRepository.observeForItem(stableId)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
+    val watchProgress: StateFlow<WatchProgressEntity?> = watchProgressRepository.observeProgress(stableId)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
     init {
         viewModelScope.launch {
             val item = libraryRepository.getById(stableId)
@@ -61,11 +67,18 @@ class DetailsViewModel(
             val episodes = item.seriesStableId
                 ?.let { libraryRepository.observeEpisodes(it).first() }
                 ?: emptyList()
+            // One getAll() scan shared across every person on this item, rather than a separate
+            // getFilmography() library scan per name.
+            val allItems = libraryRepository.getAll()
+            val clickablePersons = (item.director + item.actors).distinct()
+                .filter { name -> allItems.count { name in it.actors || name in it.director } > 1 }
+                .toSet()
             _state.value = DetailsUiState(
                 item = item,
                 similar = similar,
                 collection = collection,
                 episodes = episodes,
+                clickablePersons = clickablePersons,
                 isLoading = false
             )
         }

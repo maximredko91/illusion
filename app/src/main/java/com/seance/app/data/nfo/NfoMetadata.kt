@@ -13,6 +13,7 @@ data class NfoMetadata(
     val runtimeMinutes: Int? = null,
     val collectionName: String? = null,
     val posterUrl: String? = null,
+    val fanartUrl: String? = null,
     val season: Int? = null,
     val episode: Int? = null
 )

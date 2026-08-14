@@ -17,6 +17,8 @@ class WatchProgressRepository(
 
     suspend fun getProgress(stableId: String): WatchProgressEntity? = progressDao.getForItem(stableId)
 
+    fun observeProgress(stableId: String): Flow<WatchProgressEntity?> = progressDao.observeForItem(stableId)
+
     suspend fun updateProgress(stableId: String, positionMs: Long, durationMs: Long, watched: Boolean, now: Long) {
         progressDao.upsert(
             WatchProgressEntity(

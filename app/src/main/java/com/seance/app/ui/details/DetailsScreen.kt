@@ -30,16 +30,25 @@ import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Snackbar
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
@@ -49,6 +58,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.launch
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil3.compose.AsyncImagePainter
 import coil3.compose.rememberAsyncImagePainter
@@ -66,6 +76,7 @@ import com.seance.app.ui.common.LocalSharedTransitionScope
 import com.seance.app.ui.common.PosterCard
 import com.seance.app.ui.common.posterTransitionKey
 import com.seance.app.ui.common.shimmer
+import com.seance.app.ui.common.ZoomableImageViewer
 import com.seance.app.ui.common.toggle
 
 @Composable
@@ -87,7 +98,10 @@ fun DetailsScreen(
     val state by viewModel.state.collectAsState()
     val isFavorite by viewModel.isFavorite.collectAsState()
     val download by viewModel.download.collectAsState()
+    val watchProgress by viewModel.watchProgress.collectAsState()
     val context = LocalContext.current
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
 
     Box(modifier = modifier.fillMaxSize()) {
         val item = state.item
@@ -95,14 +109,17 @@ fun DetailsScreen(
             item != null -> DetailsContent(
                 item = item,
                 displayTitle = state.seriesTitle ?: item.title,
+                clickablePersons = state.clickablePersons,
                 similar = state.similar,
                 collection = state.collection,
                 episodes = state.episodes,
                 isFavorite = isFavorite,
                 onToggleFavorite = viewModel::toggleFavorite,
+                hasStartedWatching = watchProgress?.let { it.positionMs > 0 && !it.watched } == true,
                 download = download,
                 onStartDownload = { viewModel.startDownload(context) },
                 onRemoveDownload = { viewModel.removeDownload(context) },
+                onDownloadError = { message -> scope.launch { snackbarHostState.showSnackbar(message) } },
                 onPlay = onPlay,
                 onOpenPerson = onOpenPerson,
                 onOpenItem = onOpenItem,
@@ -114,6 +131,7 @@ fun DetailsScreen(
                 modifier = Modifier.align(Alignment.Center).padding(24.dp)
             )
         }
+        SnackbarHost(snackbarHostState, modifier = Modifier.align(Alignment.BottomCenter))
     }
 }
 
@@ -122,19 +140,24 @@ fun DetailsScreen(
 private fun DetailsContent(
     item: MediaItemEntity,
     displayTitle: String,
+    clickablePersons: Set<String>,
     similar: List<MediaItemEntity>,
     collection: List<MediaItemEntity>,
     episodes: List<MediaItemEntity>,
     isFavorite: Boolean,
     onToggleFavorite: () -> Unit,
+    hasStartedWatching: Boolean,
     download: DownloadEntity?,
     onStartDownload: () -> Unit,
     onRemoveDownload: () -> Unit,
+    onDownloadError: (String) -> Unit,
     onPlay: (String) -> Unit,
     onOpenPerson: (String) -> Unit,
     onOpenItem: (String) -> Unit,
     onBack: () -> Unit
 ) {
+    var zoomedImage by remember { mutableStateOf<Any?>(null) }
+
     Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
         Box {
             val fanart = item.fanartModel
@@ -143,6 +166,7 @@ private fun DetailsContent(
                     .fillMaxWidth()
                     .height(220.dp)
                     .background(MaterialTheme.colorScheme.surfaceVariant)
+                    .let { if (fanart != null) it.clickable { zoomedImage = fanart } else it }
             ) {
                 if (fanart != null) {
                     val painter = rememberAsyncImagePainter(model = fanart, contentScale = ContentScale.Crop)
@@ -182,9 +206,9 @@ private fun DetailsContent(
                 val sharedTransitionScope = LocalSharedTransitionScope.current
                 val animatedVisibilityScope = LocalNavAnimatedVisibilityScope.current
                 var posterModifier = Modifier
-                    .width(100.dp)
+                    .width(132.dp)
                     .aspectRatio(2f / 3f)
-                    .offset(y = (-32).dp)
+                    .offset(y = (-42).dp)
                 if (sharedTransitionScope != null && animatedVisibilityScope != null) {
                     with(sharedTransitionScope) {
                         posterModifier = posterModifier.sharedElement(
@@ -193,6 +217,7 @@ private fun DetailsContent(
                         )
                     }
                 }
+                posterModifier = posterModifier.clickable { zoomedImage = poster }
                 Box(modifier = posterModifier) {
                     val painter = rememberAsyncImagePainter(model = poster, contentScale = ContentScale.Crop)
                     val state by painter.state.collectAsState()
@@ -238,7 +263,10 @@ private fun DetailsContent(
         ) {
             Button(onClick = { onPlay(item.stableId) }) {
                 Icon(Icons.Default.PlayArrow, contentDescription = null)
-                Text(stringResource(R.string.details_play), modifier = Modifier.padding(start = 8.dp))
+                Text(
+                    stringResource(if (hasStartedWatching) R.string.details_continue_watching else R.string.details_play),
+                    modifier = Modifier.padding(start = 8.dp)
+                )
             }
             val haptics = LocalHapticFeedback.current
             IconButton(onClick = {
@@ -252,7 +280,13 @@ private fun DetailsContent(
                     )
                 )
             }
-            DownloadButton(download = download, onStart = onStartDownload, onRemove = onRemoveDownload)
+            DownloadButton(
+                download = download,
+                itemTitle = displayTitle,
+                onStart = onStartDownload,
+                onRemove = onRemoveDownload,
+                onError = onDownloadError
+            )
         }
 
         Text(
@@ -266,10 +300,10 @@ private fun DetailsContent(
         }
 
         if (item.director.isNotEmpty()) {
-            PersonRow(stringResource(R.string.details_director), item.director, onOpenPerson)
+            PersonRow(stringResource(R.string.details_director), item.director, clickablePersons, onOpenPerson)
         }
         if (item.actors.isNotEmpty()) {
-            PersonRow(stringResource(R.string.details_actors), item.actors, onOpenPerson)
+            PersonRow(stringResource(R.string.details_actors), item.actors, clickablePersons, onOpenPerson)
         }
 
         if (collection.isNotEmpty()) {
@@ -279,10 +313,21 @@ private fun DetailsContent(
             MediaRow(stringResource(R.string.details_similar), similar, onOpenItem)
         }
     }
+
+    zoomedImage?.let { model ->
+        ZoomableImageViewer(model = model, contentDescription = displayTitle, onDismiss = { zoomedImage = null })
+    }
 }
 
 @Composable
-private fun DownloadButton(download: DownloadEntity?, onStart: () -> Unit, onRemove: () -> Unit) {
+private fun DownloadButton(
+    download: DownloadEntity?,
+    itemTitle: String,
+    onStart: () -> Unit,
+    onRemove: () -> Unit,
+    onError: (String) -> Unit
+) {
+    var showRemoveConfirm by remember { mutableStateOf(false) }
     when (download?.status) {
         null -> IconButton(onClick = onStart) {
             Icon(Icons.Default.Download, contentDescription = stringResource(R.string.details_download))
@@ -305,17 +350,45 @@ private fun DownloadButton(download: DownloadEntity?, onStart: () -> Unit, onRem
                 }
             }
         }
-        DownloadStatus.COMPLETED -> IconButton(onClick = onRemove) {
-            Icon(Icons.Default.DownloadDone, contentDescription = stringResource(R.string.details_download_remove))
+        DownloadStatus.COMPLETED -> {
+            IconButton(onClick = { showRemoveConfirm = true }) {
+                Icon(Icons.Default.DownloadDone, contentDescription = stringResource(R.string.details_download_remove))
+            }
+            if (showRemoveConfirm) {
+                AlertDialog(
+                    onDismissRequest = { showRemoveConfirm = false },
+                    title = { Text(stringResource(R.string.details_download_remove_confirm_title)) },
+                    text = { Text(stringResource(R.string.details_download_remove_confirm_message, itemTitle)) },
+                    confirmButton = {
+                        TextButton(onClick = {
+                            showRemoveConfirm = false
+                            onRemove()
+                        }) {
+                            Text(stringResource(R.string.details_download_remove_confirm_action))
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showRemoveConfirm = false }) {
+                            Text(stringResource(R.string.action_cancel))
+                        }
+                    }
+                )
+            }
         }
-        DownloadStatus.FAILED -> IconButton(onClick = onStart) {
-            Icon(Icons.Default.ErrorOutline, contentDescription = stringResource(R.string.details_download_retry))
+        DownloadStatus.FAILED -> {
+            val errorMessage = stringResource(R.string.details_download_error_generic, download.errorMessage ?: stringResource(R.string.downloads_failed))
+            IconButton(onClick = {
+                onError(errorMessage)
+                onStart()
+            }) {
+                Icon(Icons.Default.ErrorOutline, contentDescription = stringResource(R.string.details_download_retry))
+            }
         }
     }
 }
 
 @Composable
-private fun PersonRow(label: String, names: List<String>, onOpenPerson: (String) -> Unit) {
+private fun PersonRow(label: String, names: List<String>, clickablePersons: Set<String>, onOpenPerson: (String) -> Unit) {
     Column(modifier = Modifier.padding(top = 8.dp)) {
         Text(label, style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(horizontal = 16.dp))
         LazyRow(
@@ -323,7 +396,14 @@ private fun PersonRow(label: String, names: List<String>, onOpenPerson: (String)
             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
         ) {
             items(names) { name ->
-                AssistChip(onClick = { onOpenPerson(name) }, label = { Text(name) })
+                // Only worth a filmography screen when the person has more than one title here -
+                // otherwise it's just this one item again, so the chip stays inert (greyed out).
+                val clickable = name in clickablePersons
+                AssistChip(
+                    onClick = { if (clickable) onOpenPerson(name) },
+                    label = { Text(name) },
+                    enabled = clickable
+                )
             }
         }
     }

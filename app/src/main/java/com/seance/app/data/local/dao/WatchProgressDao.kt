@@ -15,6 +15,9 @@ interface WatchProgressDao {
     @Query("SELECT * FROM watch_progress WHERE mediaItemStableId = :stableId")
     suspend fun getForItem(stableId: String): WatchProgressEntity?
 
+    @Query("SELECT * FROM watch_progress WHERE mediaItemStableId = :stableId")
+    fun observeForItem(stableId: String): Flow<WatchProgressEntity?>
+
     @Query(
         """
         SELECT * FROM watch_progress

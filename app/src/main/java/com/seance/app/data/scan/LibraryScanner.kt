@@ -179,16 +179,33 @@ class LibraryScanner(
         // that normally sits at .../Сериалы/ShowName/poster.jpg, one level above "Сезон N".
         val showFolder = seriesStableId?.substringAfter('|')
         val imageSearchFolders = listOfNotNull(videoFolder, showFolder).distinct()
-        fun findImage(vararg names: String): SmbFileRef? =
-            imageSearchFolders.firstNotNullOfOrNull { folder ->
-                imageFiles.firstOrNull { it.path.substringBeforeLast('\\') == folder && names.any { n -> it.baseName.equals(n, true) } }
+        // Beyond a plain "poster.jpg"/"fanart.jpg", also match Kodi/tinyMediaManager's
+        // "<video name>-fanart.jpg" convention and numbered extrafanart variants like
+        // "fanart1.jpg"/"fanart-02.jpg" - picking the lowest-numbered/first alphabetically when
+        // several exist, so the choice is at least deterministic across rescans.
+        fun findImage(names: Set<String>): SmbFileRef? {
+            fun matches(ref: SmbFileRef): Boolean {
+                val refBase = ref.baseName.lowercase()
+                if (refBase in names) return true
+                if (names.any { refBase == "${baseName.lowercase()}-$it" }) return true
+                return names.any { name ->
+                    refBase.startsWith(name) && refBase.length > name.length &&
+                        refBase.substring(name.length).all { it.isDigit() || it == '-' || it == '_' }
+                }
             }
+            return imageSearchFolders.firstNotNullOfOrNull { folder ->
+                imageFiles
+                    .filter { it.path.substringBeforeLast('\\') == folder && matches(it) }
+                    .minByOrNull { it.name }
+            }
+        }
         // Radarr/Sonarr-style libraries drop poster.jpg/fanart.jpg as real files rather than
         // pointing <thumb> at something reachable over SMB - prefer those; a <thumb> value is only
         // usable as a fallback when it's a real scraper URL, not a path from the machine that wrote the .nfo.
-        val posterPath = findImage("poster", "folder")?.path
+        val posterPath = findImage(setOf("poster", "folder", "cover"))?.path
             ?: metadata?.posterUrl?.takeIf { it.startsWith("http://") || it.startsWith("https://") }
-        val fanartPath = findImage("fanart", "backdrop")?.path
+        val fanartPath = findImage(setOf("fanart", "backdrop", "background"))?.path
+            ?: metadata?.fanartUrl?.takeIf { it.startsWith("http://") || it.startsWith("https://") }
 
         return MediaItemEntity(
             stableId = stableId,

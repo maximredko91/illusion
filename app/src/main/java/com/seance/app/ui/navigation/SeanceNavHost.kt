@@ -361,6 +361,10 @@ private fun SeanceNavHostContent(app: SeanceApplication) {
                         settingsViewModel.setRequireChargingForHeavyTasks(context, enabled)
                     },
                     onRescanIntervalChange = { hours -> settingsViewModel.setRescanIntervalHours(context, hours) },
+                    onRescanNow = {
+                        val workId = WorkScheduler.enqueueOneTimeScan(context)
+                        navController.navigate(Destination.ScanProgress(workId.toString()))
+                    },
                     posterCachingEnabled = settingsViewModel.posterCachingEnabled,
                     onSetPosterCachingEnabled = { enabled -> settingsViewModel.setPosterCachingEnabled(context, enabled) },
                     downloadsFolderUri = settingsViewModel.downloadsFolderUri,

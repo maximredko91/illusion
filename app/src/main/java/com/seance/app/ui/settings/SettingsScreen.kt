@@ -75,6 +75,7 @@ fun SettingsScreen(
     onClearCache: () -> Unit,
     onToggleChargingRequirement: (Boolean) -> Unit,
     onRescanIntervalChange: (Int) -> Unit,
+    onRescanNow: () -> Unit,
     posterCachingEnabled: Flow<Boolean>,
     onSetPosterCachingEnabled: (Boolean) -> Unit,
     downloadsFolderUri: Flow<String?>,
@@ -226,6 +227,18 @@ fun SettingsScreen(
 
             SettingsGroupLabel(stringResource(R.string.settings_scan_section))
             SettingsGroup {
+                ListItem(
+                    headlineContent = { Text(stringResource(R.string.settings_rescan_now)) },
+                    supportingContent = { Text(stringResource(R.string.settings_rescan_now_description)) },
+                    trailingContent = {
+                        OutlinedButton(onClick = onRescanNow, enabled = sources.isNotEmpty()) {
+                            Text(stringResource(R.string.settings_rescan_now_action))
+                        }
+                    },
+                    colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                    modifier = Modifier.fillMaxWidth()
+                )
+                SettingsDivider()
                 ListItem(
                     headlineContent = { Text(stringResource(R.string.settings_rescan_interval)) },
                     trailingContent = { RescanIntervalMenu(rescanHours, onRescanIntervalChange) },
