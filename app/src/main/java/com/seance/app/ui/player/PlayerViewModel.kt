@@ -152,8 +152,25 @@ class PlayerViewModel(
         })
 
         viewModelScope.launch {
+            // Calling setVideoEffects() at all - even with an empty list - permanently switches
+            // MediaCodecVideoRenderer onto its VideoSink/effects pipeline for this renderer
+            // instance (videoEffects != null is the trigger, not list emptiness; see
+            // MediaCodecVideoRenderer.onEnabled). That pipeline's onVideoSizeChanged is a
+            // deliberate no-op in Media3 1.11.0 (upstream TODO b/292111083 - "Video size reporting
+            // is removed at the moment..."), so Player.getVideoSize() stays stuck at UNKNOWN
+            // forever, which silently breaks the resize-mode cycle button (Fit/Zoom/Fill) -
+            // AspectRatioFrameLayout never sees a real aspect ratio to apply modes to. Skipping the
+            // call while sharpen has never been turned on keeps the default (off) case unaffected;
+            // once the user does turn it on for this session, the pipeline is unavoidably tainted
+            // for the rest of it (upstream limitation), so later toggles just call through normally.
+            var effectsPipelineTainted = false
             settingsRepository.sharpenEnabled.collect { enabled ->
-                player.setVideoEffects(if (enabled) listOf(SharpenEffect()) else emptyList())
+                if (enabled) {
+                    effectsPipelineTainted = true
+                    player.setVideoEffects(listOf(SharpenEffect()))
+                } else if (effectsPipelineTainted) {
+                    player.setVideoEffects(emptyList())
+                }
                 _state.update { it.copy(sharpenEnabled = enabled) }
             }
         }
