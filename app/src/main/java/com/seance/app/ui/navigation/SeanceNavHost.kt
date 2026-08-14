@@ -3,6 +3,7 @@ package com.seance.app.ui.navigation
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionLayout
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
@@ -104,6 +105,15 @@ private fun SeanceNavHostContent(app: SeanceApplication) {
 
     val haptics = LocalHapticFeedback.current
     Scaffold(
+        // This outer Scaffold has no topBar, so by default it would take responsibility for
+        // system-bar/cutout insets itself (Scaffold's rule: it reserves safeDrawing insets only
+        // when topBar/bottomBar aren't present) and apply them to innerPadding/NavHost - but every
+        // screen inside NavHost already handles its own insets (its own Scaffold + top bar, or,
+        // for the fullscreen player, deliberately no padding at all so video can draw under the
+        // cutout). Without this override, the player's content area was measured 150dp narrower
+        // than the screen in landscape - not a system overlay blocking it, just this Scaffold
+        // reserving cutout width that nothing here actually needed reserved.
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         bottomBar = {
             if (showBottomBar) {
                 NavigationBar {
