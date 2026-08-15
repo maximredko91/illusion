@@ -41,3 +41,7 @@ data class MediaItemEntity(
     val imdbId: String? = null,
     val tmdbId: String? = null
 )
+
+/** True if any sidecar subtitle file follows the "forced" naming convention (e.g. "Movie.forced.srt") - the file itself isn't parsed, just its name. */
+val MediaItemEntity.hasForcedSubtitles: Boolean
+    get() = subtitlePaths.any { it.substringAfterLast('\\').contains("forced", ignoreCase = true) }

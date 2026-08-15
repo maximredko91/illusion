@@ -80,6 +80,7 @@ import com.seance.app.data.image.posterModel
 import com.seance.app.data.local.entity.DownloadEntity
 import com.seance.app.data.local.entity.DownloadStatus
 import com.seance.app.data.local.entity.MediaItemEntity
+import com.seance.app.data.local.entity.hasForcedSubtitles
 import com.seance.app.data.player.AudioTrackProber
 import com.seance.app.data.repository.AudioTrackRepository
 import com.seance.app.data.repository.DownloadRepository
@@ -397,6 +398,14 @@ private fun DetailsContent(
         audioTracks?.takeIf { it.isNotEmpty() }?.let { tracks ->
             Text(
                 stringResource(R.string.details_audio_tracks, tracks.joinToString("; ")),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+            )
+        }
+        if (item.hasForcedSubtitles) {
+            Text(
+                stringResource(R.string.details_forced_subtitles),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)

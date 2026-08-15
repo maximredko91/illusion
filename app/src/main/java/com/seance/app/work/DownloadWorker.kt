@@ -166,13 +166,12 @@ class DownloadWorker(
         treeUri: String?
     ): List<DownloadedSubtitle> {
         if (item.subtitlePaths.isEmpty()) return emptyList()
-        val videoBaseName = videoFileName(item).substringBeforeLast('.')
         val connection = smbClient.connect(info)
         return try {
-            item.subtitlePaths.mapIndexedNotNull { index, remotePath ->
-                val fileName = subtitleFileName(videoBaseName, remotePath, index)
-                val uri = DownloadStorage.create(applicationContext, treeUri, fileName) ?: return@mapIndexedNotNull null
-                val out = DownloadStorage.openOutput(applicationContext, uri, append = false) ?: return@mapIndexedNotNull null
+            item.subtitlePaths.mapNotNull { remotePath ->
+                val fileName = subtitleFileName(remotePath)
+                val uri = DownloadStorage.create(applicationContext, treeUri, fileName) ?: return@mapNotNull null
+                val out = DownloadStorage.openOutput(applicationContext, uri, append = false) ?: return@mapNotNull null
                 runCatching {
                     connection.openInputStream(remotePath).use { input -> out.use { input.copyTo(it) } }
                 }.onFailure { DownloadStorage.delete(applicationContext, uri) }
@@ -212,20 +211,14 @@ class DownloadWorker(
         private fun sanitizeFileName(name: String): String =
             name.replace(Regex("[\\\\/:*?\"<>|]"), "_").trim().ifBlank { "video" }
 
-        fun videoFileName(item: MediaItemEntity): String {
-            val base = buildString {
-                append(item.title)
-                if (item.seasonNumber != null && item.episodeNumber != null) {
-                    append(" S${item.seasonNumber}E${item.episodeNumber}")
-                }
-            }
-            val ext = item.filePath.substringAfterLast('.', "").takeIf { it.isNotEmpty() }?.let { ".$it" } ?: ""
-            return sanitizeFileName(base) + ext
-        }
+        // Keep the exact filename from the SMB source rather than synthesizing one from metadata -
+        // the user wants the downloaded file to look the same on-device as it does on the NAS, and
+        // a raw title-only name also throws away useful info (release quality tags, show name for
+        // episodes whose own `title` is just the episode name) the original filename already had.
+        fun videoFileName(item: MediaItemEntity): String =
+            sanitizeFileName(item.filePath.substringAfterLast('\\'))
 
-        private fun subtitleFileName(videoBaseName: String, remotePath: String, index: Int): String {
-            val ext = remotePath.substringAfterLast('.', "srt")
-            return "$videoBaseName.$index.$ext"
-        }
+        private fun subtitleFileName(remotePath: String): String =
+            sanitizeFileName(remotePath.substringAfterLast('\\'))
     }
 }
