@@ -41,8 +41,10 @@ import androidx.navigation.toRoute
 import com.seance.app.R
 import com.seance.app.SeanceApplication
 import com.seance.app.domain.model.Category
+import com.seance.app.domain.model.UiMode
 import com.seance.app.ui.common.LocalNavAnimatedVisibilityScope
 import com.seance.app.ui.common.LocalSharedTransitionScope
+import com.seance.app.ui.common.LocalUiMode
 import com.seance.app.ui.common.segmentTick
 import com.seance.app.ui.details.DetailsScreen
 import com.seance.app.ui.downloads.DownloadsScreen
@@ -91,7 +93,15 @@ fun SeanceNavHost(
     app: SeanceApplication,
     modifier: Modifier = Modifier
 ) = SharedTransitionLayout(modifier = modifier) {
-    CompositionLocalProvider(LocalSharedTransitionScope provides this) {
+    // null (not chosen yet) reads as PHONE here - Splash routes a fresh install to Onboarding
+    // before any real content renders, so this default is never actually shown to a user who
+    // hasn't answered the onboarding prompt yet; it only matters for the brief pre-onboarding
+    // frame and for pre-existing installs from before this feature (see SettingsRepository.uiMode).
+    val uiMode by app.settingsRepository.uiMode.collectAsState(initial = UiMode.PHONE)
+    CompositionLocalProvider(
+        LocalSharedTransitionScope provides this,
+        LocalUiMode provides (uiMode ?: UiMode.PHONE)
+    ) {
         SeanceNavHostContent(app)
     }
 }
@@ -184,6 +194,7 @@ private fun SeanceNavHostContent(app: SeanceApplication) {
             composable<Destination.Onboarding> {
                 OnboardingScreen(
                     smbSourceRepository = app.smbSourceRepository,
+                    settingsRepository = app.settingsRepository,
                     onFinished = { workId ->
                         navController.navigate(Destination.ScanProgress(workId)) {
                             popUpTo(Destination.Onboarding) { inclusive = true }
@@ -360,6 +371,8 @@ private fun SeanceNavHostContent(app: SeanceApplication) {
                     cacheSizeBytes = cacheSizeBytes,
                     onRefreshCacheSize = { settingsViewModel.refreshCacheSize(context) },
                     onOpenCache = { navController.navigate(Destination.Cache) },
+                    uiMode = settingsViewModel.uiMode,
+                    onUiModeChange = { mode -> settingsViewModel.setUiMode(mode) },
                     onToggleChargingRequirement = { enabled ->
                         settingsViewModel.setRequireChargingForHeavyTasks(context, enabled)
                     },

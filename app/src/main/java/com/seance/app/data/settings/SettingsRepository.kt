@@ -7,6 +7,7 @@ import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.seance.app.domain.model.SortOrder
+import com.seance.app.domain.model.UiMode
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
@@ -21,6 +22,7 @@ class SettingsRepository(private val context: Context) {
         val SEEK_DURATION_SECONDS = intPreferencesKey("player_seek_duration_seconds")
         val POSTER_CACHING_ENABLED = booleanPreferencesKey("poster_caching_enabled")
         val DOWNLOADS_FOLDER_URI = stringPreferencesKey("downloads_folder_uri")
+        val UI_MODE = stringPreferencesKey("ui_mode")
     }
 
     val requireChargingForHeavyTasks: Flow<Boolean> = context.dataStore.data.map {
@@ -80,5 +82,14 @@ class SettingsRepository(private val context: Context) {
         context.dataStore.edit {
             if (uri == null) it.remove(Keys.DOWNLOADS_FOLDER_URI) else it[Keys.DOWNLOADS_FOLDER_URI] = uri
         }
+    }
+
+    /** null = not chosen yet - onboarding asks explicitly (no runtime android.software.leanback detection, the user picks). */
+    val uiMode: Flow<UiMode?> = context.dataStore.data.map {
+        it[Keys.UI_MODE]?.let { name -> runCatching { UiMode.valueOf(name) }.getOrNull() }
+    }
+
+    suspend fun setUiMode(mode: UiMode) {
+        context.dataStore.edit { it[Keys.UI_MODE] = mode.name }
     }
 }

@@ -18,6 +18,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
+import com.seance.app.domain.model.UiMode
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -31,6 +32,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -69,6 +71,8 @@ fun SettingsScreen(
     cacheSizeBytes: Long?,
     onRefreshCacheSize: () -> Unit,
     onOpenCache: () -> Unit,
+    uiMode: Flow<UiMode?>,
+    onUiModeChange: (UiMode) -> Unit,
     onToggleChargingRequirement: (Boolean) -> Unit,
     onRescanIntervalChange: (Int) -> Unit,
     onRescanNow: () -> Unit,
@@ -89,6 +93,7 @@ fun SettingsScreen(
     onDeleteSource: (SmbSourceEntity) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val currentUiMode by uiMode.collectAsState(initial = null)
     val chargingOnly by requireChargingForHeavyTasks.collectAsState(initial = true)
     val rescanHours by rescanIntervalHours.collectAsState(initial = 24)
     val seekSeconds by seekDurationSeconds.collectAsState(initial = 10)
@@ -190,6 +195,33 @@ fun SettingsScreen(
                         )
                     }
                 }
+            }
+
+            SettingsGroupLabel(stringResource(R.string.settings_ui_mode_section))
+            SettingsGroup {
+                ListItem(
+                    headlineContent = { Text(stringResource(R.string.settings_ui_mode_phone)) },
+                    trailingContent = {
+                        RadioButton(
+                            selected = currentUiMode == UiMode.PHONE,
+                            onClick = { onUiModeChange(UiMode.PHONE) }
+                        )
+                    },
+                    colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                    modifier = Modifier.fillMaxWidth().clickable { onUiModeChange(UiMode.PHONE) }
+                )
+                SettingsDivider()
+                ListItem(
+                    headlineContent = { Text(stringResource(R.string.settings_ui_mode_tv)) },
+                    trailingContent = {
+                        RadioButton(
+                            selected = currentUiMode == UiMode.TV,
+                            onClick = { onUiModeChange(UiMode.TV) }
+                        )
+                    },
+                    colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                    modifier = Modifier.fillMaxWidth().clickable { onUiModeChange(UiMode.TV) }
+                )
             }
 
             SettingsGroupLabel(stringResource(R.string.settings_scan_section))

@@ -103,6 +103,13 @@
     <string name="details_download_error_generic">Не удалось скачать: %1$s</string>
 
     <string name="onboarding_title">Настройка приложения «Сеанс»</string>
+    <string name="onboarding_ui_mode_title">Выбор интерфейса</string>
+    <string name="onboarding_ui_mode_description">На чём будете смотреть? Это можно поменять позже в настройках.</string>
+    <string name="onboarding_ui_mode_phone">Телефон или планшет</string>
+    <string name="onboarding_ui_mode_tv">Телевизор (пульт)</string>
+    <string name="settings_ui_mode_section">Интерфейс</string>
+    <string name="settings_ui_mode_phone">Телефон или планшет</string>
+    <string name="settings_ui_mode_tv">Телевизор (пульт)</string>
     <string name="onboarding_smb_address">Адрес сервера (хост)</string>
     <string name="onboarding_smb_address_help">Только IP или имя устройства в локальной сети, например 192.168.2.1 — без \\\\ и без имени папки</string>
     <string name="onboarding_display_name">Название источника</string>
