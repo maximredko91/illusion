@@ -1,5 +1,6 @@
 package com.seance.app.ui.library
 
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -172,7 +173,7 @@ fun LibraryScreen(
                 LazyVerticalGrid(
                     columns = GridCells.Adaptive(minSize = 120.dp),
                     state = gridState,
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = Modifier.fillMaxSize().focusGroup(),
                     contentPadding = PaddingValues(8.dp)
                 ) {
                     items(items, key = { it.stableId }) { item ->

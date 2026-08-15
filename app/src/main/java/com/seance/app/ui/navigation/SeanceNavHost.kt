@@ -4,6 +4,7 @@ import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionLayout
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -17,6 +18,8 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationRail
+import androidx.compose.material3.NavigationRailItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -35,6 +38,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavDestination.Companion.hasRoute
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
+import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
@@ -116,8 +120,61 @@ private fun SeanceNavHostContent(app: SeanceApplication) {
     val showBottomBar = backStackEntry?.destination?.hierarchy?.any { dest ->
         bottomBarRoutes.any { dest.hasRoute(it) }
     } == true
+    val uiMode = LocalUiMode.current
 
     val haptics = LocalHapticFeedback.current
+    val currentLibraryCategory = backStackEntry
+        ?.takeIf { it.destination.hasRoute<Destination.Library>() }
+        ?.let { runCatching { it.toRoute<Destination.Library>() }.getOrNull() }
+        ?.category
+
+    fun isTabSelected(tabDestination: Destination): Boolean = if (tabDestination is Destination.Library) {
+        val matchesAnimationTab = tabDestination.category == Category.CARTOONS &&
+            (currentLibraryCategory == Category.CARTOONS || currentLibraryCategory == Category.CARTOON_SERIES)
+        currentLibraryCategory == tabDestination.category || matchesAnimationTab
+    } else {
+        backStackEntry?.destination?.hierarchy?.any { it.hasRoute(tabDestination::class) } == true
+    }
+
+    fun navigateToTab(destination: Destination, selected: Boolean) {
+        if (!selected) haptics.segmentTick()
+        navController.navigate(destination) {
+            popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+            launchSingleTop = true
+            restoreState = true
+        }
+    }
+
+    // The TV Box target has no touchscreen, so the bottom NavigationBar used on phones is a D-pad
+    // dead end: it lives in a separate Scaffold slot below the scrollable screen content, and
+    // DPAD_DOWN from the last focusable item on screen never reaches it (verified on-device -
+    // Compose's scrollable modifier absorbs the key event once the direction matches the scroll
+    // axis, rather than handing it to directional focus search once there's nothing left to
+    // scroll). A left-edge NavigationRail is reachable via DPAD_LEFT from any point in the
+    // content column instead, which isn't the axis vertical carousels/lists scroll on.
+    if (uiMode == UiMode.TV) {
+        Row(modifier = Modifier.fillMaxSize()) {
+            if (showBottomBar) {
+                NavigationRail {
+                    bottomTabs.forEach { tab ->
+                        val selected = isTabSelected(tab.destination)
+                        val interactionSource = remember { MutableInteractionSource() }
+                        NavigationRailItem(
+                            selected = selected,
+                            onClick = { navigateToTab(tab.destination, selected) },
+                            icon = { Icon(tab.icon, contentDescription = stringResource(tab.labelRes)) },
+                            label = { Text(stringResource(tab.labelRes)) },
+                            interactionSource = interactionSource,
+                            modifier = Modifier.focusHighlight(interactionSource)
+                        )
+                    }
+                }
+            }
+            SeanceNavGraph(app, navController, modifier = Modifier.weight(1f))
+        }
+        return
+    }
+
     Scaffold(
         // This outer Scaffold has no topBar, so by default it would take responsibility for
         // system-bar/cutout insets itself (Scaffold's rule: it reserves safeDrawing insets only
@@ -131,34 +188,12 @@ private fun SeanceNavHostContent(app: SeanceApplication) {
         bottomBar = {
             if (showBottomBar) {
                 NavigationBar {
-                    val currentLibraryCategory = backStackEntry
-                        ?.takeIf { it.destination.hasRoute<Destination.Library>() }
-                        ?.let { runCatching { it.toRoute<Destination.Library>() }.getOrNull() }
-                        ?.category
                     bottomTabs.forEach { tab ->
-                        val tabDestination = tab.destination
-                        val selected = if (tabDestination is Destination.Library) {
-                            val matchesAnimationTab = tabDestination.category == Category.CARTOONS &&
-                                (currentLibraryCategory == Category.CARTOONS || currentLibraryCategory == Category.CARTOON_SERIES)
-                            currentLibraryCategory == tabDestination.category || matchesAnimationTab
-                        } else {
-                            backStackEntry?.destination?.hierarchy?.any {
-                                it.hasRoute(tabDestination::class)
-                            } == true
-                        }
+                        val selected = isTabSelected(tab.destination)
                         val interactionSource = remember { MutableInteractionSource() }
                         NavigationBarItem(
                             selected = selected,
-                            onClick = {
-                                if (!selected) haptics.segmentTick()
-                                navController.navigate(tab.destination) {
-                                    popUpTo(navController.graph.findStartDestination().id) {
-                                        saveState = true
-                                    }
-                                    launchSingleTop = true
-                                    restoreState = true
-                                }
-                            },
+                            onClick = { navigateToTab(tab.destination, selected) },
                             icon = { Icon(tab.icon, contentDescription = stringResource(tab.labelRes)) },
                             label = { Text(stringResource(tab.labelRes)) },
                             interactionSource = interactionSource,
@@ -169,10 +204,16 @@ private fun SeanceNavHostContent(app: SeanceApplication) {
             }
         }
     ) { innerPadding ->
+        SeanceNavGraph(app, navController, modifier = Modifier.padding(innerPadding))
+    }
+}
+
+@Composable
+private fun SeanceNavGraph(app: SeanceApplication, navController: NavHostController, modifier: Modifier = Modifier) {
         NavHost(
             navController = navController,
             startDestination = Destination.Splash,
-            modifier = Modifier.padding(innerPadding)
+            modifier = modifier
         ) {
             composable<Destination.Splash> {
                 LaunchedEffect(Unit) {
@@ -435,5 +476,4 @@ private fun SeanceNavHostContent(app: SeanceApplication) {
                 )
             }
         }
-    }
 }
