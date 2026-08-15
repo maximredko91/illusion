@@ -244,7 +244,13 @@ class LibraryScanner(
             hasNfo = metadata != null,
             dateAdded = System.currentTimeMillis(),
             sizeBytes = file.sizeBytes,
-            subtitlePaths = subtitlePaths
+            subtitlePaths = subtitlePaths,
+            mpaa = metadata?.mpaa ?: showMetadata?.mpaa,
+            tagline = metadata?.tagline,
+            studio = metadata?.studio ?: showMetadata?.studio,
+            premiered = metadata?.premiered,
+            imdbId = metadata?.imdbId ?: showMetadata?.imdbId,
+            tmdbId = metadata?.tmdbId ?: showMetadata?.tmdbId
         )
     }
 

@@ -15,5 +15,11 @@ data class NfoMetadata(
     val posterUrl: String? = null,
     val fanartUrl: String? = null,
     val season: Int? = null,
-    val episode: Int? = null
+    val episode: Int? = null,
+    val mpaa: String? = null,
+    val tagline: String? = null,
+    val studio: String? = null,
+    val premiered: String? = null,
+    val imdbId: String? = null,
+    val tmdbId: String? = null
 )

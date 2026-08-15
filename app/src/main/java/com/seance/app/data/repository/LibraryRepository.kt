@@ -57,6 +57,13 @@ class LibraryRepository(private val dao: MediaItemDao) {
             .asSequence()
             .filter { it.stableId != item.stableId }
             .filter { item.seriesStableId == null || it.seriesStableId != item.seriesStableId }
+            // A candidate sharing the same imdb/tmdb id is the same title under a different file
+            // (a re-encode, a copy in another SMB source) - not a recommendation, so it doesn't
+            // belong in "Похожие" even if genres overlap.
+            .filter { candidate ->
+                (item.imdbId == null || candidate.imdbId != item.imdbId) &&
+                    (item.tmdbId == null || candidate.tmdbId != item.tmdbId)
+            }
             .distinctBy { it.seriesStableId ?: it.stableId }
             .map { candidate -> candidate to candidate.genres.count { genre -> genre in item.genres } }
             .filter { (_, shared) -> shared >= minShared }

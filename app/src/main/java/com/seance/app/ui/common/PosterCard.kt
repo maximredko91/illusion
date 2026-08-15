@@ -91,6 +91,9 @@ fun PosterCard(
                 if (showRatingBadge && item.rating != null) {
                     RatingBadge(item.rating, modifier = Modifier.align(Alignment.TopStart).padding(6.dp))
                 }
+                item.mpaa?.let { mpaa ->
+                    MpaaBadge(mpaa, modifier = Modifier.align(Alignment.TopEnd).padding(6.dp))
+                }
             }
             Column(modifier = Modifier.padding(8.dp)) {
                 Text(
@@ -132,6 +135,19 @@ private fun RatingBadge(rating: Double, modifier: Modifier = Modifier) {
             modifier = Modifier.padding(start = 2.dp)
         )
     }
+}
+
+/** Small translucent age-rating pill for a poster corner, e.g. "16+". Shown whenever the nfo has `mpaa`, unlike [RatingBadge] which is opt-in per screen. */
+@Composable
+fun MpaaBadge(mpaa: String, modifier: Modifier = Modifier) {
+    Text(
+        mpaa,
+        color = Color.White,
+        style = MaterialTheme.typography.labelSmall,
+        modifier = modifier
+            .background(Color.Black.copy(alpha = 0.65f), RoundedCornerShape(6.dp))
+            .padding(horizontal = 6.dp, vertical = 3.dp)
+    )
 }
 
 private fun posterSubtitle(item: MediaItemEntity): String? {

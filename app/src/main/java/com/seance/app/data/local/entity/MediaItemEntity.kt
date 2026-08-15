@@ -31,5 +31,11 @@ data class MediaItemEntity(
     val sizeBytes: Long,
     val subtitlePaths: List<String>,
     val introStartMs: Long? = null,
-    val introEndMs: Long? = null
+    val introEndMs: Long? = null,
+    val mpaa: String? = null,
+    val tagline: String? = null,
+    val studio: String? = null,
+    val premiered: String? = null,
+    val imdbId: String? = null,
+    val tmdbId: String? = null
 )

@@ -57,6 +57,8 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -75,6 +77,7 @@ import com.seance.app.data.repository.LibraryRepository
 import com.seance.app.data.repository.WatchProgressRepository
 import com.seance.app.ui.common.LocalNavAnimatedVisibilityScope
 import com.seance.app.ui.common.LocalSharedTransitionScope
+import com.seance.app.ui.common.MpaaBadge
 import com.seance.app.ui.common.PosterCard
 import com.seance.app.ui.common.posterTransitionKey
 import com.seance.app.ui.common.shimmer
@@ -245,8 +248,13 @@ private fun DetailsContent(
                     }
                 }
             }
-            Column(modifier = Modifier.padding(start = 12.dp, top = 8.dp)) {
-                Text(displayTitle, style = MaterialTheme.typography.headlineSmall)
+            Column(modifier = Modifier.padding(start = 12.dp, top = 8.dp).fillMaxWidth()) {
+                Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
+                    Text(displayTitle, style = MaterialTheme.typography.headlineSmall, modifier = Modifier.weight(1f))
+                    item.mpaa?.let { mpaa ->
+                        MpaaBadge(mpaa, modifier = Modifier.padding(start = 8.dp))
+                    }
+                }
                 item.originalTitle?.takeIf { it != item.title }?.let {
                     Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
@@ -260,11 +268,22 @@ private fun DetailsContent(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-                if (item.genres.isNotEmpty()) {
+                if (item.genres.isNotEmpty() || item.studio != null) {
                     Text(
-                        item.genres.joinToString(", "),
+                        listOfNotNull(item.genres.takeIf { it.isNotEmpty() }?.joinToString(", "), item.studio)
+                            .joinToString(" · "),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                item.tagline?.takeIf { it.isNotBlank() }?.let {
+                    Text(
+                        it,
+                        style = MaterialTheme.typography.bodySmall.copy(fontStyle = FontStyle.Italic),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(top = 4.dp)
                     )
                 }
             }
@@ -457,7 +476,18 @@ private fun EpisodeList(episodes: List<MediaItemEntity>, onPlay: (String) -> Uni
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(Icons.Default.PlayArrow, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Text(label.ifBlank { episode.title }, modifier = Modifier.padding(start = 12.dp))
+                    Text(
+                        label.ifBlank { episode.title },
+                        modifier = Modifier.padding(start = 12.dp).weight(1f)
+                    )
+                    episode.premiered?.let {
+                        Text(
+                            it,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(start = 8.dp)
+                        )
+                    }
                 }
             }
         }
