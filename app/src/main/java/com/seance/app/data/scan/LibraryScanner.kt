@@ -2,6 +2,7 @@ package com.seance.app.data.scan
 
 import com.seance.app.data.local.entity.MediaItemEntity
 import com.seance.app.data.local.entity.SmbSourceEntity
+import com.seance.app.data.nfo.NfoMetadata
 import com.seance.app.data.nfo.NfoParser
 import com.seance.app.data.repository.LibraryRepository
 import com.seance.app.data.repository.SmbSourceRepository
@@ -15,6 +16,7 @@ import com.seance.app.data.smb.isImage
 import com.seance.app.data.smb.isSubtitle
 import com.seance.app.data.smb.isVideo
 import com.seance.app.domain.model.Category
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -75,11 +77,15 @@ class LibraryScanner(
             val imageFiles = allFiles.filter { it.isImage }
 
             val indexed = AtomicInteger(0)
+            // Kodi's per-episode .nfo (episodedetails) rarely carries genre/year - those live only
+            // in the show-root tvshow.nfo - so fetch it once per show (not once per episode) and
+            // reuse across every episode of the same series within this scan.
+            val showNfoCache = ConcurrentHashMap<String, NfoMetadata?>()
             val items = coroutineScope {
                 videoFiles.map { file ->
                     async {
                         val item = withConnection(pool) { connection ->
-                            toMediaItem(source, connection, file, subtitleFiles, imageFiles)
+                            toMediaItem(source, connection, file, subtitleFiles, imageFiles, showNfoCache)
                         }
                         onProgress(
                             ScanProgress(
@@ -141,7 +147,8 @@ class LibraryScanner(
         connection: SmbConnection,
         file: SmbFileRef,
         subtitleFiles: List<SmbFileRef>,
-        imageFiles: List<SmbFileRef>
+        imageFiles: List<SmbFileRef>,
+        showNfoCache: ConcurrentHashMap<String, NfoMetadata?>
     ): MediaItemEntity {
         val (headBytes, tailBytes) = connection.readEdgeSamples(file.path, file.sizeBytes, STABLE_ID_SAMPLE_BYTES)
         val stableId = StableIdGenerator.forFile(source.id, file.sizeBytes, headBytes, tailBytes)
@@ -178,6 +185,12 @@ class LibraryScanner(
         // fall back to the show's own root folder - a season subfolder rarely has its own poster,
         // that normally sits at .../Сериалы/ShowName/poster.jpg, one level above "Сезон N".
         val showFolder = seriesStableId?.substringAfter('|')
+        // Fallback for fields Kodi/tinyMediaManager write once at the show level (tvshow.nfo)
+        // rather than repeating in every episode's own .nfo - genre and year most commonly,
+        // sometimes rating/country/plot too. Without this, series categories end up with no
+        // genre/year on any item, which silently disables the Library genre/year filter chips
+        // (they only render when at least one item in the category has a value).
+        val showMetadata = showFolder?.let { fetchShowNfo(connection, it, showNfoCache) }
         val imageSearchFolders = listOfNotNull(videoFolder, showFolder).distinct()
         // Beyond a plain "poster.jpg"/"fanart.jpg", also match Kodi/tinyMediaManager's
         // "<video name>-fanart.jpg" convention and numbered extrafanart variants like
@@ -214,10 +227,10 @@ class LibraryScanner(
             category = category,
             title = metadata?.title ?: baseName,
             originalTitle = metadata?.originalTitle,
-            year = metadata?.year,
-            genres = metadata?.genres ?: emptyList(),
-            rating = metadata?.rating,
-            country = metadata?.country,
+            year = metadata?.year ?: showMetadata?.year,
+            genres = metadata?.genres?.takeIf { it.isNotEmpty() } ?: showMetadata?.genres ?: emptyList(),
+            rating = metadata?.rating ?: showMetadata?.rating,
+            country = metadata?.country ?: showMetadata?.country,
             runtimeMinutes = metadata?.runtimeMinutes,
             plot = metadata?.plot,
             director = metadata?.director ?: emptyList(),
@@ -233,6 +246,20 @@ class LibraryScanner(
             sizeBytes = file.sizeBytes,
             subtitlePaths = subtitlePaths
         )
+    }
+
+    /** Parses [showFolder]'s tvshow.nfo once and caches the result (including a miss) for the rest of this scan. */
+    private fun fetchShowNfo(
+        connection: SmbConnection,
+        showFolder: String,
+        cache: ConcurrentHashMap<String, NfoMetadata?>
+    ): NfoMetadata? = cache.computeIfAbsent(showFolder) {
+        val path = "$showFolder\\tvshow.nfo"
+        if (connection.fileExists(path)) {
+            connection.openInputStream(path).use { nfoParser.parse(it) }
+        } else {
+            null
+        }
     }
 
     private data class CategoryMatch(val category: Category, val categoryFolderIndex: Int)
