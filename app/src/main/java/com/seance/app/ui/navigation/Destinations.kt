@@ -38,6 +38,9 @@ sealed interface Destination {
     data object Settings : Destination
 
     @Serializable
+    data object Cache : Destination
+
+    @Serializable
     data object Onboarding : Destination
 
     @Serializable

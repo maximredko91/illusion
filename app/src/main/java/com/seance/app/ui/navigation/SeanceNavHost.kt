@@ -57,6 +57,7 @@ import com.seance.app.ui.person.PersonScreen
 import com.seance.app.ui.player.PlayerScreen
 import com.seance.app.ui.scan.ScanProgressScreen
 import com.seance.app.ui.search.SearchScreen
+import com.seance.app.ui.settings.CacheScreen
 import com.seance.app.ui.settings.SettingsScreen
 import com.seance.app.ui.settings.SettingsViewModel
 import com.seance.app.ui.smbsource.AddSmbSourceScreen
@@ -358,7 +359,7 @@ private fun SeanceNavHostContent(app: SeanceApplication) {
                     onSeekDurationChange = settingsViewModel::setSeekDurationSeconds,
                     cacheSizeBytes = cacheSizeBytes,
                     onRefreshCacheSize = { settingsViewModel.refreshCacheSize(context) },
-                    onClearCache = { settingsViewModel.clearCache(context) },
+                    onOpenCache = { navController.navigate(Destination.Cache) },
                     onToggleChargingRequirement = { enabled ->
                         settingsViewModel.setRequireChargingForHeavyTasks(context, enabled)
                     },
@@ -367,8 +368,6 @@ private fun SeanceNavHostContent(app: SeanceApplication) {
                         val workId = WorkScheduler.enqueueOneTimeScan(context)
                         navController.navigate(Destination.ScanProgress(workId.toString()))
                     },
-                    posterCachingEnabled = settingsViewModel.posterCachingEnabled,
-                    onSetPosterCachingEnabled = { enabled -> settingsViewModel.setPosterCachingEnabled(context, enabled) },
                     downloadsFolderUri = settingsViewModel.downloadsFolderUri,
                     onPickDownloadsFolder = { uri -> settingsViewModel.setDownloadsFolderUri(context, uri) },
                     downloadsSizeBytes = downloadsSizeBytes,
@@ -384,6 +383,21 @@ private fun SeanceNavHostContent(app: SeanceApplication) {
                     onAddSource = { navController.navigate(Destination.AddSmbSource) },
                     onEditSource = { source -> navController.navigate(Destination.EditSmbSource(source.id)) },
                     onDeleteSource = { source -> settingsViewModel.deleteSource(source) }
+                )
+            }
+            composable<Destination.Cache> {
+                val context = LocalContext.current
+                val settingsViewModel: SettingsViewModel = viewModel(
+                    factory = SettingsViewModel.factory(app.smbSourceRepository, app.settingsRepository, app.thumbnailRepository, app.downloadRepository, app.backupManager)
+                )
+                val cacheSizeBytes by settingsViewModel.cacheSizeBytes.collectAsState()
+                CacheScreen(
+                    cacheSizeBytes = cacheSizeBytes,
+                    onRefreshCacheSize = { settingsViewModel.refreshCacheSize(context) },
+                    onClearCache = { settingsViewModel.clearCache(context) },
+                    posterCachingEnabled = settingsViewModel.posterCachingEnabled,
+                    onSetPosterCachingEnabled = { enabled -> settingsViewModel.setPosterCachingEnabled(context, enabled) },
+                    onBack = { navController.popBackStack() }
                 )
             }
             composable<Destination.AddSmbSource> {

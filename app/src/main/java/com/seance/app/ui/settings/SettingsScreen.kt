@@ -48,16 +48,12 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
-import androidx.work.WorkInfo
-import androidx.work.WorkManager
 import com.seance.app.R
 import com.seance.app.data.backup.BackupSource
 import com.seance.app.data.download.DownloadStorage
 import com.seance.app.data.local.entity.SmbSourceEntity
 import com.seance.app.ui.common.reject
 import com.seance.app.ui.common.toggle
-import com.seance.app.work.PosterPreloadWorker
-import com.seance.app.work.WorkScheduler
 import kotlinx.coroutines.flow.Flow
 
 private val RESCAN_OPTIONS = listOf(0, 6, 12, 24, 48)
@@ -72,12 +68,10 @@ fun SettingsScreen(
     onSeekDurationChange: (Int) -> Unit,
     cacheSizeBytes: Long?,
     onRefreshCacheSize: () -> Unit,
-    onClearCache: () -> Unit,
+    onOpenCache: () -> Unit,
     onToggleChargingRequirement: (Boolean) -> Unit,
     onRescanIntervalChange: (Int) -> Unit,
     onRescanNow: () -> Unit,
-    posterCachingEnabled: Flow<Boolean>,
-    onSetPosterCachingEnabled: (Boolean) -> Unit,
     downloadsFolderUri: Flow<String?>,
     onPickDownloadsFolder: (android.net.Uri?) -> Unit,
     downloadsSizeBytes: Long?,
@@ -111,13 +105,6 @@ fun SettingsScreen(
     }
 
     LaunchedEffect(Unit) { onRefreshDownloadsSize() }
-    val preloadWorkInfos by remember(context) {
-        WorkManager.getInstance(context).getWorkInfosForUniqueWorkFlow(WorkScheduler.POSTER_PRELOAD_WORK_NAME)
-    }.collectAsState(initial = emptyList())
-    val preloadInfo = preloadWorkInfos.firstOrNull()
-    val preloadRunning = preloadInfo?.state == WorkInfo.State.RUNNING || preloadInfo?.state == WorkInfo.State.ENQUEUED
-    val cachingEnabled by posterCachingEnabled.collectAsState(initial = true)
-    var showDisableCachingConfirm by remember { mutableStateOf(false) }
     val haptics = LocalHapticFeedback.current
 
     LaunchedEffect(Unit) { onRefreshCacheSize() }
@@ -152,26 +139,6 @@ fun SettingsScreen(
             text = { Text(backupMessage) },
             confirmButton = {
                 TextButton(onClick = onDismissBackupMessage) { Text(stringResource(R.string.player_close)) }
-            }
-        )
-    }
-
-    if (showDisableCachingConfirm) {
-        AlertDialog(
-            onDismissRequest = { showDisableCachingConfirm = false },
-            title = { Text(stringResource(R.string.settings_poster_cache_disable_title)) },
-            text = { Text(stringResource(R.string.settings_poster_cache_disable_message)) },
-            confirmButton = {
-                TextButton(onClick = {
-                    haptics.reject()
-                    showDisableCachingConfirm = false
-                    onSetPosterCachingEnabled(false)
-                }) { Text(stringResource(R.string.settings_poster_cache_disable_confirm)) }
-            },
-            dismissButton = {
-                TextButton(onClick = { showDisableCachingConfirm = false }) {
-                    Text(stringResource(R.string.action_cancel))
-                }
             }
         )
     }
@@ -276,7 +243,8 @@ fun SettingsScreen(
             SettingsGroupLabel(stringResource(R.string.settings_cache))
             SettingsGroup {
                 ListItem(
-                    headlineContent = {
+                    headlineContent = { Text(stringResource(R.string.settings_cache)) },
+                    supportingContent = {
                         Text(
                             if (cacheSizeBytes != null) {
                                 stringResource(R.string.settings_cache_size, formatBytes(cacheSizeBytes))
@@ -285,50 +253,10 @@ fun SettingsScreen(
                             }
                         )
                     },
-                    trailingContent = {
-                        OutlinedButton(onClick = onClearCache) {
-                            Text(stringResource(R.string.settings_cache_clear))
-                        }
-                    },
                     colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-                    modifier = Modifier.fillMaxWidth()
-                )
-                SettingsDivider()
-                ListItem(
-                    headlineContent = { Text(stringResource(R.string.settings_poster_caching)) },
-                    supportingContent = {
-                        Text(
-                            when {
-                                preloadRunning -> {
-                                    val processed = preloadInfo?.progress?.getInt(PosterPreloadWorker.KEY_PROCESSED, 0) ?: 0
-                                    val total = preloadInfo?.progress?.getInt(PosterPreloadWorker.KEY_TOTAL, 0) ?: 0
-                                    if (total > 0) {
-                                        stringResource(R.string.settings_poster_preload_progress, processed, total)
-                                    } else {
-                                        stringResource(R.string.settings_poster_preload_starting)
-                                    }
-                                }
-                                cachingEnabled && preloadInfo?.state == WorkInfo.State.SUCCEEDED ->
-                                    stringResource(R.string.settings_poster_preload_done)
-                                else -> stringResource(R.string.settings_poster_caching_description)
-                            }
-                        )
-                    },
-                    trailingContent = {
-                        Switch(
-                            checked = cachingEnabled,
-                            onCheckedChange = { enabled ->
-                                haptics.toggle(enabled)
-                                if (enabled) {
-                                    onSetPosterCachingEnabled(true)
-                                } else {
-                                    showDisableCachingConfirm = true
-                                }
-                            }
-                        )
-                    },
-                    colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onOpenCache() }
                 )
             }
 
@@ -403,7 +331,7 @@ fun SettingsScreen(
 
 /** Section label shown above a [SettingsGroup] card, matching Material3's grouped-settings idiom. */
 @Composable
-private fun SettingsGroupLabel(text: String) {
+internal fun SettingsGroupLabel(text: String) {
     Text(
         text,
         style = MaterialTheme.typography.labelLarge,
@@ -414,7 +342,7 @@ private fun SettingsGroupLabel(text: String) {
 
 /** Groups related settings rows into one visually bounded card, so adjacent unrelated rows don't blend together. */
 @Composable
-private fun SettingsGroup(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
+internal fun SettingsGroup(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
     Card(
         modifier = modifier
             .fillMaxWidth()
@@ -425,7 +353,7 @@ private fun SettingsGroup(modifier: Modifier = Modifier, content: @Composable Co
 }
 
 @Composable
-private fun SettingsDivider() {
+internal fun SettingsDivider() {
     HorizontalDivider(
         modifier = Modifier.padding(horizontal = 16.dp),
         color = MaterialTheme.colorScheme.outlineVariant
@@ -480,7 +408,7 @@ private fun SeekDurationMenu(seconds: Int, onChange: (Int) -> Unit) {
     }
 }
 
-private fun formatBytes(bytes: Long): String {
+internal fun formatBytes(bytes: Long): String {
     val mb = bytes / (1024.0 * 1024.0)
     return if (mb >= 1024) "%.2f ГБ".format(mb / 1024) else "%.1f МБ".format(mb)
 }
