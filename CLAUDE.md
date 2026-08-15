@@ -22,35 +22,19 @@ MVVM, package-by-feature, **no DI framework** — `SeanceApplication.kt` manuall
 - Adaptive buffering is one-shot at player creation (bandwidth estimate), not continuous — swapping `LoadControl` on a live `ExoPlayer` risks `Allocator` desync.
 - GPU sharpen shader implemented against real decompiled Media3 1.11.0 bytecode (`javap` on Gradle-cached `.class` files), not guessed from docs — do this for other fast-moving Media3 Effects / newer Android platform APIs too.
 
-## Known bug — SMB connection timeout (root-caused, fix not yet applied)
+## Fixed bug — SMB connection timeout via `ACCESS_LOCAL_NETWORK` (resolved)
 
-App fails to connect to a confirmed-reachable SMB host (another app on the same phone connects fine; `adb shell nc` confirms ports 445 and 139 open; all standard permissions granted). **Root cause**: `targetSdk = 37` triggers Android's new mandatory `ACCESS_LOCAL_NETWORK` runtime permission (https://developer.android.com/privacy-and-security/local-network-permission) — any raw-socket local-network connection (which is exactly what `smbj` does) is silently blocked by the OS until this permission is declared *and* granted at runtime. The app currently does neither. Manifests as a plain TCP timeout, not an explicit denial — easy to misdiagnose as a network/router problem.
+`targetSdk = 37` triggers Android's mandatory `ACCESS_LOCAL_NETWORK` runtime permission (https://developer.android.com/privacy-and-security/local-network-permission) — any raw-socket local-network connection (which is exactly what `smbj` does) is silently blocked by the OS until this permission is declared *and* granted at runtime, manifesting as a plain TCP timeout rather than an explicit denial. **Fixed**: `AndroidManifest.xml` declares the permission, and `data/smb/LocalNetworkPermission.kt` + `ui/smbsource/LocalNetworkPermissionGate.kt` request/gate it at runtime, wired into onboarding, SMB add/edit forms, and scan/playback paths.
 
-**Fix** (not yet done):
-1. `AndroidManifest.xml`: add `<uses-permission android:name="android.permission.ACCESS_LOCAL_NETWORK" />`
-2. Request it at runtime (`ActivityResultContracts.RequestPermission()`) before any SMB `connect()` attempt — onboarding form, settings SMB add/edit form, and the scan/playback paths all need to check/request it first.
-3. Handle denial gracefully (clear message, since a bare timeout is what happens if you skip this and the user won't know why).
+## Implementation status vs spec (audited 2026-08-15 — re-verify before trusting specific claims, code moves fast)
 
-## Implementation status vs spec (audited 2026-08-12 — re-verify before trusting specific claims, code moves fast)
+**Working**: SMB multi-source scanning + Room index, `.nfo` parsing, 4-category model, onboarding + test-connection + scan-progress flow, bottom nav, player core (gestures, gradient bars, scrub thumbnails, resume, external subs, audio-track switching, PiP, immersive mode, autoplay-next, wake lock, error/retry), Material You + day/night, edge-to-edge, WorkManager charging-only constraint (for thumbnail gen), Details screen (fanart/poster/metadata/cast-filmography/similar/collections, continue-watching, zoomable poster/fanart), Coil image loading across all screens, functional search, library sort/filter UI, Favorites/History UI, backup export/import, periodic rescan (`WorkScheduler.schedulePeriodicScan`), rename-proof `StableIdGenerator` (hashes source+size+byte samples, not filename), offline downloads (`DownloadsScreen`/`DownloadWorker`/`DownloadEntity`), Settings cache management + rescan interval + SMB source edit, empty states/shimmer/shared-element transitions/haptics.
 
-**Working**: SMB multi-source scanning + Room index, `.nfo` parsing, 4-category model, onboarding + test-connection + scan-progress flow, bottom nav, player core (gestures, gradient bars, scrub thumbnails, resume, external subs, audio-track switching, PiP, immersive mode, autoplay-next, wake lock, error/retry), Material You + day/night, edge-to-edge, WorkManager charging-only constraint (for thumbnail gen).
-
-**Biggest gaps** (see full audit in session transcript for exhaustive per-requirement checklist; headline items):
-1. Details/card screen is a near-empty stub — no fanart/poster/metadata/cast-filmography/similar/collections. **Highest-impact gap.**
-2. Coil is a dependency but **never actually used** — no poster images render anywhere (Home, Library, Details all text-only).
-3. Search screen is a non-functional stub (no results, not wired to `MediaItemDao.search()`).
-4. Library sort/filter backend exists, no UI control to use it.
-5. Favorites/History have data layers, zero UI.
-6. Backup export/import — dead menu item in Settings.
-7. `WorkScheduler.schedulePeriodicScan()` defined, never called — periodic rescan is dead code.
-8. `StableIdGenerator` hashes filename directly — survives file *move* but not *rename*, defeating its stated purpose.
-9. Dolby Vision RPU/EL explicit handling missing (spec explicitly calls this out as the one real DV risk).
-10. Cast/DLNA not implemented (deliberate, see above).
-11. Audio-fingerprint auto-skip-intro: Room fields exist, nothing populates them — dead feature by construction.
-12. Offline downloads: entirely absent.
-13. Settings: no cache-management UI, no rescan-interval UI, no SMB source *edit* (add/delete only).
-14. No `WindowSizeClass` adaptive layout / D-pad focus handling anywhere (TV support unaddressed).
-15. No empty states, shimmer/skeleton loading, shared-element transitions, or haptics.
+**Remaining real gaps**:
+1. Dolby Vision RPU/EL explicit handling missing (spec explicitly calls this out as the one real DV risk).
+2. No `WindowSizeClass` adaptive layout / D-pad focus handling anywhere (TV support unaddressed).
+3. Audio-fingerprint auto-skip-intro: `PlayerViewModel` reads `introStartMs`/`introEndMs`, but nothing ever writes them — dead feature, reader exists with no writer.
+4. Cast/DLNA not implemented (deliberate, see above — not a gap to close).
 
 ## Working conventions
 
