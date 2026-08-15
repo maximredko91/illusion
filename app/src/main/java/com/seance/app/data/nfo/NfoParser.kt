@@ -23,6 +23,10 @@ class NfoParser {
         var plot: String? = null
         val directors = mutableListOf<String>()
         val actors = mutableListOf<String>()
+        // Parallel to `actors` by index (empty string where the nfo didn't specify a role) rather
+        // than a name->role map, since the same actor name can legitimately appear twice with
+        // different roles and a map would silently collapse that.
+        val actorRoles = mutableListOf<String>()
         var country: String? = null
         var runtime: Int? = null
         var collectionName: String? = null
@@ -41,6 +45,7 @@ class NfoParser {
         var inSet = false
         var inFanart = false
         var currentActorName: String? = null
+        var currentActorRole: String? = null
         var currentTag: String? = null
         // <uniqueid type="imdb">tt123</uniqueid> / <uniqueid type="tmdb">456</uniqueid> - the id
         // itself lives in the tag's TEXT, but which service it's for is a START_TAG attribute, so
@@ -88,6 +93,7 @@ class NfoParser {
                                 inActor -> currentActorName = text
                                 inSet -> collectionName = text
                             }
+                            "role" -> if (inActor) currentActorRole = text
                             "country" -> country = text
                             "runtime" -> runtime = text.toIntOrNull()
                             "season" -> season = text.toIntOrNull()
@@ -112,8 +118,12 @@ class NfoParser {
                 XmlPullParser.END_TAG -> {
                     when (parser.name) {
                         "actor" -> {
-                            currentActorName?.let { actors.add(it) }
+                            currentActorName?.let {
+                                actors.add(it)
+                                actorRoles.add(currentActorRole ?: "")
+                            }
                             currentActorName = null
+                            currentActorRole = null
                             inActor = false
                         }
                         "set" -> inSet = false
@@ -139,6 +149,7 @@ class NfoParser {
             plot = plot,
             director = directors,
             actors = actors,
+            actorRoles = actorRoles,
             country = country,
             runtimeMinutes = runtime,
             collectionName = collectionName,

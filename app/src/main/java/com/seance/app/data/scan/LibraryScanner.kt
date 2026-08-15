@@ -235,6 +235,7 @@ class LibraryScanner(
             plot = metadata?.plot,
             director = metadata?.director ?: emptyList(),
             actors = metadata?.actors ?: emptyList(),
+            actorRoles = metadata?.actorRoles ?: emptyList(),
             collectionName = metadata?.collectionName,
             posterPath = posterPath,
             fanartPath = fanartPath,

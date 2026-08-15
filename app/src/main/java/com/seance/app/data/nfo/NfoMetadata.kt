@@ -9,6 +9,8 @@ data class NfoMetadata(
     val plot: String? = null,
     val director: List<String> = emptyList(),
     val actors: List<String> = emptyList(),
+    /** Parallel to [actors] by index; empty string where the nfo has no role for that actor. */
+    val actorRoles: List<String> = emptyList(),
     val country: String? = null,
     val runtimeMinutes: Int? = null,
     val collectionName: String? = null,

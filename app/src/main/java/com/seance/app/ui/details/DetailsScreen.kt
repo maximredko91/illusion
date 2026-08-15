@@ -342,7 +342,11 @@ private fun DetailsContent(
             PersonRow(stringResource(R.string.details_director), item.director, clickablePersons, onOpenPerson)
         }
         if (item.actors.isNotEmpty()) {
-            PersonRow(stringResource(R.string.details_actors), item.actors, clickablePersons, onOpenPerson)
+            val roles = item.actorRoles.takeIf { it.size == item.actors.size }
+            val labels = item.actors.mapIndexed { index, name ->
+                roles?.get(index)?.takeIf { it.isNotBlank() }?.let { role -> "$name — $role" } ?: name
+            }
+            PersonRow(stringResource(R.string.details_actors), labels, item.actors, clickablePersons, onOpenPerson)
         }
 
         if (collection.isNotEmpty()) {
@@ -427,20 +431,36 @@ private fun DownloadButton(
 }
 
 @Composable
-private fun PersonRow(label: String, names: List<String>, clickablePersons: Set<String>, onOpenPerson: (String) -> Unit) {
+private fun PersonRow(
+    label: String,
+    names: List<String>,
+    clickablePersons: Set<String>,
+    onOpenPerson: (String) -> Unit
+) = PersonRow(label, names, names, clickablePersons, onOpenPerson)
+
+/** [displayLabels] (e.g. "Имя — Роль") drives what's shown; [names] (the actual person name, no role suffix) drives the click target and filmography lookup - they stay separate so a role suffix never breaks navigation/matching. */
+@Composable
+private fun PersonRow(
+    label: String,
+    displayLabels: List<String>,
+    names: List<String>,
+    clickablePersons: Set<String>,
+    onOpenPerson: (String) -> Unit
+) {
     Column(modifier = Modifier.padding(top = 8.dp)) {
         Text(label, style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(horizontal = 16.dp))
         LazyRow(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
         ) {
-            items(names) { name ->
+            items(displayLabels.indices.toList()) { index ->
+                val name = names[index]
                 // Only worth a filmography screen when the person has more than one title here -
                 // otherwise it's just this one item again, so the chip stays inert (greyed out).
                 val clickable = name in clickablePersons
                 AssistChip(
                     onClick = { if (clickable) onOpenPerson(name) },
-                    label = { Text(name) },
+                    label = { Text(displayLabels[index]) },
                     enabled = clickable
                 )
             }
