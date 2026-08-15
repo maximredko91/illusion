@@ -21,6 +21,7 @@ MVVM, package-by-feature, **no DI framework** — `SeanceApplication.kt` manuall
 - Chromecast/DLNA deliberately not implemented — a Chromecast can't read SMB directly, would need a local HTTP bridge server (bigger subsystem, out of scope for now). Cast button in the player UI is a visible disabled stub, not forgotten.
 - Adaptive buffering is one-shot at player creation (bandwidth estimate), not continuous — swapping `LoadControl` on a live `ExoPlayer` risks `Allocator` desync.
 - GPU sharpen shader implemented against real decompiled Media3 1.11.0 bytecode (`javap` on Gradle-cached `.class` files), not guessed from docs — do this for other fast-moving Media3 Effects / newer Android platform APIs too.
+- Dolby Vision Profile 7 (FEL, dual-layer) enhancement-layer detail can never be composited by this app, on the phone *or* the Xiaomi TV Box target — verified by decompiling media3-container 1.11.0's `DolbyVisionConfig.java` (only parses `dvcC`/`dvvC` for a codec string, never reads `el_present_flag` or an EL track) and cross-checking AOSP's HDR docs (BL+EL concatenation needs a vendor `MediaExtractor`, not available through ExoPlayer's Java extractors, which is all this app's `SmbDataSource` pipeline uses). Not a decoder-capability gap on any specific device — it's architectural. Player now surfaces the DV profile number in its diagnostic overlay and a plain-language warning when Profile 7 is detected, rather than attempting compositing.
 
 ## Fixed bug — SMB connection timeout via `ACCESS_LOCAL_NETWORK` (resolved)
 
@@ -31,10 +32,10 @@ MVVM, package-by-feature, **no DI framework** — `SeanceApplication.kt` manuall
 **Working**: SMB multi-source scanning + Room index, `.nfo` parsing, 4-category model, onboarding + test-connection + scan-progress flow, bottom nav, player core (gestures, gradient bars, scrub thumbnails, resume, external subs, audio-track switching, PiP, immersive mode, autoplay-next, wake lock, error/retry), Material You + day/night, edge-to-edge, WorkManager charging-only constraint (for thumbnail gen), Details screen (fanart/poster/metadata/cast-filmography/similar/collections, continue-watching, zoomable poster/fanart), Coil image loading across all screens, functional search, library sort/filter UI, Favorites/History UI, backup export/import, periodic rescan (`WorkScheduler.schedulePeriodicScan`), rename-proof `StableIdGenerator` (hashes source+size+byte samples, not filename), offline downloads (`DownloadsScreen`/`DownloadWorker`/`DownloadEntity`), Settings cache management + rescan interval + SMB source edit, empty states/shimmer/shared-element transitions/haptics.
 
 **Remaining real gaps**:
-1. Dolby Vision RPU/EL explicit handling missing (spec explicitly calls this out as the one real DV risk).
-2. No `WindowSizeClass` adaptive layout / D-pad focus handling anywhere (TV support unaddressed).
-3. Audio-fingerprint auto-skip-intro: `PlayerViewModel` reads `introStartMs`/`introEndMs`, but nothing ever writes them — dead feature, reader exists with no writer.
-4. Cast/DLNA not implemented (deliberate, see above — not a gap to close).
+1. No `WindowSizeClass` adaptive layout / D-pad focus handling anywhere — TV support unaddressed, and the app is now confirmed to also target a Xiaomi TV Box (gen 3), so this is a real near-term gap, not hypothetical.
+2. Audio-fingerprint auto-skip-intro: `PlayerViewModel` reads `introStartMs`/`introEndMs`, but nothing ever writes them — dead feature, reader exists with no writer.
+3. Cast/DLNA not implemented (deliberate, see above — not a gap to close).
+4. Dolby Vision Profile 7 (FEL) enhancement-layer detail — resolved as "won't fix, diagnosed instead": see the key-decisions note above. Not on the gaps list anymore; the player now tells the user honestly rather than silently doing nothing.
 
 ## Working conventions
 
