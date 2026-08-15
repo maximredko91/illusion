@@ -325,15 +325,30 @@ class PlayerViewModel(
         player.trackSelectionParameters = builder.build()
     }
 
-    /** Diagnostic snapshot of the currently rendered video track - used to verify HDR10/DV actually negotiated on-device. */
+    /**
+     * Diagnostic snapshot of the currently rendered video track - used to verify HDR10/DV actually
+     * negotiated on-device. Also flags Dolby Vision Profile 7 specifically: it's DV's only
+     * dual-layer profile (a low-res enhancement-layer stream + RPU on top of the base layer), and
+     * this app can never composite that layer even in principle - Media3's own MP4/MKV extractors
+     * only ever parse the `dvcC`/`dvvC` config box for a codec string (verified by decompiling
+     * media3-container 1.11.0's `DolbyVisionConfig.java` - it stops after profile/level, never
+     * reads `el_present_flag` or an EL track), and AOSP's own HDR docs confirm BL+EL concatenation
+     * requires a vendor-supplied "Dolby-Vision capable MediaExtractor" that only the platform
+     * `android.media.MediaExtractor` can hand off to - not available through ExoPlayer's Java
+     * extractors, which is all this app's custom SmbDataSource pipeline uses. True either on the
+     * phone or the Xiaomi TV box, regardless of that box's decoder chip. Profile 7 still plays -
+     * MediaCodec decodes the base layer like any other HEVC track - just without the EL detail.
+     */
     fun currentVideoFormatSummary(): String {
         val format = player.videoFormat ?: return "Видеодорожка ещё не определена"
         val color = format.colorInfo
-        val isDolbyVision = format.codecs?.let {
-            it.startsWith("dvhe") || it.startsWith("dvh1") || it.startsWith("dva1") || it.startsWith("dvav")
-        } == true
+        val dvProfile = format.codecs
+            ?.takeIf { it.startsWith("dvhe") || it.startsWith("dvh1") || it.startsWith("dva1") || it.startsWith("dvav") }
+            ?.split(".")
+            ?.getOrNull(1)
+            ?.toIntOrNull()
         val dynamicRange = when {
-            isDolbyVision -> "Dolby Vision"
+            dvProfile != null -> "Dolby Vision (Profile $dvProfile)"
             color?.colorTransfer == C.COLOR_TRANSFER_ST2084 -> "HDR10/HDR10+"
             color?.colorTransfer == C.COLOR_TRANSFER_HLG -> "HLG"
             else -> "SDR"
@@ -343,6 +358,13 @@ class PlayerViewModel(
             appendLine("Разрешение: ${format.width}x${format.height}")
             appendLine("Динамический диапазон: $dynamicRange")
             appendLine("Цвет: пространство=${color?.colorSpace ?: "—"}, transfer=${color?.colorTransfer ?: "—"}, range=${color?.colorRange ?: "—"}")
+            if (dvProfile == 7) {
+                appendLine()
+                append(
+                    "⚠ Profile 7 хранит доп. детализацию в отдельном enhancement-layer потоке. " +
+                        "Плеер показывает только базовый слой - картинка корректна, но без этой детализации."
+                )
+            }
         }
     }
 
