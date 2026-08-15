@@ -12,7 +12,9 @@ import com.seance.app.data.image.SmbImageConnectionPool
 import com.seance.app.data.image.SmbImageFetcher
 import com.seance.app.data.local.AppDatabase
 import com.seance.app.data.nfo.NfoParser
+import com.seance.app.data.player.AudioTrackProber
 import com.seance.app.data.player.SmbDataSourceFactory
+import com.seance.app.data.repository.AudioTrackRepository
 import com.seance.app.data.repository.DownloadRepository
 import com.seance.app.data.repository.LibraryRepository
 import com.seance.app.data.repository.SmbSourceRepository
@@ -63,6 +65,8 @@ class SeanceApplication : Application(), Configuration.Provider, SingletonImageL
     }
     val downloadRepository: DownloadRepository by lazy { DownloadRepository(this, database.downloadDao()) }
     val backupManager: BackupManager by lazy { BackupManager(smbSourceRepository, watchProgressRepository) }
+    val audioTrackRepository: AudioTrackRepository by lazy { AudioTrackRepository(database.audioTrackDao()) }
+    val audioTrackProber: AudioTrackProber by lazy { AudioTrackProber(this, smbDataSourceFactory) }
 
     override val workManagerConfiguration: Configuration
         get() = Configuration.Builder()

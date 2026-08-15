@@ -68,6 +68,8 @@ import com.seance.app.data.image.posterModel
 import com.seance.app.data.local.entity.DownloadEntity
 import com.seance.app.data.local.entity.DownloadStatus
 import com.seance.app.data.local.entity.MediaItemEntity
+import com.seance.app.data.player.AudioTrackProber
+import com.seance.app.data.repository.AudioTrackRepository
 import com.seance.app.data.repository.DownloadRepository
 import com.seance.app.data.repository.LibraryRepository
 import com.seance.app.data.repository.WatchProgressRepository
@@ -85,6 +87,8 @@ fun DetailsScreen(
     libraryRepository: LibraryRepository,
     watchProgressRepository: WatchProgressRepository,
     downloadRepository: DownloadRepository,
+    audioTrackRepository: AudioTrackRepository,
+    audioTrackProber: AudioTrackProber,
     onPlay: (String) -> Unit,
     onOpenPerson: (String) -> Unit,
     onOpenItem: (String) -> Unit,
@@ -93,7 +97,14 @@ fun DetailsScreen(
 ) {
     val viewModel: DetailsViewModel = viewModel(
         key = stableId,
-        factory = DetailsViewModel.factory(stableId, libraryRepository, watchProgressRepository, downloadRepository)
+        factory = DetailsViewModel.factory(
+            stableId,
+            libraryRepository,
+            watchProgressRepository,
+            downloadRepository,
+            audioTrackRepository,
+            audioTrackProber
+        )
     )
     val state by viewModel.state.collectAsState()
     val isFavorite by viewModel.isFavorite.collectAsState()
@@ -109,6 +120,7 @@ fun DetailsScreen(
             item != null -> DetailsContent(
                 item = item,
                 displayTitle = state.seriesTitle ?: item.title,
+                audioTracks = state.audioTracks,
                 clickablePersons = state.clickablePersons,
                 similar = state.similar,
                 collection = state.collection,
@@ -140,6 +152,7 @@ fun DetailsScreen(
 private fun DetailsContent(
     item: MediaItemEntity,
     displayTitle: String,
+    audioTracks: List<String>?,
     clickablePersons: Set<String>,
     similar: List<MediaItemEntity>,
     collection: List<MediaItemEntity>,
@@ -294,6 +307,15 @@ private fun DetailsContent(
             style = MaterialTheme.typography.bodyMedium,
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
         )
+
+        audioTracks?.takeIf { it.isNotEmpty() }?.let { tracks ->
+            Text(
+                stringResource(R.string.details_audio_tracks, tracks.joinToString("; ")),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+            )
+        }
 
         if (episodes.isNotEmpty()) {
             EpisodeList(episodes, onPlay)

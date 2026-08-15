@@ -308,6 +308,8 @@ private fun SeanceNavHostContent(app: SeanceApplication) {
                         libraryRepository = app.libraryRepository,
                         watchProgressRepository = app.watchProgressRepository,
                         downloadRepository = app.downloadRepository,
+                        audioTrackRepository = app.audioTrackRepository,
+                        audioTrackProber = app.audioTrackProber,
                         onPlay = { stableId -> navController.navigate(Destination.Player(stableId)) },
                         onOpenPerson = { name -> navController.navigate(Destination.Person(name)) },
                         onOpenItem = { stableId -> navController.navigate(Destination.Details(stableId)) },

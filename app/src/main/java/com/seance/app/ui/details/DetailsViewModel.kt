@@ -8,6 +8,8 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import com.seance.app.data.local.entity.DownloadEntity
 import com.seance.app.data.local.entity.MediaItemEntity
 import com.seance.app.data.local.entity.WatchProgressEntity
+import com.seance.app.data.player.AudioTrackProber
+import com.seance.app.data.repository.AudioTrackRepository
 import com.seance.app.data.repository.DownloadRepository
 import com.seance.app.data.repository.LibraryRepository
 import com.seance.app.data.repository.WatchProgressRepository
@@ -18,6 +20,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 data class DetailsUiState(
@@ -27,7 +30,9 @@ data class DetailsUiState(
     val episodes: List<MediaItemEntity> = emptyList(),
     /** Director/actor names with more than one title in the library - only these are worth opening a filmography for. */
     val clickablePersons: Set<String> = emptySet(),
-    val isLoading: Boolean = true
+    val isLoading: Boolean = true,
+    /** null = not probed yet (or probe failed/timed out); empty = probed, container had none. */
+    val audioTracks: List<String>? = null
 ) {
     /** The show's own name, e.g. "Больница Питт (2025)" - the show folder, not this representative episode's own NFO title. */
     val seriesTitle: String?
@@ -38,7 +43,9 @@ class DetailsViewModel(
     private val stableId: String,
     private val libraryRepository: LibraryRepository,
     private val watchProgressRepository: WatchProgressRepository,
-    private val downloadRepository: DownloadRepository
+    private val downloadRepository: DownloadRepository,
+    private val audioTrackRepository: AudioTrackRepository,
+    private val audioTrackProber: AudioTrackProber
 ) : ViewModel() {
     private val _state = MutableStateFlow(DetailsUiState())
     val state: StateFlow<DetailsUiState> = _state.asStateFlow()
@@ -81,7 +88,19 @@ class DetailsViewModel(
                 clickablePersons = clickablePersons,
                 isLoading = false
             )
+            loadAudioTracks(item)
         }
+    }
+
+    private suspend fun loadAudioTracks(item: MediaItemEntity) {
+        val cached = audioTrackRepository.getForItem(item.stableId)
+        if (cached != null) {
+            _state.update { it.copy(audioTracks = cached.tracks) }
+            return
+        }
+        val probed = audioTrackProber.probe(item.sourceId, item.filePath, item.sizeBytes) ?: return
+        audioTrackRepository.save(item.stableId, probed, System.currentTimeMillis())
+        _state.update { it.copy(audioTracks = probed) }
     }
 
     fun toggleFavorite() {
@@ -105,9 +124,20 @@ class DetailsViewModel(
             stableId: String,
             libraryRepository: LibraryRepository,
             watchProgressRepository: WatchProgressRepository,
-            downloadRepository: DownloadRepository
+            downloadRepository: DownloadRepository,
+            audioTrackRepository: AudioTrackRepository,
+            audioTrackProber: AudioTrackProber
         ) = viewModelFactory {
-            initializer { DetailsViewModel(stableId, libraryRepository, watchProgressRepository, downloadRepository) }
+            initializer {
+                DetailsViewModel(
+                    stableId,
+                    libraryRepository,
+                    watchProgressRepository,
+                    downloadRepository,
+                    audioTrackRepository,
+                    audioTrackProber
+                )
+            }
         }
     }
 }

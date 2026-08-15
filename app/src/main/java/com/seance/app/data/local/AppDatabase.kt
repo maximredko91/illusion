@@ -7,12 +7,14 @@ import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
+import com.seance.app.data.local.dao.AudioTrackDao
 import com.seance.app.data.local.dao.DownloadDao
 import com.seance.app.data.local.dao.FavoriteDao
 import com.seance.app.data.local.dao.MediaItemDao
 import com.seance.app.data.local.dao.SmbSourceDao
 import com.seance.app.data.local.dao.ThumbnailSpriteDao
 import com.seance.app.data.local.dao.WatchProgressDao
+import com.seance.app.data.local.entity.AudioTrackEntity
 import com.seance.app.data.local.entity.DownloadEntity
 import com.seance.app.data.local.entity.FavoriteEntity
 import com.seance.app.data.local.entity.MediaItemEntity
@@ -27,9 +29,10 @@ import com.seance.app.data.local.entity.WatchProgressEntity
         WatchProgressEntity::class,
         FavoriteEntity::class,
         ThumbnailSpriteEntity::class,
-        DownloadEntity::class
+        DownloadEntity::class,
+        AudioTrackEntity::class
     ],
-    version = 3
+    version = 4
 )
 @TypeConverters(Converters::class)
 abstract class AppDatabase : RoomDatabase() {
@@ -39,6 +42,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun favoriteDao(): FavoriteDao
     abstract fun thumbnailSpriteDao(): ThumbnailSpriteDao
     abstract fun downloadDao(): DownloadDao
+    abstract fun audioTrackDao(): AudioTrackDao
 
     companion object {
         @Volatile
@@ -88,13 +92,28 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        private val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `audio_tracks` (
+                        `stableId` TEXT NOT NULL,
+                        `tracks` TEXT NOT NULL,
+                        `probedAt` INTEGER NOT NULL,
+                        PRIMARY KEY(`stableId`)
+                    )
+                    """.trimIndent()
+                )
+            }
+        }
+
         fun getInstance(context: Context): AppDatabase =
             instance ?: synchronized(this) {
                 instance ?: Room.databaseBuilder(
                     context.applicationContext,
                     AppDatabase::class.java,
                     "seance.db"
-                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3).build().also { instance = it }
+                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4).build().also { instance = it }
             }
     }
 }
