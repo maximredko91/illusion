@@ -9,13 +9,19 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -58,6 +64,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -173,7 +180,27 @@ private fun DetailsContent(
 ) {
     var zoomedImage by remember { mutableStateOf<Any?>(null) }
 
-    Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            // Push everything - including the fanart backdrop, not just the back button - below
+            // the status bar, instead of letting the fanart bleed under it. Simpler and more
+            // robust than darkening the top of the image for icon contrast: a bright backdrop
+            // (e.g. a poster with a white background) can't wash out status-bar icons if nothing
+            // ever renders behind them.
+            .statusBarsPadding()
+            // Landscape on this device has a real display-cutout inset on one side (front
+            // camera) - the rest of the app deliberately uses a fixed small margin instead of
+            // chasing the cutout dynamically (see CutoutAvoidance.kt, removed), but that fixed
+            // margin is narrower than the cutout itself, so content was rendering underneath it.
+            // Scoped to `displayCutout` specifically (not `safeDrawing`) - safeDrawing also folds
+            // in the gesture-nav side insets, which would add a left-side margin the rest of the
+            // app doesn't have and that isn't what's being fixed here. This is a static one-time
+            // inset (computed once, not per-scroll-position), unlike the rejected dynamic approach
+            // - it just widens the existing margin on whichever side the cutout actually is.
+            .windowInsetsPadding(WindowInsets.displayCutout.only(WindowInsetsSides.Horizontal))
+    ) {
         Box {
             val fanart = item.fanartModel
             Box(
@@ -318,6 +345,7 @@ private fun DetailsContent(
         Text(
             item.plot?.takeIf { it.isNotBlank() } ?: stringResource(R.string.details_no_description),
             style = MaterialTheme.typography.bodyMedium,
+            textAlign = TextAlign.Justify,
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
         )
 
