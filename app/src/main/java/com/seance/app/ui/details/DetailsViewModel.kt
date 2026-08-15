@@ -135,8 +135,31 @@ class DetailsViewModel(
 
     /** Cancels an in-progress download, or deletes a finished/failed one - either way the row and any partial file are gone. */
     fun removeDownload(context: Context) {
-        WorkScheduler.cancelDownload(context, stableId)
-        viewModelScope.launch { downloadRepository.remove(stableId) }
+        removeDownload(context, stableId)
+    }
+
+    /** Same as [removeDownload] but for a different item (an episode row in this show's list, not the item this screen was opened for). */
+    fun removeDownload(context: Context, targetStableId: String) {
+        WorkScheduler.cancelDownload(context, targetStableId)
+        viewModelScope.launch { downloadRepository.remove(targetStableId) }
+    }
+
+    /**
+     * Deletes every completed download among [episodeStableIds] - the season-list counterpart to
+     * [removeDownload]. Runs as one sequential batch in a single coroutine (not N detached
+     * `launch` calls, one per episode) - a dozen concurrent Room writes racing each other proved
+     * unreliable in practice (silently dropped a few rows under load), and a `runCatching` per
+     * item means one failure can't derail the rest of the batch.
+     */
+    fun removeSeasonDownloads(context: Context, episodeStableIds: List<String>) {
+        val current = downloads.value
+        val idsToRemove = episodeStableIds.filter { id -> current[id]?.status == DownloadStatus.COMPLETED }
+        viewModelScope.launch {
+            idsToRemove.forEach { id ->
+                WorkScheduler.cancelDownload(context, id)
+                runCatching { downloadRepository.remove(id) }
+            }
+        }
     }
 
     companion object {

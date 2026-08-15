@@ -151,6 +151,8 @@ fun DetailsScreen(
                 onRemoveDownload = { viewModel.removeDownload(context) },
                 onDownloadSeason = { ids -> viewModel.startSeasonDownload(context, ids) },
                 onDownloadEpisode = { id -> viewModel.startDownload(context, id) },
+                onRemoveEpisodeDownload = { id -> viewModel.removeDownload(context, id) },
+                onRemoveSeasonDownloads = { ids -> viewModel.removeSeasonDownloads(context, ids) },
                 onDownloadError = { message -> scope.launch { snackbarHostState.showSnackbar(message) } },
                 onPlay = onPlay,
                 onOpenPerson = onOpenPerson,
@@ -186,6 +188,8 @@ private fun DetailsContent(
     onRemoveDownload: () -> Unit,
     onDownloadSeason: (List<String>) -> Unit,
     onDownloadEpisode: (String) -> Unit,
+    onRemoveEpisodeDownload: (String) -> Unit,
+    onRemoveSeasonDownloads: (List<String>) -> Unit,
     onDownloadError: (String) -> Unit,
     onPlay: (String) -> Unit,
     onOpenPerson: (String) -> Unit,
@@ -421,7 +425,7 @@ private fun DetailsContent(
         }
 
         if (episodes.isNotEmpty()) {
-            EpisodeList(episodes, downloads, onPlay, onDownloadSeason, onDownloadEpisode)
+            EpisodeList(episodes, downloads, onPlay, onDownloadSeason, onDownloadEpisode, onRemoveEpisodeDownload, onRemoveSeasonDownloads)
         }
 
         if (item.director.isNotEmpty()) {
@@ -540,7 +544,9 @@ private fun EpisodeList(
     downloads: Map<String, DownloadEntity>,
     onPlay: (String) -> Unit,
     onDownloadSeason: (List<String>) -> Unit,
-    onDownloadEpisode: (String) -> Unit
+    onDownloadEpisode: (String) -> Unit,
+    onRemoveEpisodeDownload: (String) -> Unit,
+    onRemoveSeasonDownloads: (List<String>) -> Unit
 ) {
     val bySeason = episodes
         .sortedWith(compareBy({ it.seasonNumber ?: 0 }, { it.episodeNumber ?: 0 }))
@@ -550,6 +556,41 @@ private fun EpisodeList(
     // which for an unwatched show is itself a spoiler (episode titles/synopses give away plot
     // beats) as well as just a lot of scrolling to get past on the details page.
     var expandedSeasons by remember { mutableStateOf(emptySet<Int?>()) }
+    var episodeDownloadToRemove by remember { mutableStateOf<MediaItemEntity?>(null) }
+    var seasonDownloadsToRemove by remember { mutableStateOf<List<String>?>(null) }
+
+    episodeDownloadToRemove?.let { episode ->
+        AlertDialog(
+            onDismissRequest = { episodeDownloadToRemove = null },
+            title = { Text(stringResource(R.string.details_download_remove_confirm_title)) },
+            text = { Text(stringResource(R.string.details_download_remove_confirm_message, episode.title)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    onRemoveEpisodeDownload(episode.stableId)
+                    episodeDownloadToRemove = null
+                }) { Text(stringResource(R.string.details_download_remove_confirm_action)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { episodeDownloadToRemove = null }) { Text(stringResource(R.string.action_cancel)) }
+            }
+        )
+    }
+    seasonDownloadsToRemove?.let { ids ->
+        AlertDialog(
+            onDismissRequest = { seasonDownloadsToRemove = null },
+            title = { Text(stringResource(R.string.details_download_remove_confirm_title)) },
+            text = { Text(stringResource(R.string.details_download_season_remove_confirm_message, ids.size)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    onRemoveSeasonDownloads(ids)
+                    seasonDownloadsToRemove = null
+                }) { Text(stringResource(R.string.details_download_remove_confirm_action)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { seasonDownloadsToRemove = null }) { Text(stringResource(R.string.action_cancel)) }
+            }
+        )
+    }
 
     Column(modifier = Modifier.padding(top = 8.dp)) {
         bySeason.forEach { (season, seasonEpisodes) ->
@@ -574,15 +615,19 @@ private fun EpisodeList(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(end = 4.dp)
                 )
-                val seasonFullyDownloaded = seasonEpisodes.all { downloads[it.stableId]?.status == DownloadStatus.COMPLETED }
+                val seasonHasDownloads = seasonEpisodes.any { downloads[it.stableId]?.status == DownloadStatus.COMPLETED }
                 IconButton(
-                    onClick = { onDownloadSeason(seasonEpisodes.map { it.stableId }) },
-                    enabled = !seasonFullyDownloaded,
+                    onClick = {
+                        val ids = seasonEpisodes.map { it.stableId }
+                        if (seasonHasDownloads) seasonDownloadsToRemove = ids else onDownloadSeason(ids)
+                    },
                     modifier = Modifier.size(36.dp)
                 ) {
                     Icon(
-                        if (seasonFullyDownloaded) Icons.Default.DownloadDone else Icons.Default.Download,
-                        contentDescription = stringResource(R.string.details_download_season),
+                        if (seasonHasDownloads) Icons.Default.Delete else Icons.Default.Download,
+                        contentDescription = stringResource(
+                            if (seasonHasDownloads) R.string.details_download_season_remove else R.string.details_download_season
+                        ),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
@@ -634,12 +679,16 @@ private fun EpisodeList(
                             }
                         }
                         when (downloads[episode.stableId]?.status) {
-                            DownloadStatus.COMPLETED -> Icon(
-                                Icons.Default.DownloadDone,
-                                contentDescription = stringResource(R.string.details_download_remove),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.padding(start = 4.dp)
-                            )
+                            DownloadStatus.COMPLETED -> IconButton(
+                                onClick = { episodeDownloadToRemove = episode },
+                                modifier = Modifier.padding(start = 4.dp).size(36.dp)
+                            ) {
+                                Icon(
+                                    Icons.Default.DownloadDone,
+                                    contentDescription = stringResource(R.string.details_download_remove),
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
                             DownloadStatus.QUEUED, DownloadStatus.DOWNLOADING -> CircularProgressIndicator(
                                 modifier = Modifier.padding(start = 4.dp).size(20.dp),
                                 strokeWidth = 2.dp
