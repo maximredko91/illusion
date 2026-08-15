@@ -19,6 +19,10 @@ class WatchProgressRepository(
 
     fun observeProgress(stableId: String): Flow<WatchProgressEntity?> = progressDao.observeForItem(stableId)
 
+    suspend fun deleteHistoryEntry(stableId: String) = progressDao.deleteForItem(stableId)
+
+    suspend fun clearHistory() = progressDao.deleteAll()
+
     suspend fun updateProgress(stableId: String, positionMs: Long, durationMs: Long, watched: Boolean, now: Long) {
         progressDao.upsert(
             WatchProgressEntity(

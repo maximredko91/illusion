@@ -30,4 +30,10 @@ interface WatchProgressDao {
 
     @Query("SELECT * FROM watch_progress ORDER BY updatedAt DESC")
     fun observeHistory(): Flow<List<WatchProgressEntity>>
+
+    @Query("DELETE FROM watch_progress WHERE mediaItemStableId = :stableId")
+    suspend fun deleteForItem(stableId: String)
+
+    @Query("DELETE FROM watch_progress")
+    suspend fun deleteAll()
 }

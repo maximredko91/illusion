@@ -76,6 +76,14 @@
     <string name="history_empty">Вы ещё ничего не смотрели</string>
     <string name="history_watched">Просмотрено</string>
     <string name="history_progress">Просмотрено %1$d%%</string>
+    <string name="history_clear_all">Очистить историю</string>
+    <string name="history_clear_confirm_title">Очистить всю историю?</string>
+    <string name="history_clear_confirm_message">История просмотров будет полностью очищена. Это действие нельзя отменить.</string>
+    <string name="history_clear_confirm_action">Очистить</string>
+    <string name="history_remove_item">Удалить из истории</string>
+    <string name="history_remove_confirm_title">Удалить из истории?</string>
+    <string name="history_remove_confirm_message">«%1$s» будет удалено из истории просмотров.</string>
+    <string name="history_remove_confirm_action">Удалить</string>
 
     <string name="downloads_title">Загрузки</string>
     <string name="downloads_empty">Нет загруженных видео</string>

@@ -12,12 +12,13 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 
 data class HistoryEntry(val item: MediaItemEntity, val progress: WatchProgressEntity)
 
 class HistoryViewModel(
     libraryRepository: LibraryRepository,
-    watchProgressRepository: WatchProgressRepository
+    private val watchProgressRepository: WatchProgressRepository
 ) : ViewModel() {
     val entries: StateFlow<List<HistoryEntry>> = watchProgressRepository.observeHistory()
         .map { history ->
@@ -26,6 +27,14 @@ class HistoryViewModel(
             }
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    fun deleteEntry(stableId: String) {
+        viewModelScope.launch { watchProgressRepository.deleteHistoryEntry(stableId) }
+    }
+
+    fun clearAll() {
+        viewModelScope.launch { watchProgressRepository.clearHistory() }
+    }
 
     companion object {
         fun factory(libraryRepository: LibraryRepository, watchProgressRepository: WatchProgressRepository) =
