@@ -97,7 +97,7 @@ class DownloadWorker(
     private fun resolveVideoUri(existing: DownloadEntity?, treeUri: String?, item: MediaItemEntity): Uri? {
         val previous = existing?.takeIf { it.status != DownloadStatus.COMPLETED }?.contentUri?.let { Uri.parse(it) }
         if (previous != null && DownloadStorage.exists(applicationContext, previous)) return previous
-        return DownloadStorage.create(applicationContext, treeUri, videoFileName(item))
+        return DownloadStorage.create(applicationContext, treeUri, folderSegments(item), videoFileName(item))
     }
 
     /**
@@ -168,9 +168,10 @@ class DownloadWorker(
         if (item.subtitlePaths.isEmpty()) return emptyList()
         val connection = smbClient.connect(info)
         return try {
+            val segments = folderSegments(item)
             item.subtitlePaths.mapNotNull { remotePath ->
                 val fileName = subtitleFileName(remotePath)
-                val uri = DownloadStorage.create(applicationContext, treeUri, fileName) ?: return@mapNotNull null
+                val uri = DownloadStorage.create(applicationContext, treeUri, segments, fileName) ?: return@mapNotNull null
                 val out = DownloadStorage.openOutput(applicationContext, uri, append = false) ?: return@mapNotNull null
                 runCatching {
                     connection.openInputStream(remotePath).use { input -> out.use { input.copyTo(it) } }
@@ -210,6 +211,21 @@ class DownloadWorker(
 
         private fun sanitizeFileName(name: String): String =
             name.replace(Regex("[\\\\/:*?\"<>|]"), "_").trim().ifBlank { "video" }
+
+        // One subfolder per title (movie) or per show/season (episode) instead of dropping every
+        // download flat into the same folder - mirrors how the source library on the NAS is
+        // itself organized, so downloads stay just as browsable.
+        fun folderSegments(item: MediaItemEntity): List<String> {
+            val segments = if (item.seriesStableId != null) {
+                listOfNotNull(
+                    item.seriesStableId.substringAfterLast('\\'),
+                    item.seasonNumber?.let { "Сезон $it" }
+                )
+            } else {
+                listOf(item.year?.let { "${item.title} ($it)" } ?: item.title)
+            }
+            return segments.map { sanitizeFileName(it) }
+        }
 
         // Keep the exact filename from the SMB source rather than synthesizing one from metadata -
         // the user wants the downloaded file to look the same on-device as it does on the NAS, and

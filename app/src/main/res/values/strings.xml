@@ -185,6 +185,7 @@
     <string name="details_season">Сезон %1$d</string>
     <string name="details_episodes">Серии</string>
     <string name="details_episode_count">%1$d эп.</string>
+    <string name="details_download_season">Скачать сезон</string>
 
     <string name="person_title">Фильмография: %1$s</string>
 </resources>

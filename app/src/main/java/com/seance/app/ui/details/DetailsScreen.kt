@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
@@ -124,6 +125,7 @@ fun DetailsScreen(
     val state by viewModel.state.collectAsState()
     val isFavorite by viewModel.isFavorite.collectAsState()
     val download by viewModel.download.collectAsState()
+    val downloads by viewModel.downloads.collectAsState()
     val watchProgress by viewModel.watchProgress.collectAsState()
     val context = LocalContext.current
     val snackbarHostState = remember { SnackbarHostState() }
@@ -144,8 +146,11 @@ fun DetailsScreen(
                 onToggleFavorite = viewModel::toggleFavorite,
                 hasStartedWatching = watchProgress?.let { it.positionMs > 0 && !it.watched } == true,
                 download = download,
+                downloads = downloads,
                 onStartDownload = { viewModel.startDownload(context) },
                 onRemoveDownload = { viewModel.removeDownload(context) },
+                onDownloadSeason = { ids -> viewModel.startSeasonDownload(context, ids) },
+                onDownloadEpisode = { id -> viewModel.startDownload(context, id) },
                 onDownloadError = { message -> scope.launch { snackbarHostState.showSnackbar(message) } },
                 onPlay = onPlay,
                 onOpenPerson = onOpenPerson,
@@ -176,8 +181,11 @@ private fun DetailsContent(
     onToggleFavorite: () -> Unit,
     hasStartedWatching: Boolean,
     download: DownloadEntity?,
+    downloads: Map<String, DownloadEntity>,
     onStartDownload: () -> Unit,
     onRemoveDownload: () -> Unit,
+    onDownloadSeason: (List<String>) -> Unit,
+    onDownloadEpisode: (String) -> Unit,
     onDownloadError: (String) -> Unit,
     onPlay: (String) -> Unit,
     onOpenPerson: (String) -> Unit,
@@ -413,7 +421,7 @@ private fun DetailsContent(
         }
 
         if (episodes.isNotEmpty()) {
-            EpisodeList(episodes, onPlay)
+            EpisodeList(episodes, downloads, onPlay, onDownloadSeason, onDownloadEpisode)
         }
 
         if (item.director.isNotEmpty()) {
@@ -527,7 +535,13 @@ private fun PersonRow(label: String, names: List<String>, clickablePersons: Set<
 }
 
 @Composable
-private fun EpisodeList(episodes: List<MediaItemEntity>, onPlay: (String) -> Unit) {
+private fun EpisodeList(
+    episodes: List<MediaItemEntity>,
+    downloads: Map<String, DownloadEntity>,
+    onPlay: (String) -> Unit,
+    onDownloadSeason: (List<String>) -> Unit,
+    onDownloadEpisode: (String) -> Unit
+) {
     val bySeason = episodes
         .sortedWith(compareBy({ it.seasonNumber ?: 0 }, { it.episodeNumber ?: 0 }))
         .groupBy { it.seasonNumber }
@@ -560,6 +574,18 @@ private fun EpisodeList(episodes: List<MediaItemEntity>, onPlay: (String) -> Uni
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(end = 4.dp)
                 )
+                val seasonFullyDownloaded = seasonEpisodes.all { downloads[it.stableId]?.status == DownloadStatus.COMPLETED }
+                IconButton(
+                    onClick = { onDownloadSeason(seasonEpisodes.map { it.stableId }) },
+                    enabled = !seasonFullyDownloaded,
+                    modifier = Modifier.size(36.dp)
+                ) {
+                    Icon(
+                        if (seasonFullyDownloaded) Icons.Default.DownloadDone else Icons.Default.Download,
+                        contentDescription = stringResource(R.string.details_download_season),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
                 Icon(
                     if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
                     contentDescription = null,
@@ -605,6 +631,24 @@ private fun EpisodeList(episodes: List<MediaItemEntity>, onPlay: (String) -> Uni
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     modifier = Modifier.padding(top = 4.dp)
                                 )
+                            }
+                        }
+                        when (downloads[episode.stableId]?.status) {
+                            DownloadStatus.COMPLETED -> Icon(
+                                Icons.Default.DownloadDone,
+                                contentDescription = stringResource(R.string.details_download_remove),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(start = 4.dp)
+                            )
+                            DownloadStatus.QUEUED, DownloadStatus.DOWNLOADING -> CircularProgressIndicator(
+                                modifier = Modifier.padding(start = 4.dp).size(20.dp),
+                                strokeWidth = 2.dp
+                            )
+                            else -> IconButton(
+                                onClick = { onDownloadEpisode(episode.stableId) },
+                                modifier = Modifier.padding(start = 4.dp).size(36.dp)
+                            ) {
+                                Icon(Icons.Default.Download, contentDescription = stringResource(R.string.details_download))
                             }
                         }
                     }

@@ -57,13 +57,18 @@ object DownloadStorage {
         return Intent(DownloadManager.ACTION_VIEW_DOWNLOADS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
     }
 
-    /** Creates a new empty file named [fileName] under the configured folder and returns its Uri, or null on failure. */
-    fun create(context: Context, treeUri: String?, fileName: String): Uri? {
+    /**
+     * Creates a new empty file named [fileName] under the configured folder and returns its Uri,
+     * or null on failure. [folderSegments] nests it inside a per-title subfolder (e.g. the movie
+     * name, or "Show/Season N" for an episode) instead of dropping every download flat into one
+     * folder - each segment is sanitized and created if missing.
+     */
+    fun create(context: Context, treeUri: String?, folderSegments: List<String>, fileName: String): Uri? {
         val mimeType = mimeTypeFor(fileName)
         return if (treeUri != null) {
-            createUnderTree(context, treeUri, fileName, mimeType)
+            createUnderTree(context, treeUri, folderSegments, fileName, mimeType)
         } else {
-            createInDownloads(context, fileName, mimeType)
+            createInDownloads(context, folderSegments, fileName, mimeType)
         }
     }
 
@@ -80,17 +85,21 @@ object DownloadStorage {
         runCatching { context.contentResolver.delete(uri, null, null) }
     }
 
-    private fun createUnderTree(context: Context, treeUri: String, fileName: String, mimeType: String): Uri? {
-        val root = DocumentFile.fromTreeUri(context, Uri.parse(treeUri)) ?: return null
-        return root.createFile(mimeType, fileName)?.uri
+    private fun createUnderTree(context: Context, treeUri: String, folderSegments: List<String>, fileName: String, mimeType: String): Uri? {
+        var dir = DocumentFile.fromTreeUri(context, Uri.parse(treeUri)) ?: return null
+        for (segment in folderSegments) {
+            dir = dir.findFile(segment)?.takeIf { it.isDirectory } ?: dir.createDirectory(segment) ?: return null
+        }
+        return dir.createFile(mimeType, fileName)?.uri
     }
 
-    private fun createInDownloads(context: Context, fileName: String, mimeType: String): Uri? {
+    private fun createInDownloads(context: Context, folderSegments: List<String>, fileName: String, mimeType: String): Uri? {
+        val relativePath = (listOf(RELATIVE_DIR) + folderSegments).joinToString("/")
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             val values = ContentValues().apply {
                 put(MediaStore.Downloads.DISPLAY_NAME, fileName)
                 put(MediaStore.Downloads.MIME_TYPE, mimeType)
-                put(MediaStore.Downloads.RELATIVE_PATH, "${android.os.Environment.DIRECTORY_DOWNLOADS}/$RELATIVE_DIR/")
+                put(MediaStore.Downloads.RELATIVE_PATH, "${android.os.Environment.DIRECTORY_DOWNLOADS}/$relativePath/")
             }
             return context.contentResolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
         }
@@ -98,7 +107,7 @@ object DownloadStorage {
         // Requires WRITE_EXTERNAL_STORAGE (declared maxSdkVersion=28) granted at runtime.
         val dir = java.io.File(
             android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS),
-            RELATIVE_DIR
+            relativePath
         )
         if (!dir.exists() && !dir.mkdirs()) return null
         val file = java.io.File(dir, fileName)

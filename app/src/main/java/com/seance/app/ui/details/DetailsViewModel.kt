@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.seance.app.data.local.entity.DownloadEntity
+import com.seance.app.data.local.entity.DownloadStatus
 import com.seance.app.data.local.entity.MediaItemEntity
 import com.seance.app.data.local.entity.WatchProgressEntity
 import com.seance.app.data.player.AudioTrackProber
@@ -19,6 +20,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -55,6 +57,11 @@ class DetailsViewModel(
 
     val download: StateFlow<DownloadEntity?> = downloadRepository.observeForItem(stableId)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
+    /** Every download in the app, keyed by item - used to show per-episode/season download state without a separate query per episode row. */
+    val downloads: StateFlow<Map<String, DownloadEntity>> = downloadRepository.observeAll()
+        .map { list -> list.associateBy { it.stableId } }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
 
     val watchProgress: StateFlow<WatchProgressEntity?> = watchProgressRepository.observeProgress(stableId)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
@@ -111,6 +118,19 @@ class DetailsViewModel(
 
     fun startDownload(context: Context) {
         WorkScheduler.enqueueDownload(context, stableId)
+    }
+
+    /** Same as [startDownload] but for a different item (an episode row in this show's list, not the item this screen was opened for). */
+    fun startDownload(context: Context, targetStableId: String) {
+        WorkScheduler.enqueueDownload(context, targetStableId)
+    }
+
+    /** Downloads every episode in [episodeStableIds] that isn't already downloaded/downloading - re-enqueuing a completed download would otherwise restart it from scratch (`enqueueDownload` always replaces). */
+    fun startSeasonDownload(context: Context, episodeStableIds: List<String>) {
+        val current = downloads.value
+        episodeStableIds
+            .filter { id -> current[id]?.status.let { it == null || it == DownloadStatus.FAILED } }
+            .forEach { id -> WorkScheduler.enqueueDownload(context, id) }
     }
 
     /** Cancels an in-progress download, or deletes a finished/failed one - either way the row and any partial file are gone. */
