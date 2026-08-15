@@ -58,7 +58,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontStyle
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -79,6 +78,7 @@ import com.seance.app.ui.common.LocalNavAnimatedVisibilityScope
 import com.seance.app.ui.common.LocalSharedTransitionScope
 import com.seance.app.ui.common.MpaaBadge
 import com.seance.app.ui.common.PosterCard
+import com.seance.app.ui.common.RatingBadge
 import com.seance.app.ui.common.posterTransitionKey
 import com.seance.app.ui.common.shimmer
 import com.seance.app.ui.common.ZoomableImageViewer
@@ -246,15 +246,16 @@ private fun DetailsContent(
                     if (state is AsyncImagePainter.State.Loading) {
                         Box(modifier = Modifier.fillMaxSize().shimmer())
                     }
+                    item.rating?.let { rating ->
+                        RatingBadge(rating, modifier = Modifier.align(Alignment.TopStart).padding(6.dp))
+                    }
+                    item.mpaa?.let { mpaa ->
+                        MpaaBadge(mpaa, modifier = Modifier.align(Alignment.TopEnd).padding(6.dp))
+                    }
                 }
             }
             Column(modifier = Modifier.padding(start = 12.dp, top = 8.dp).fillMaxWidth()) {
-                Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
-                    Text(displayTitle, style = MaterialTheme.typography.headlineSmall, modifier = Modifier.weight(1f))
-                    item.mpaa?.let { mpaa ->
-                        MpaaBadge(mpaa, modifier = Modifier.padding(start = 8.dp))
-                    }
-                }
+                Text(displayTitle, style = MaterialTheme.typography.headlineSmall)
                 item.originalTitle?.takeIf { it != item.title }?.let {
                     Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
@@ -262,8 +263,7 @@ private fun DetailsContent(
                     listOfNotNull(
                         item.year?.toString(),
                         item.country,
-                        item.runtimeMinutes?.let { "$it мин" },
-                        item.rating?.let { "★ %.1f".format(it) }
+                        item.runtimeMinutes?.let { "$it мин" }
                     ).joinToString(" · "),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -281,8 +281,6 @@ private fun DetailsContent(
                         it,
                         style = MaterialTheme.typography.bodySmall.copy(fontStyle = FontStyle.Italic),
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.padding(top = 4.dp)
                     )
                 }

@@ -115,7 +115,7 @@ fun PosterCard(
 }
 
 @Composable
-private fun RatingBadge(rating: Double, modifier: Modifier = Modifier) {
+fun RatingBadge(rating: Double, modifier: Modifier = Modifier) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = modifier
