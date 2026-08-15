@@ -6,13 +6,17 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.SmartDisplay
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.Card
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -22,10 +26,12 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.unit.dp
+import java.util.Locale
 import coil3.compose.AsyncImagePainter
 import coil3.compose.rememberAsyncImagePainter
 import com.seance.app.data.image.posterModel
@@ -38,7 +44,8 @@ import com.seance.app.domain.model.Category
 fun PosterCard(
     item: MediaItemEntity,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    showRatingBadge: Boolean = false
 ) {
     val haptics = LocalHapticFeedback.current
     val sharedTransitionScope = LocalSharedTransitionScope.current
@@ -81,6 +88,9 @@ fun PosterCard(
                 } else {
                     PosterPlaceholder(item.category)
                 }
+                if (showRatingBadge && item.rating != null) {
+                    RatingBadge(item.rating, modifier = Modifier.align(Alignment.TopStart).padding(6.dp))
+                }
             }
             Column(modifier = Modifier.padding(8.dp)) {
                 Text(
@@ -98,6 +108,29 @@ fun PosterCard(
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun RatingBadge(rating: Double, modifier: Modifier = Modifier) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = modifier
+            .background(Color.Black.copy(alpha = 0.65f), RoundedCornerShape(6.dp))
+            .padding(horizontal = 6.dp, vertical = 3.dp)
+    ) {
+        Icon(
+            Icons.Default.Star,
+            contentDescription = null,
+            tint = Color(0xFFFFC107),
+            modifier = Modifier.size(14.dp)
+        )
+        Text(
+            String.format(Locale.US, "%.1f", rating),
+            color = Color.White,
+            style = MaterialTheme.typography.labelSmall,
+            modifier = Modifier.padding(start = 2.dp)
+        )
     }
 }
 

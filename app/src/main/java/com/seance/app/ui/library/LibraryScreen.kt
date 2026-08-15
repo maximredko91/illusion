@@ -31,10 +31,10 @@ import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -47,7 +47,6 @@ import com.seance.app.domain.model.Category
 import com.seance.app.domain.model.SortOrder
 import com.seance.app.ui.common.PosterCard
 import com.seance.app.ui.common.segmentTick
-import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -72,10 +71,21 @@ fun LibraryScreen(
     modifier: Modifier = Modifier
 ) {
     val gridState = rememberLazyGridState()
-    val scope = rememberCoroutineScope()
     // Only jump to the top when the user actively changes a filter/sort/category - never on
     // recomposition from returning via back navigation, which should restore where they were.
-    val scrollToTop: () -> Unit = { scope.launch { gridState.scrollToItem(0) } }
+    // Scrolling immediately on click would race the new sort order's items arriving from Room
+    // (async query) - LazyVerticalGrid's key-based item tracking then keeps whatever was on
+    // screen in view instead of honoring the scroll, so the list silently stayed where the user
+    // was. Deferring the actual scroll to a LaunchedEffect keyed on `items` guarantees it only
+    // runs once the newly-sorted/filtered list has actually landed.
+    var pendingScrollToTop by remember { mutableStateOf(false) }
+    val scrollToTop: () -> Unit = { pendingScrollToTop = true }
+    LaunchedEffect(items) {
+        if (pendingScrollToTop) {
+            pendingScrollToTop = false
+            gridState.scrollToItem(0)
+        }
+    }
 
     Scaffold(
         modifier = modifier,
@@ -163,7 +173,8 @@ fun LibraryScreen(
                         PosterCard(
                             item = item,
                             onClick = { onOpenItem(item.stableId) },
-                            modifier = Modifier.padding(4.dp)
+                            modifier = Modifier.padding(4.dp),
+                            showRatingBadge = sortOrder == SortOrder.RATING
                         )
                     }
                 }
