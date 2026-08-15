@@ -14,13 +14,16 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import com.seance.app.R
+import com.seance.app.ui.common.focusHighlight
 
 @Composable
 fun SmbSourceFormFields(
@@ -101,10 +104,12 @@ fun SmbSourceFormFields(
             )
         }
 
+        val testConnectionSource = remember { MutableInteractionSource() }
         OutlinedButton(
             onClick = onTestConnection,
             enabled = state.testState != TestConnectionState.Testing,
-            modifier = Modifier.fillMaxWidth()
+            interactionSource = testConnectionSource,
+            modifier = Modifier.fillMaxWidth().focusHighlight(testConnectionSource)
         ) {
             if (state.testState == TestConnectionState.Testing) {
                 CircularProgressIndicator(modifier = Modifier.size(18.dp).padding(end = 8.dp))
@@ -131,10 +136,12 @@ fun SmbSourceFormFields(
             TestConnectionState.Idle -> Unit
         }
 
+        val saveSource = remember { MutableInteractionSource() }
         Button(
             onClick = onSave,
             enabled = state.canSave,
-            modifier = Modifier.fillMaxWidth()
+            interactionSource = saveSource,
+            modifier = Modifier.fillMaxWidth().focusHighlight(saveSource)
         ) {
             if (state.isSaving) {
                 CircularProgressIndicator(modifier = Modifier.padding(end = 8.dp))

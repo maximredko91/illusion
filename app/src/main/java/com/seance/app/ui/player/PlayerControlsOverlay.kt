@@ -3,6 +3,7 @@ package com.seance.app.ui.player
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -50,6 +51,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.seance.app.R
+import com.seance.app.ui.common.focusHighlight
 import java.util.Locale
 
 @Composable
@@ -70,7 +72,8 @@ fun TopGradientBar(
             .padding(horizontal = 8.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        IconButton(onClick = onBack) {
+        val backSource = remember { MutableInteractionSource() }
+        IconButton(onClick = onBack, interactionSource = backSource, modifier = Modifier.focusHighlight(backSource, color = Color.White)) {
             Icon(Icons.Default.ArrowBack, contentDescription = stringResource(R.string.player_back), tint = Color.White)
         }
         Text(
@@ -79,13 +82,16 @@ fun TopGradientBar(
             modifier = Modifier.weight(1f).padding(start = 4.dp),
             maxLines = 1
         )
-        IconButton(onClick = onOpenSubtitles) {
+        val subtitlesSource = remember { MutableInteractionSource() }
+        IconButton(onClick = onOpenSubtitles, interactionSource = subtitlesSource, modifier = Modifier.focusHighlight(subtitlesSource, color = Color.White)) {
             Icon(Icons.Default.Subtitles, contentDescription = stringResource(R.string.player_subtitles_button), tint = Color.White)
         }
-        IconButton(onClick = onOpenAudioTracks) {
+        val audioSource = remember { MutableInteractionSource() }
+        IconButton(onClick = onOpenAudioTracks, interactionSource = audioSource, modifier = Modifier.focusHighlight(audioSource, color = Color.White)) {
             Icon(Icons.Default.Audiotrack, contentDescription = stringResource(R.string.player_audio_tracks_button), tint = Color.White)
         }
-        IconButton(onClick = onCycleAspectRatio) {
+        val aspectSource = remember { MutableInteractionSource() }
+        IconButton(onClick = onCycleAspectRatio, interactionSource = aspectSource, modifier = Modifier.focusHighlight(aspectSource, color = Color.White)) {
             Icon(Icons.Default.AspectRatio, contentDescription = stringResource(R.string.player_aspect_ratio), tint = Color.White)
         }
         IconButton(onClick = { /* Cast: требует настройки Google Cast SDK (App ID) - см. заметки */ }) {
@@ -95,7 +101,8 @@ fun TopGradientBar(
                 tint = Color.White.copy(alpha = 0.4f)
             )
         }
-        IconButton(onClick = onOpenSettings) {
+        val settingsSource = remember { MutableInteractionSource() }
+        IconButton(onClick = onOpenSettings, interactionSource = settingsSource, modifier = Modifier.focusHighlight(settingsSource, color = Color.White)) {
             Icon(Icons.Default.Settings, contentDescription = stringResource(R.string.player_settings), tint = Color.White)
         }
     }
@@ -107,7 +114,12 @@ fun CenterTransportControls(
     onTogglePlayPause: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    IconButton(onClick = onTogglePlayPause, modifier = modifier.size(72.dp)) {
+    val interactionSource = remember { MutableInteractionSource() }
+    IconButton(
+        onClick = onTogglePlayPause,
+        interactionSource = interactionSource,
+        modifier = modifier.size(72.dp).focusHighlight(interactionSource, color = Color.White)
+    ) {
         Icon(
             if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
             contentDescription = stringResource(R.string.player_play_pause),
@@ -138,7 +150,12 @@ fun BottomGradientBar(
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             if (hasNextEpisode) {
-                TextButton(onClick = onNextEpisode) {
+                val nextEpisodeSource = remember { MutableInteractionSource() }
+                TextButton(
+                    onClick = onNextEpisode,
+                    interactionSource = nextEpisodeSource,
+                    modifier = Modifier.focusHighlight(nextEpisodeSource, color = Color.White)
+                ) {
                     Icon(Icons.Default.SkipNext, contentDescription = null, tint = Color.White)
                     Text(stringResource(R.string.player_next_episode), color = Color.White)
                 }
@@ -146,7 +163,8 @@ fun BottomGradientBar(
             } else {
                 Spacer(Modifier.weight(1f))
             }
-            IconButton(onClick = onToggleLock) {
+            val lockSource = remember { MutableInteractionSource() }
+            IconButton(onClick = onToggleLock, interactionSource = lockSource, modifier = Modifier.focusHighlight(lockSource, color = Color.White)) {
                 Icon(
                     if (isLocked) Icons.Default.Lock else Icons.Default.LockOpen,
                     contentDescription = stringResource(if (isLocked) R.string.player_unlock else R.string.player_lock),

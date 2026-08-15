@@ -1,5 +1,6 @@
 package com.seance.app.ui.smbsource
 
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -28,6 +29,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.seance.app.R
 import com.seance.app.data.local.entity.SmbSourceEntity
 import com.seance.app.data.repository.SmbSourceRepository
+import com.seance.app.ui.common.focusHighlight
 import com.seance.app.work.WorkScheduler
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -52,7 +54,8 @@ fun EditSmbSourceScreen(
             TopAppBar(
                 title = { Text(stringResource(R.string.edit_source_title)) },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
+                    val backSource = remember { MutableInteractionSource() }
+                    IconButton(onClick = onBack, interactionSource = backSource, modifier = Modifier.focusHighlight(backSource)) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.details_back))
                     }
                 }

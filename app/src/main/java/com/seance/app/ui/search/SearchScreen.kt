@@ -1,5 +1,6 @@
 package com.seance.app.ui.search
 
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
@@ -25,6 +26,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -32,6 +34,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.seance.app.R
 import com.seance.app.data.repository.LibraryRepository
 import com.seance.app.ui.common.PosterCard
+import com.seance.app.ui.common.focusHighlight
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -54,16 +57,20 @@ fun SearchScreen(
             TopAppBar(
                 title = { Text(stringResource(R.string.nav_search)) },
                 actions = {
-                    IconButton(onClick = onOpenFavorites) {
+                    val favoritesSource = remember { MutableInteractionSource() }
+                    IconButton(onClick = onOpenFavorites, interactionSource = favoritesSource, modifier = Modifier.focusHighlight(favoritesSource)) {
                         Icon(Icons.Default.Favorite, contentDescription = stringResource(R.string.favorites_title))
                     }
-                    IconButton(onClick = onOpenHistory) {
+                    val historySource = remember { MutableInteractionSource() }
+                    IconButton(onClick = onOpenHistory, interactionSource = historySource, modifier = Modifier.focusHighlight(historySource)) {
                         Icon(Icons.Default.History, contentDescription = stringResource(R.string.history_title))
                     }
-                    IconButton(onClick = onOpenDownloads) {
+                    val downloadsSource = remember { MutableInteractionSource() }
+                    IconButton(onClick = onOpenDownloads, interactionSource = downloadsSource, modifier = Modifier.focusHighlight(downloadsSource)) {
                         Icon(Icons.Default.Download, contentDescription = stringResource(R.string.downloads_title))
                     }
-                    IconButton(onClick = onOpenSettings) {
+                    val settingsSource = remember { MutableInteractionSource() }
+                    IconButton(onClick = onOpenSettings, interactionSource = settingsSource, modifier = Modifier.focusHighlight(settingsSource)) {
                         Icon(Icons.Default.Settings, contentDescription = stringResource(R.string.settings_title))
                     }
                 }

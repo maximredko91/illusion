@@ -1,7 +1,9 @@
 package com.seance.app.ui.downloads
 
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -29,6 +31,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -44,6 +47,7 @@ import com.seance.app.data.repository.DownloadRepository
 import com.seance.app.data.repository.LibraryRepository
 import com.seance.app.data.settings.SettingsRepository
 import com.seance.app.ui.common.ThumbnailImage
+import com.seance.app.ui.common.focusHighlight
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -68,12 +72,18 @@ fun DownloadsScreen(
             TopAppBar(
                 title = { Text(stringResource(R.string.downloads_title)) },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
+                    val backSource = remember { MutableInteractionSource() }
+                    IconButton(onClick = onBack, interactionSource = backSource, modifier = Modifier.focusHighlight(backSource)) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.details_back))
                     }
                 },
                 actions = {
-                    IconButton(onClick = { context.startActivity(DownloadStorage.openFolderIntent(context, downloadsFolder)) }) {
+                    val folderSource = remember { MutableInteractionSource() }
+                    IconButton(
+                        onClick = { context.startActivity(DownloadStorage.openFolderIntent(context, downloadsFolder)) },
+                        interactionSource = folderSource,
+                        modifier = Modifier.focusHighlight(folderSource)
+                    ) {
                         Icon(Icons.Default.Folder, contentDescription = stringResource(R.string.settings_downloads_open_folder))
                     }
                 }
@@ -90,10 +100,16 @@ fun DownloadsScreen(
                 contentPadding = PaddingValues(8.dp)
             ) {
                 items(entries, key = { it.download.stableId }) { entry ->
+                    val rowSource = remember { MutableInteractionSource() }
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clickable(enabled = entry.download.status == DownloadStatus.COMPLETED) { onOpenItem(entry.item.stableId) }
+                            .focusHighlight(rowSource)
+                            .clickable(
+                                enabled = entry.download.status == DownloadStatus.COMPLETED,
+                                interactionSource = rowSource,
+                                indication = LocalIndication.current
+                            ) { onOpenItem(entry.item.stableId) }
                             .padding(8.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
@@ -120,7 +136,12 @@ fun DownloadsScreen(
                                 )
                             }
                         }
-                        IconButton(onClick = { viewModel.removeDownload(context, entry.download.stableId) }) {
+                        val removeSource = remember { MutableInteractionSource() }
+                        IconButton(
+                            onClick = { viewModel.removeDownload(context, entry.download.stableId) },
+                            interactionSource = removeSource,
+                            modifier = Modifier.focusHighlight(removeSource)
+                        ) {
                             Icon(
                                 if (entry.download.status == DownloadStatus.DOWNLOADING) Icons.Default.Close else Icons.Default.Delete,
                                 contentDescription = stringResource(R.string.downloads_remove)

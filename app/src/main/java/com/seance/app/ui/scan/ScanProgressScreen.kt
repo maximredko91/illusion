@@ -1,5 +1,6 @@
 package com.seance.app.ui.scan
 
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -23,6 +24,7 @@ import androidx.work.WorkInfo
 import androidx.work.WorkManager
 import com.seance.app.R
 import com.seance.app.data.scan.ScanProgress
+import com.seance.app.ui.common.focusHighlight
 import com.seance.app.work.LibraryScanWorker
 import java.util.UUID
 import kotlinx.coroutines.flow.collectLatest
@@ -107,7 +109,12 @@ fun ScanProgressScreen(
                         stringResource(R.string.scan_progress_done_count, total),
                         modifier = Modifier.padding(top = 8.dp)
                     )
-                    Button(onClick = onComplete, modifier = Modifier.padding(top = 16.dp)) {
+                    val continueSource = remember { MutableInteractionSource() }
+                    Button(
+                        onClick = onComplete,
+                        interactionSource = continueSource,
+                        modifier = Modifier.padding(top = 16.dp).focusHighlight(continueSource)
+                    ) {
                         Text(stringResource(R.string.scan_progress_continue))
                     }
                 }
@@ -116,7 +123,12 @@ fun ScanProgressScreen(
                         stringResource(R.string.scan_progress_failed),
                         modifier = Modifier.padding(top = 8.dp)
                     )
-                    Button(onClick = onComplete, modifier = Modifier.padding(top = 16.dp)) {
+                    val continueSource = remember { MutableInteractionSource() }
+                    Button(
+                        onClick = onComplete,
+                        interactionSource = continueSource,
+                        modifier = Modifier.padding(top = 16.dp).focusHighlight(continueSource)
+                    ) {
                         Text(stringResource(R.string.scan_progress_continue))
                     }
                 }

@@ -2,6 +2,7 @@ package com.seance.app.ui.navigation
 
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionLayout
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
@@ -23,6 +24,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -45,6 +47,7 @@ import com.seance.app.domain.model.UiMode
 import com.seance.app.ui.common.LocalNavAnimatedVisibilityScope
 import com.seance.app.ui.common.LocalSharedTransitionScope
 import com.seance.app.ui.common.LocalUiMode
+import com.seance.app.ui.common.focusHighlight
 import com.seance.app.ui.common.segmentTick
 import com.seance.app.ui.details.DetailsScreen
 import com.seance.app.ui.downloads.DownloadsScreen
@@ -143,6 +146,7 @@ private fun SeanceNavHostContent(app: SeanceApplication) {
                                 it.hasRoute(tabDestination::class)
                             } == true
                         }
+                        val interactionSource = remember { MutableInteractionSource() }
                         NavigationBarItem(
                             selected = selected,
                             onClick = {
@@ -156,7 +160,9 @@ private fun SeanceNavHostContent(app: SeanceApplication) {
                                 }
                             },
                             icon = { Icon(tab.icon, contentDescription = stringResource(tab.labelRes)) },
-                            label = { Text(stringResource(tab.labelRes)) }
+                            label = { Text(stringResource(tab.labelRes)) },
+                            interactionSource = interactionSource,
+                            modifier = Modifier.focusHighlight(interactionSource)
                         )
                     }
                 }

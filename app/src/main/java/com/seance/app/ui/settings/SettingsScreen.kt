@@ -2,7 +2,9 @@ package com.seance.app.ui.settings
 
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -54,6 +56,7 @@ import com.seance.app.R
 import com.seance.app.data.backup.BackupSource
 import com.seance.app.data.download.DownloadStorage
 import com.seance.app.data.local.entity.SmbSourceEntity
+import com.seance.app.ui.common.focusHighlight
 import com.seance.app.ui.common.reject
 import com.seance.app.ui.common.toggle
 import kotlinx.coroutines.flow.Flow
@@ -129,10 +132,20 @@ fun SettingsScreen(
                 )
             },
             confirmButton = {
-                TextButton(onClick = { onConfirmImportSource(password) }) { Text(stringResource(R.string.action_save)) }
+                val confirmSource = remember { MutableInteractionSource() }
+                TextButton(
+                    onClick = { onConfirmImportSource(password) },
+                    interactionSource = confirmSource,
+                    modifier = Modifier.focusHighlight(confirmSource)
+                ) { Text(stringResource(R.string.action_save)) }
             },
             dismissButton = {
-                TextButton(onClick = onSkipImportSource) { Text(stringResource(R.string.action_cancel)) }
+                val cancelSource = remember { MutableInteractionSource() }
+                TextButton(
+                    onClick = onSkipImportSource,
+                    interactionSource = cancelSource,
+                    modifier = Modifier.focusHighlight(cancelSource)
+                ) { Text(stringResource(R.string.action_cancel)) }
             }
         )
     }
@@ -143,7 +156,12 @@ fun SettingsScreen(
             title = { Text(stringResource(R.string.settings_backup)) },
             text = { Text(backupMessage) },
             confirmButton = {
-                TextButton(onClick = onDismissBackupMessage) { Text(stringResource(R.string.player_close)) }
+                val closeSource = remember { MutableInteractionSource() }
+                TextButton(
+                    onClick = onDismissBackupMessage,
+                    interactionSource = closeSource,
+                    modifier = Modifier.focusHighlight(closeSource)
+                ) { Text(stringResource(R.string.player_close)) }
             }
         )
     }
@@ -154,7 +172,8 @@ fun SettingsScreen(
             TopAppBar(
                 title = { Text(stringResource(R.string.settings_title)) },
                 actions = {
-                    IconButton(onClick = onAddSource) {
+                    val addSourceSource = remember { MutableInteractionSource() }
+                    IconButton(onClick = onAddSource, interactionSource = addSourceSource, modifier = Modifier.focusHighlight(addSourceSource)) {
                         Icon(Icons.Default.Add, contentDescription = stringResource(R.string.settings_add_source))
                     }
                 }
@@ -174,14 +193,20 @@ fun SettingsScreen(
                 } else {
                     sources.forEachIndexed { index, source ->
                         if (index > 0) SettingsDivider()
+                        val rowSource = remember { MutableInteractionSource() }
                         ListItem(
                             headlineContent = { Text(source.displayName) },
                             supportingContent = { Text("\\\\${source.host}\\${source.share}") },
                             trailingContent = {
-                                IconButton(onClick = {
-                                    haptics.reject()
-                                    onDeleteSource(source)
-                                }) {
+                                val deleteSource = remember { MutableInteractionSource() }
+                                IconButton(
+                                    onClick = {
+                                        haptics.reject()
+                                        onDeleteSource(source)
+                                    },
+                                    interactionSource = deleteSource,
+                                    modifier = Modifier.focusHighlight(deleteSource)
+                                ) {
                                     Icon(
                                         Icons.Default.Delete,
                                         contentDescription = stringResource(R.string.settings_delete_source)
@@ -191,7 +216,8 @@ fun SettingsScreen(
                             colors = ListItemDefaults.colors(containerColor = Color.Transparent),
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clickable { onEditSource(source) }
+                                .focusHighlight(rowSource)
+                                .clickable(interactionSource = rowSource, indication = LocalIndication.current) { onEditSource(source) }
                         )
                     }
                 }
@@ -199,6 +225,7 @@ fun SettingsScreen(
 
             SettingsGroupLabel(stringResource(R.string.settings_ui_mode_section))
             SettingsGroup {
+                val phoneRowSource = remember { MutableInteractionSource() }
                 ListItem(
                     headlineContent = { Text(stringResource(R.string.settings_ui_mode_phone)) },
                     trailingContent = {
@@ -208,9 +235,13 @@ fun SettingsScreen(
                         )
                     },
                     colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-                    modifier = Modifier.fillMaxWidth().clickable { onUiModeChange(UiMode.PHONE) }
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .focusHighlight(phoneRowSource)
+                        .clickable(interactionSource = phoneRowSource, indication = LocalIndication.current) { onUiModeChange(UiMode.PHONE) }
                 )
                 SettingsDivider()
+                val tvRowSource = remember { MutableInteractionSource() }
                 ListItem(
                     headlineContent = { Text(stringResource(R.string.settings_ui_mode_tv)) },
                     trailingContent = {
@@ -220,7 +251,10 @@ fun SettingsScreen(
                         )
                     },
                     colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-                    modifier = Modifier.fillMaxWidth().clickable { onUiModeChange(UiMode.TV) }
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .focusHighlight(tvRowSource)
+                        .clickable(interactionSource = tvRowSource, indication = LocalIndication.current) { onUiModeChange(UiMode.TV) }
                 )
             }
 
@@ -230,7 +264,13 @@ fun SettingsScreen(
                     headlineContent = { Text(stringResource(R.string.settings_rescan_now)) },
                     supportingContent = { Text(stringResource(R.string.settings_rescan_now_description)) },
                     trailingContent = {
-                        OutlinedButton(onClick = onRescanNow, enabled = sources.isNotEmpty()) {
+                        val rescanNowSource = remember { MutableInteractionSource() }
+                        OutlinedButton(
+                            onClick = onRescanNow,
+                            enabled = sources.isNotEmpty(),
+                            interactionSource = rescanNowSource,
+                            modifier = Modifier.focusHighlight(rescanNowSource)
+                        ) {
                             Text(stringResource(R.string.settings_rescan_now_action))
                         }
                     },
@@ -274,6 +314,7 @@ fun SettingsScreen(
 
             SettingsGroupLabel(stringResource(R.string.settings_cache))
             SettingsGroup {
+                val cacheRowSource = remember { MutableInteractionSource() }
                 ListItem(
                     headlineContent = { Text(stringResource(R.string.settings_cache)) },
                     supportingContent = {
@@ -288,7 +329,8 @@ fun SettingsScreen(
                     colors = ListItemDefaults.colors(containerColor = Color.Transparent),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clickable { onOpenCache() }
+                        .focusHighlight(cacheRowSource)
+                        .clickable(interactionSource = cacheRowSource, indication = LocalIndication.current) { onOpenCache() }
                 )
             }
 
@@ -299,10 +341,20 @@ fun SettingsScreen(
                     supportingContent = { Text(DownloadStorage.folderDisplayName(context, downloadsFolder)) },
                     trailingContent = {
                         Row {
-                            IconButton(onClick = { context.startActivity(DownloadStorage.openFolderIntent(context, downloadsFolder)) }) {
+                            val openFolderSource = remember { MutableInteractionSource() }
+                            IconButton(
+                                onClick = { context.startActivity(DownloadStorage.openFolderIntent(context, downloadsFolder)) },
+                                interactionSource = openFolderSource,
+                                modifier = Modifier.focusHighlight(openFolderSource)
+                            ) {
                                 Icon(Icons.Default.Folder, contentDescription = stringResource(R.string.settings_downloads_open_folder))
                             }
-                            OutlinedButton(onClick = { folderPicker.launch(DownloadStorage.pickerInitialUri()) }) {
+                            val chooseFolderSource = remember { MutableInteractionSource() }
+                            OutlinedButton(
+                                onClick = { folderPicker.launch(DownloadStorage.pickerInitialUri()) },
+                                interactionSource = chooseFolderSource,
+                                modifier = Modifier.focusHighlight(chooseFolderSource)
+                            ) {
                                 Text(stringResource(R.string.settings_downloads_choose_folder))
                             }
                         }
@@ -322,7 +374,12 @@ fun SettingsScreen(
                         )
                     },
                     trailingContent = {
-                        OutlinedButton(onClick = onClearDownloads) {
+                        val clearDownloadsSource = remember { MutableInteractionSource() }
+                        OutlinedButton(
+                            onClick = onClearDownloads,
+                            interactionSource = clearDownloadsSource,
+                            modifier = Modifier.focusHighlight(clearDownloadsSource)
+                        ) {
                             Text(stringResource(R.string.settings_downloads_clear))
                         }
                     },
@@ -337,10 +394,20 @@ fun SettingsScreen(
                     headlineContent = { Text(stringResource(R.string.settings_backup)) },
                     trailingContent = {
                         Row {
-                            TextButton(onClick = { exportLauncher.launch("seance-backup.json") }) {
+                            val exportSource = remember { MutableInteractionSource() }
+                            TextButton(
+                                onClick = { exportLauncher.launch("seance-backup.json") },
+                                interactionSource = exportSource,
+                                modifier = Modifier.focusHighlight(exportSource)
+                            ) {
                                 Text(stringResource(R.string.settings_backup_export))
                             }
-                            TextButton(onClick = { importLauncher.launch(arrayOf("application/json")) }) {
+                            val importSource = remember { MutableInteractionSource() }
+                            TextButton(
+                                onClick = { importLauncher.launch(arrayOf("application/json")) },
+                                interactionSource = importSource,
+                                modifier = Modifier.focusHighlight(importSource)
+                            ) {
                                 Text(stringResource(R.string.settings_backup_import))
                             }
                         }
@@ -396,17 +463,21 @@ internal fun SettingsDivider() {
 private fun RescanIntervalMenu(hours: Int, onChange: (Int) -> Unit) {
     var expanded by remember { mutableStateOf(false) }
     Box {
-        OutlinedButton(onClick = { expanded = true }) {
+        val triggerSource = remember { MutableInteractionSource() }
+        OutlinedButton(onClick = { expanded = true }, interactionSource = triggerSource, modifier = Modifier.focusHighlight(triggerSource)) {
             Text(rescanLabel(hours))
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             RESCAN_OPTIONS.forEach { option ->
+                val itemSource = remember { MutableInteractionSource() }
                 DropdownMenuItem(
                     text = { Text(rescanLabel(option)) },
                     onClick = {
                         onChange(option)
                         expanded = false
-                    }
+                    },
+                    interactionSource = itemSource,
+                    modifier = Modifier.focusHighlight(itemSource)
                 )
             }
         }
@@ -423,17 +494,21 @@ private val SEEK_DURATION_OPTIONS = listOf(5, 10, 15, 20, 25, 30)
 private fun SeekDurationMenu(seconds: Int, onChange: (Int) -> Unit) {
     var expanded by remember { mutableStateOf(false) }
     Box {
-        OutlinedButton(onClick = { expanded = true }) {
+        val triggerSource = remember { MutableInteractionSource() }
+        OutlinedButton(onClick = { expanded = true }, interactionSource = triggerSource, modifier = Modifier.focusHighlight(triggerSource)) {
             Text(stringResource(R.string.settings_seek_duration_seconds, seconds))
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             SEEK_DURATION_OPTIONS.forEach { option ->
+                val itemSource = remember { MutableInteractionSource() }
                 DropdownMenuItem(
                     text = { Text(stringResource(R.string.settings_seek_duration_seconds, option)) },
                     onClick = {
                         onChange(option)
                         expanded = false
-                    }
+                    },
+                    interactionSource = itemSource,
+                    modifier = Modifier.focusHighlight(itemSource)
                 )
             }
         }

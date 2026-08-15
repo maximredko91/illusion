@@ -1,5 +1,6 @@
 package com.seance.app.ui.onboarding
 
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -30,6 +31,7 @@ import com.seance.app.R
 import com.seance.app.data.repository.SmbSourceRepository
 import com.seance.app.data.settings.SettingsRepository
 import com.seance.app.domain.model.UiMode
+import com.seance.app.ui.common.focusHighlight
 import com.seance.app.ui.smbsource.SmbSourceFormFields
 import com.seance.app.ui.smbsource.SmbSourceFormViewModel
 import com.seance.app.ui.smbsource.rememberLocalNetworkPermissionGate
@@ -107,11 +109,21 @@ private fun UiModeChoiceStep(
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             Text(stringResource(R.string.onboarding_ui_mode_description))
-            Button(onClick = { choose(UiMode.PHONE) }, modifier = Modifier.fillMaxWidth()) {
+            val phoneSource = remember { MutableInteractionSource() }
+            Button(
+                onClick = { choose(UiMode.PHONE) },
+                interactionSource = phoneSource,
+                modifier = Modifier.fillMaxWidth().focusHighlight(phoneSource)
+            ) {
                 Icon(Icons.Default.PhoneAndroid, contentDescription = null)
                 Text(stringResource(R.string.onboarding_ui_mode_phone), modifier = Modifier.padding(start = 8.dp))
             }
-            Button(onClick = { choose(UiMode.TV) }, modifier = Modifier.fillMaxWidth()) {
+            val tvSource = remember { MutableInteractionSource() }
+            Button(
+                onClick = { choose(UiMode.TV) },
+                interactionSource = tvSource,
+                modifier = Modifier.fillMaxWidth().focusHighlight(tvSource)
+            ) {
                 Icon(Icons.Default.Tv, contentDescription = null)
                 Text(stringResource(R.string.onboarding_ui_mode_tv), modifier = Modifier.padding(start = 8.dp))
             }

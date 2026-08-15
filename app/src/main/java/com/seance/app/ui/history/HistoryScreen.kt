@@ -1,7 +1,9 @@
 package com.seance.app.ui.history
 
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -42,6 +44,7 @@ import com.seance.app.data.image.posterModel
 import com.seance.app.data.repository.LibraryRepository
 import com.seance.app.data.repository.WatchProgressRepository
 import com.seance.app.ui.common.ThumbnailImage
+import com.seance.app.ui.common.focusHighlight
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -70,13 +73,19 @@ fun HistoryScreen(
             TopAppBar(
                 title = { Text(stringResource(R.string.history_title)) },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
+                    val backSource = remember { MutableInteractionSource() }
+                    IconButton(onClick = onBack, interactionSource = backSource, modifier = Modifier.focusHighlight(backSource)) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.details_back))
                     }
                 },
                 actions = {
                     if (entries.isNotEmpty()) {
-                        IconButton(onClick = { showClearAllConfirm = true }) {
+                        val clearAllSource = remember { MutableInteractionSource() }
+                        IconButton(
+                            onClick = { showClearAllConfirm = true },
+                            interactionSource = clearAllSource,
+                            modifier = Modifier.focusHighlight(clearAllSource)
+                        ) {
                             Icon(Icons.Default.Delete, contentDescription = stringResource(R.string.history_clear_all))
                         }
                     }
@@ -94,10 +103,12 @@ fun HistoryScreen(
                 contentPadding = PaddingValues(8.dp)
             ) {
                 items(entries, key = { it.item.stableId + it.progress.updatedAt }) { entry ->
+                    val rowSource = remember { MutableInteractionSource() }
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clickable { onOpenItem(entry.item.stableId) }
+                            .focusHighlight(rowSource)
+                            .clickable(interactionSource = rowSource, indication = LocalIndication.current) { onOpenItem(entry.item.stableId) }
                             .padding(8.dp)
                     ) {
                         val poster = entry.item.posterModel
@@ -139,7 +150,12 @@ fun HistoryScreen(
                                 )
                             }
                         }
-                        IconButton(onClick = { pendingRemoveEntry = entry }) {
+                        val removeSource = remember { MutableInteractionSource() }
+                        IconButton(
+                            onClick = { pendingRemoveEntry = entry },
+                            interactionSource = removeSource,
+                            modifier = Modifier.focusHighlight(removeSource)
+                        ) {
                             Icon(Icons.Default.Delete, contentDescription = stringResource(R.string.history_remove_item))
                         }
                     }
@@ -154,15 +170,25 @@ fun HistoryScreen(
             title = { Text(stringResource(R.string.history_clear_confirm_title)) },
             text = { Text(stringResource(R.string.history_clear_confirm_message)) },
             confirmButton = {
-                TextButton(onClick = {
-                    showClearAllConfirm = false
-                    viewModel.clearAll()
-                }) {
+                val confirmSource = remember { MutableInteractionSource() }
+                TextButton(
+                    onClick = {
+                        showClearAllConfirm = false
+                        viewModel.clearAll()
+                    },
+                    interactionSource = confirmSource,
+                    modifier = Modifier.focusHighlight(confirmSource)
+                ) {
                     Text(stringResource(R.string.history_clear_confirm_action))
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showClearAllConfirm = false }) {
+                val cancelSource = remember { MutableInteractionSource() }
+                TextButton(
+                    onClick = { showClearAllConfirm = false },
+                    interactionSource = cancelSource,
+                    modifier = Modifier.focusHighlight(cancelSource)
+                ) {
                     Text(stringResource(R.string.action_cancel))
                 }
             }
@@ -175,15 +201,25 @@ fun HistoryScreen(
             title = { Text(stringResource(R.string.history_remove_confirm_title)) },
             text = { Text(stringResource(R.string.history_remove_confirm_message, entry.item.title)) },
             confirmButton = {
-                TextButton(onClick = {
-                    pendingRemoveEntry = null
-                    viewModel.deleteEntry(entry.item.stableId)
-                }) {
+                val confirmSource = remember { MutableInteractionSource() }
+                TextButton(
+                    onClick = {
+                        pendingRemoveEntry = null
+                        viewModel.deleteEntry(entry.item.stableId)
+                    },
+                    interactionSource = confirmSource,
+                    modifier = Modifier.focusHighlight(confirmSource)
+                ) {
                     Text(stringResource(R.string.history_remove_confirm_action))
                 }
             },
             dismissButton = {
-                TextButton(onClick = { pendingRemoveEntry = null }) {
+                val cancelSource = remember { MutableInteractionSource() }
+                TextButton(
+                    onClick = { pendingRemoveEntry = null },
+                    interactionSource = cancelSource,
+                    modifier = Modifier.focusHighlight(cancelSource)
+                ) {
                     Text(stringResource(R.string.action_cancel))
                 }
             }

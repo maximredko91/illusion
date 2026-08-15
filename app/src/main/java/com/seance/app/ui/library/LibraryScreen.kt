@@ -1,5 +1,6 @@
 package com.seance.app.ui.library
 
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -46,6 +47,7 @@ import com.seance.app.data.local.entity.MediaItemEntity
 import com.seance.app.domain.model.Category
 import com.seance.app.domain.model.SortOrder
 import com.seance.app.ui.common.PosterCard
+import com.seance.app.ui.common.focusHighlight
 import com.seance.app.ui.common.segmentTick
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -93,16 +95,20 @@ fun LibraryScreen(
             TopAppBar(
                 title = { Text(categoryTitle(category)) },
                 actions = {
-                    IconButton(onClick = onOpenFavorites) {
+                    val favoritesSource = remember { MutableInteractionSource() }
+                    IconButton(onClick = onOpenFavorites, interactionSource = favoritesSource, modifier = Modifier.focusHighlight(favoritesSource)) {
                         Icon(Icons.Default.Favorite, contentDescription = stringResource(R.string.favorites_title))
                     }
-                    IconButton(onClick = onOpenHistory) {
+                    val historySource = remember { MutableInteractionSource() }
+                    IconButton(onClick = onOpenHistory, interactionSource = historySource, modifier = Modifier.focusHighlight(historySource)) {
                         Icon(Icons.Default.History, contentDescription = stringResource(R.string.history_title))
                     }
-                    IconButton(onClick = onOpenDownloads) {
+                    val downloadsSource = remember { MutableInteractionSource() }
+                    IconButton(onClick = onOpenDownloads, interactionSource = downloadsSource, modifier = Modifier.focusHighlight(downloadsSource)) {
                         Icon(Icons.Default.Download, contentDescription = stringResource(R.string.downloads_title))
                     }
-                    IconButton(onClick = onOpenSettings) {
+                    val settingsSource = remember { MutableInteractionSource() }
+                    IconButton(onClick = onOpenSettings, interactionSource = settingsSource, modifier = Modifier.focusHighlight(settingsSource)) {
                         Icon(Icons.Default.Settings, contentDescription = stringResource(R.string.settings_title))
                     }
                 }
@@ -194,13 +200,16 @@ private fun CartoonCategoryToggle(
     val options = listOf(Category.CARTOONS, Category.CARTOON_SERIES)
     SingleChoiceSegmentedButtonRow(modifier = modifier) {
         options.forEachIndexed { index, option ->
+            val segmentSource = remember { MutableInteractionSource() }
             SegmentedButton(
                 selected = category == option,
                 onClick = {
                     haptics.segmentTick()
                     onCategoryChange(option)
                 },
-                shape = SegmentedButtonDefaults.itemShape(index = index, count = options.size)
+                shape = SegmentedButtonDefaults.itemShape(index = index, count = options.size),
+                interactionSource = segmentSource,
+                modifier = Modifier.focusHighlight(segmentSource)
             ) {
                 Text(categoryTitle(option))
             }
@@ -213,16 +222,25 @@ private fun SortMenu(sortOrder: SortOrder, onSortOrderChange: (SortOrder) -> Uni
     var expanded by remember { mutableStateOf(false) }
     val haptics = LocalHapticFeedback.current
     Box {
-        AssistChip(onClick = { expanded = true }, label = { Text(sortLabel(sortOrder)) })
+        val triggerSource = remember { MutableInteractionSource() }
+        AssistChip(
+            onClick = { expanded = true },
+            label = { Text(sortLabel(sortOrder)) },
+            interactionSource = triggerSource,
+            modifier = Modifier.focusHighlight(triggerSource)
+        )
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             SortOrder.entries.forEach { order ->
+                val itemSource = remember { MutableInteractionSource() }
                 DropdownMenuItem(
                     text = { Text(sortLabel(order)) },
                     onClick = {
                         haptics.segmentTick()
                         onSortOrderChange(order)
                         expanded = false
-                    }
+                    },
+                    interactionSource = itemSource,
+                    modifier = Modifier.focusHighlight(itemSource)
                 )
             }
         }
@@ -248,24 +266,36 @@ private fun FilterMenu(
     val allLabel = stringResource(R.string.library_filter_all)
     val haptics = LocalHapticFeedback.current
     Box {
-        AssistChip(onClick = { expanded = true }, label = { Text(selected ?: label) })
+        val triggerSource = remember { MutableInteractionSource() }
+        AssistChip(
+            onClick = { expanded = true },
+            label = { Text(selected ?: label) },
+            interactionSource = triggerSource,
+            modifier = Modifier.focusHighlight(triggerSource)
+        )
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            val allSource = remember { MutableInteractionSource() }
             DropdownMenuItem(
                 text = { Text(allLabel) },
                 onClick = {
                     haptics.segmentTick()
                     onSelected(null)
                     expanded = false
-                }
+                },
+                interactionSource = allSource,
+                modifier = Modifier.focusHighlight(allSource)
             )
             options.forEach { option ->
+                val itemSource = remember { MutableInteractionSource() }
                 DropdownMenuItem(
                     text = { Text(option) },
                     onClick = {
                         haptics.segmentTick()
                         onSelected(option)
                         expanded = false
-                    }
+                    },
+                    interactionSource = itemSource,
+                    modifier = Modifier.focusHighlight(itemSource)
                 )
             }
         }

@@ -1,5 +1,6 @@
 package com.seance.app.ui.favorites
 
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
@@ -19,6 +20,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -28,6 +30,7 @@ import com.seance.app.R
 import com.seance.app.data.repository.LibraryRepository
 import com.seance.app.data.repository.WatchProgressRepository
 import com.seance.app.ui.common.PosterCard
+import com.seance.app.ui.common.focusHighlight
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -49,7 +52,8 @@ fun FavoritesScreen(
             TopAppBar(
                 title = { Text(stringResource(R.string.favorites_title)) },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
+                    val backSource = remember { MutableInteractionSource() }
+                    IconButton(onClick = onBack, interactionSource = backSource, modifier = Modifier.focusHighlight(backSource)) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.details_back))
                     }
                 }

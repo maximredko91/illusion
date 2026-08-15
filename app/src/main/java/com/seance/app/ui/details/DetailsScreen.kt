@@ -2,8 +2,11 @@ package com.seance.app.ui.details
 
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusGroup
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -95,6 +98,7 @@ import com.seance.app.ui.common.ThumbnailImage
 import com.seance.app.ui.common.posterTransitionKey
 import com.seance.app.ui.common.shimmer
 import com.seance.app.ui.common.ZoomableImageViewer
+import com.seance.app.ui.common.focusHighlight
 import com.seance.app.ui.common.toggle
 
 @Composable
@@ -225,12 +229,20 @@ private fun DetailsContent(
     ) {
         Box {
             val fanart = item.fanartModel
+            val fanartSource = remember { MutableInteractionSource() }
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(220.dp)
                     .background(MaterialTheme.colorScheme.surfaceVariant)
-                    .let { if (fanart != null) it.clickable { zoomedImage = fanart } else it }
+                    .let {
+                        if (fanart != null) {
+                            it.focusHighlight(fanartSource)
+                                .clickable(interactionSource = fanartSource, indication = LocalIndication.current) { zoomedImage = fanart }
+                        } else {
+                            it
+                        }
+                    }
             ) {
                 if (fanart != null) {
                     val painter = rememberAsyncImagePainter(model = fanart, contentScale = ContentScale.Crop)
@@ -283,14 +295,17 @@ private fun DetailsContent(
                     )
                 }
             }
+            val backSource = remember { MutableInteractionSource() }
             IconButton(
                 onClick = onBack,
+                interactionSource = backSource,
                 modifier = Modifier
                     .padding(4.dp)
                     // A plain white icon washes out on a bright fanart (same problem the poster
                     // corner badges already solve) - same translucent-black pill treatment as
                     // RatingBadge/MpaaBadge, so it stays legible regardless of the image underneath.
                     .background(Color.Black.copy(alpha = 0.5f), CircleShape)
+                    .focusHighlight(backSource, color = Color.White)
             ) {
                 Icon(
                     Icons.AutoMirrored.Filled.ArrowBack,
@@ -317,7 +332,10 @@ private fun DetailsContent(
                         )
                     }
                 }
-                posterModifier = posterModifier.clickable { zoomedImage = poster }
+                val posterSource = remember { MutableInteractionSource() }
+                posterModifier = posterModifier
+                    .focusHighlight(posterSource)
+                    .clickable(interactionSource = posterSource, indication = LocalIndication.current) { zoomedImage = poster }
                 Box(modifier = posterModifier) {
                     val painter = rememberAsyncImagePainter(model = poster, contentScale = ContentScale.Crop)
                     val state by painter.state.collectAsState()
@@ -372,7 +390,12 @@ private fun DetailsContent(
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
         ) {
-            Button(onClick = { onPlay(item.stableId) }) {
+            val playSource = remember { MutableInteractionSource() }
+            Button(
+                onClick = { onPlay(item.stableId) },
+                interactionSource = playSource,
+                modifier = Modifier.focusHighlight(playSource)
+            ) {
                 Icon(Icons.Default.PlayArrow, contentDescription = null)
                 Text(
                     stringResource(if (hasStartedWatching) R.string.details_continue_watching else R.string.details_play),
@@ -380,10 +403,15 @@ private fun DetailsContent(
                 )
             }
             val haptics = LocalHapticFeedback.current
-            IconButton(onClick = {
-                haptics.toggle(!isFavorite)
-                onToggleFavorite()
-            }) {
+            val favoriteSource = remember { MutableInteractionSource() }
+            IconButton(
+                onClick = {
+                    haptics.toggle(!isFavorite)
+                    onToggleFavorite()
+                },
+                interactionSource = favoriteSource,
+                modifier = Modifier.focusHighlight(favoriteSource)
+            ) {
                 Icon(
                     imageVector = if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
                     contentDescription = stringResource(
@@ -458,8 +486,11 @@ private fun DownloadButton(
 ) {
     var showRemoveConfirm by remember { mutableStateOf(false) }
     when (download?.status) {
-        null -> IconButton(onClick = onStart) {
-            Icon(Icons.Default.Download, contentDescription = stringResource(R.string.details_download))
+        null -> {
+            val startSource = remember { MutableInteractionSource() }
+            IconButton(onClick = onStart, interactionSource = startSource, modifier = Modifier.focusHighlight(startSource)) {
+                Icon(Icons.Default.Download, contentDescription = stringResource(R.string.details_download))
+            }
         }
         DownloadStatus.QUEUED, DownloadStatus.DOWNLOADING -> Row(verticalAlignment = Alignment.CenterVertically) {
             val progress = if (download.totalBytes > 0) {
@@ -474,13 +505,19 @@ private fun DownloadButton(
             )
             Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(start = 4.dp)) {
                 CircularProgressIndicator(progress = { progress }, modifier = Modifier.padding(8.dp))
-                IconButton(onClick = onRemove) {
+                val cancelSource = remember { MutableInteractionSource() }
+                IconButton(onClick = onRemove, interactionSource = cancelSource, modifier = Modifier.focusHighlight(cancelSource)) {
                     Icon(Icons.Default.Close, contentDescription = stringResource(R.string.details_download_cancel))
                 }
             }
         }
         DownloadStatus.COMPLETED -> {
-            IconButton(onClick = { showRemoveConfirm = true }) {
+            val removeSource = remember { MutableInteractionSource() }
+            IconButton(
+                onClick = { showRemoveConfirm = true },
+                interactionSource = removeSource,
+                modifier = Modifier.focusHighlight(removeSource)
+            ) {
                 Icon(Icons.Default.DownloadDone, contentDescription = stringResource(R.string.details_download_remove))
             }
             if (showRemoveConfirm) {
@@ -489,15 +526,25 @@ private fun DownloadButton(
                     title = { Text(stringResource(R.string.details_download_remove_confirm_title)) },
                     text = { Text(stringResource(R.string.details_download_remove_confirm_message, itemTitle)) },
                     confirmButton = {
-                        TextButton(onClick = {
-                            showRemoveConfirm = false
-                            onRemove()
-                        }) {
+                        val confirmSource = remember { MutableInteractionSource() }
+                        TextButton(
+                            onClick = {
+                                showRemoveConfirm = false
+                                onRemove()
+                            },
+                            interactionSource = confirmSource,
+                            modifier = Modifier.focusHighlight(confirmSource)
+                        ) {
                             Text(stringResource(R.string.details_download_remove_confirm_action))
                         }
                     },
                     dismissButton = {
-                        TextButton(onClick = { showRemoveConfirm = false }) {
+                        val cancelDialogSource = remember { MutableInteractionSource() }
+                        TextButton(
+                            onClick = { showRemoveConfirm = false },
+                            interactionSource = cancelDialogSource,
+                            modifier = Modifier.focusHighlight(cancelDialogSource)
+                        ) {
                             Text(stringResource(R.string.action_cancel))
                         }
                     }
@@ -506,10 +553,15 @@ private fun DownloadButton(
         }
         DownloadStatus.FAILED -> {
             val errorMessage = stringResource(R.string.details_download_error_generic, download.errorMessage ?: stringResource(R.string.downloads_failed))
-            IconButton(onClick = {
-                onError(errorMessage)
-                onStart()
-            }) {
+            val retrySource = remember { MutableInteractionSource() }
+            IconButton(
+                onClick = {
+                    onError(errorMessage)
+                    onStart()
+                },
+                interactionSource = retrySource,
+                modifier = Modifier.focusHighlight(retrySource)
+            ) {
                 Icon(Icons.Default.ErrorOutline, contentDescription = stringResource(R.string.details_download_retry))
             }
         }
@@ -522,16 +574,20 @@ private fun PersonRow(label: String, names: List<String>, clickablePersons: Set<
         Text(label, style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(horizontal = 16.dp))
         LazyRow(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
-            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
+            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+            modifier = Modifier.focusGroup()
         ) {
             items(names) { name ->
                 // Only worth a filmography screen when the person has more than one title here -
                 // otherwise it's just this one item again, so the chip stays inert (greyed out).
                 val clickable = name in clickablePersons
+                val personSource = remember { MutableInteractionSource() }
                 AssistChip(
                     onClick = { if (clickable) onOpenPerson(name) },
                     label = { Text(name) },
-                    enabled = clickable
+                    enabled = clickable,
+                    interactionSource = personSource,
+                    modifier = Modifier.focusHighlight(personSource)
                 )
             }
         }
@@ -565,13 +621,23 @@ private fun EpisodeList(
             title = { Text(stringResource(R.string.details_download_remove_confirm_title)) },
             text = { Text(stringResource(R.string.details_download_remove_confirm_message, episode.title)) },
             confirmButton = {
-                TextButton(onClick = {
-                    onRemoveEpisodeDownload(episode.stableId)
-                    episodeDownloadToRemove = null
-                }) { Text(stringResource(R.string.details_download_remove_confirm_action)) }
+                val confirmSource = remember { MutableInteractionSource() }
+                TextButton(
+                    onClick = {
+                        onRemoveEpisodeDownload(episode.stableId)
+                        episodeDownloadToRemove = null
+                    },
+                    interactionSource = confirmSource,
+                    modifier = Modifier.focusHighlight(confirmSource)
+                ) { Text(stringResource(R.string.details_download_remove_confirm_action)) }
             },
             dismissButton = {
-                TextButton(onClick = { episodeDownloadToRemove = null }) { Text(stringResource(R.string.action_cancel)) }
+                val cancelSource = remember { MutableInteractionSource() }
+                TextButton(
+                    onClick = { episodeDownloadToRemove = null },
+                    interactionSource = cancelSource,
+                    modifier = Modifier.focusHighlight(cancelSource)
+                ) { Text(stringResource(R.string.action_cancel)) }
             }
         )
     }
@@ -581,13 +647,23 @@ private fun EpisodeList(
             title = { Text(stringResource(R.string.details_download_remove_confirm_title)) },
             text = { Text(stringResource(R.string.details_download_season_remove_confirm_message, ids.size)) },
             confirmButton = {
-                TextButton(onClick = {
-                    onRemoveSeasonDownloads(ids)
-                    seasonDownloadsToRemove = null
-                }) { Text(stringResource(R.string.details_download_remove_confirm_action)) }
+                val confirmSource = remember { MutableInteractionSource() }
+                TextButton(
+                    onClick = {
+                        onRemoveSeasonDownloads(ids)
+                        seasonDownloadsToRemove = null
+                    },
+                    interactionSource = confirmSource,
+                    modifier = Modifier.focusHighlight(confirmSource)
+                ) { Text(stringResource(R.string.details_download_remove_confirm_action)) }
             },
             dismissButton = {
-                TextButton(onClick = { seasonDownloadsToRemove = null }) { Text(stringResource(R.string.action_cancel)) }
+                val cancelSource = remember { MutableInteractionSource() }
+                TextButton(
+                    onClick = { seasonDownloadsToRemove = null },
+                    interactionSource = cancelSource,
+                    modifier = Modifier.focusHighlight(cancelSource)
+                ) { Text(stringResource(R.string.action_cancel)) }
             }
         )
     }
@@ -595,10 +671,12 @@ private fun EpisodeList(
     Column(modifier = Modifier.padding(top = 8.dp)) {
         bySeason.forEach { (season, seasonEpisodes) ->
             val expanded = season in expandedSeasons
+            val seasonSource = remember { MutableInteractionSource() }
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clickable {
+                    .focusHighlight(seasonSource)
+                    .clickable(interactionSource = seasonSource, indication = LocalIndication.current) {
                         expandedSeasons = if (expanded) expandedSeasons - season else expandedSeasons + season
                     }
                     .padding(horizontal = 16.dp, vertical = 8.dp),
@@ -616,12 +694,14 @@ private fun EpisodeList(
                     modifier = Modifier.padding(end = 4.dp)
                 )
                 val seasonHasDownloads = seasonEpisodes.any { downloads[it.stableId]?.status == DownloadStatus.COMPLETED }
+                val seasonDownloadSource = remember { MutableInteractionSource() }
                 IconButton(
                     onClick = {
                         val ids = seasonEpisodes.map { it.stableId }
                         if (seasonHasDownloads) seasonDownloadsToRemove = ids else onDownloadSeason(ids)
                     },
-                    modifier = Modifier.size(36.dp)
+                    interactionSource = seasonDownloadSource,
+                    modifier = Modifier.size(36.dp).focusHighlight(seasonDownloadSource)
                 ) {
                     Icon(
                         if (seasonHasDownloads) Icons.Default.Delete else Icons.Default.Download,
@@ -643,10 +723,12 @@ private fun EpisodeList(
                         episode.seasonNumber?.let { s -> episode.episodeNumber?.let { e -> "S${s}E$e" } },
                         episode.title
                     ).joinToString(" · ")
+                    val episodeSource = remember { MutableInteractionSource() }
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clickable { onPlay(episode.stableId) }
+                            .focusHighlight(episodeSource)
+                            .clickable(interactionSource = episodeSource, indication = LocalIndication.current) { onPlay(episode.stableId) }
                             .padding(horizontal = 16.dp, vertical = 12.dp)
                     ) {
                         Box(
@@ -679,25 +761,33 @@ private fun EpisodeList(
                             }
                         }
                         when (downloads[episode.stableId]?.status) {
-                            DownloadStatus.COMPLETED -> IconButton(
-                                onClick = { episodeDownloadToRemove = episode },
-                                modifier = Modifier.padding(start = 4.dp).size(36.dp)
-                            ) {
-                                Icon(
-                                    Icons.Default.DownloadDone,
-                                    contentDescription = stringResource(R.string.details_download_remove),
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
+                            DownloadStatus.COMPLETED -> {
+                                val episodeRemoveSource = remember { MutableInteractionSource() }
+                                IconButton(
+                                    onClick = { episodeDownloadToRemove = episode },
+                                    interactionSource = episodeRemoveSource,
+                                    modifier = Modifier.padding(start = 4.dp).size(36.dp).focusHighlight(episodeRemoveSource)
+                                ) {
+                                    Icon(
+                                        Icons.Default.DownloadDone,
+                                        contentDescription = stringResource(R.string.details_download_remove),
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
                             }
                             DownloadStatus.QUEUED, DownloadStatus.DOWNLOADING -> CircularProgressIndicator(
                                 modifier = Modifier.padding(start = 4.dp).size(20.dp),
                                 strokeWidth = 2.dp
                             )
-                            else -> IconButton(
-                                onClick = { onDownloadEpisode(episode.stableId) },
-                                modifier = Modifier.padding(start = 4.dp).size(36.dp)
-                            ) {
-                                Icon(Icons.Default.Download, contentDescription = stringResource(R.string.details_download))
+                            else -> {
+                                val episodeDownloadSource = remember { MutableInteractionSource() }
+                                IconButton(
+                                    onClick = { onDownloadEpisode(episode.stableId) },
+                                    interactionSource = episodeDownloadSource,
+                                    modifier = Modifier.padding(start = 4.dp).size(36.dp).focusHighlight(episodeDownloadSource)
+                                ) {
+                                    Icon(Icons.Default.Download, contentDescription = stringResource(R.string.details_download))
+                                }
                             }
                         }
                     }
@@ -713,7 +803,8 @@ private fun MediaRow(title: String, items: List<MediaItemEntity>, onOpenItem: (S
         Text(title, style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(horizontal = 16.dp))
         LazyRow(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
-            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
+            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+            modifier = Modifier.focusGroup()
         ) {
             items(items, key = { it.stableId }) { item ->
                 PosterCard(item = item, onClick = { onOpenItem(item.stableId) }, modifier = Modifier.width(110.dp))

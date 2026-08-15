@@ -7,6 +7,7 @@ import android.media.AudioManager
 import android.view.WindowManager
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -56,6 +57,7 @@ import com.seance.app.data.repository.DownloadRepository
 import com.seance.app.data.repository.LibraryRepository
 import com.seance.app.data.repository.ThumbnailRepository
 import com.seance.app.data.repository.WatchProgressRepository
+import com.seance.app.ui.common.focusHighlight
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -136,13 +138,23 @@ fun PlayerScreen(
             title = { Text(stringResource(R.string.player_aspect_ratio_blocked_title)) },
             text = { Text(stringResource(R.string.player_aspect_ratio_blocked_message)) },
             confirmButton = {
-                TextButton(onClick = {
-                    showAspectRatioBlockedDialog = false
-                    onBack()
-                }) { Text(stringResource(R.string.player_aspect_ratio_blocked_reload)) }
+                val reloadSource = remember { MutableInteractionSource() }
+                TextButton(
+                    onClick = {
+                        showAspectRatioBlockedDialog = false
+                        onBack()
+                    },
+                    interactionSource = reloadSource,
+                    modifier = Modifier.focusHighlight(reloadSource)
+                ) { Text(stringResource(R.string.player_aspect_ratio_blocked_reload)) }
             },
             dismissButton = {
-                TextButton(onClick = { showAspectRatioBlockedDialog = false }) { Text(stringResource(R.string.player_close)) }
+                val closeSource = remember { MutableInteractionSource() }
+                TextButton(
+                    onClick = { showAspectRatioBlockedDialog = false },
+                    interactionSource = closeSource,
+                    modifier = Modifier.focusHighlight(closeSource)
+                ) { Text(stringResource(R.string.player_close)) }
             }
         )
     }
@@ -307,9 +319,11 @@ fun PlayerScreen(
 @Composable
 private fun LockedOverlay(onUnlock: () -> Unit) {
     Box(modifier = Modifier.fillMaxSize()) {
+        val unlockSource = remember { MutableInteractionSource() }
         IconButton(
             onClick = onUnlock,
-            modifier = Modifier.align(Alignment.BottomEnd).padding(24.dp)
+            interactionSource = unlockSource,
+            modifier = Modifier.align(Alignment.BottomEnd).padding(24.dp).focusHighlight(unlockSource, color = Color.White)
         ) {
             Icon(Icons.Default.Lock, contentDescription = stringResource(R.string.player_unlock), tint = Color.White)
         }

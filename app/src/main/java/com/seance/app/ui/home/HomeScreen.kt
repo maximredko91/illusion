@@ -1,5 +1,7 @@
 package com.seance.app.ui.home
 
+import androidx.compose.foundation.focusGroup
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -8,6 +10,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Favorite
@@ -20,12 +24,14 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.seance.app.R
 import com.seance.app.data.local.entity.MediaItemEntity
 import com.seance.app.ui.common.PosterCard
+import com.seance.app.ui.common.focusHighlight
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -45,16 +51,20 @@ fun HomeScreen(
             TopAppBar(
                 title = { Text(stringResource(R.string.app_name)) },
                 actions = {
-                    IconButton(onClick = onOpenFavorites) {
+                    val favoritesSource = remember { MutableInteractionSource() }
+                    IconButton(onClick = onOpenFavorites, interactionSource = favoritesSource, modifier = Modifier.focusHighlight(favoritesSource)) {
                         Icon(Icons.Default.Favorite, contentDescription = stringResource(R.string.favorites_title))
                     }
-                    IconButton(onClick = onOpenHistory) {
+                    val historySource = remember { MutableInteractionSource() }
+                    IconButton(onClick = onOpenHistory, interactionSource = historySource, modifier = Modifier.focusHighlight(historySource)) {
                         Icon(Icons.Default.History, contentDescription = stringResource(R.string.history_title))
                     }
-                    IconButton(onClick = onOpenDownloads) {
+                    val downloadsSource = remember { MutableInteractionSource() }
+                    IconButton(onClick = onOpenDownloads, interactionSource = downloadsSource, modifier = Modifier.focusHighlight(downloadsSource)) {
                         Icon(Icons.Default.Download, contentDescription = stringResource(R.string.downloads_title))
                     }
-                    IconButton(onClick = onOpenSettings) {
+                    val settingsSource = remember { MutableInteractionSource() }
+                    IconButton(onClick = onOpenSettings, interactionSource = settingsSource, modifier = Modifier.focusHighlight(settingsSource)) {
                         Icon(Icons.Default.Settings, contentDescription = stringResource(R.string.settings_title))
                     }
                 }
@@ -65,6 +75,7 @@ fun HomeScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
+                .verticalScroll(rememberScrollState())
                 .padding(vertical = 16.dp),
             verticalArrangement = Arrangement.spacedBy(24.dp)
         ) {
@@ -94,7 +105,8 @@ private fun MediaCarousel(
         Text(title, modifier = Modifier.padding(horizontal = 16.dp))
         LazyRow(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
-            contentPadding = PaddingValues(horizontal = 16.dp)
+            contentPadding = PaddingValues(horizontal = 16.dp),
+            modifier = Modifier.focusGroup()
         ) {
             items(items) { item ->
                 PosterCard(

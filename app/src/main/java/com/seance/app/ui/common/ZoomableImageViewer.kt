@@ -3,6 +3,7 @@ package com.seance.app.ui.common
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -88,12 +89,15 @@ fun ZoomableImageViewer(model: Any, contentDescription: String?, onDismiss: () -
                         translationY = offset.y
                     )
             )
+            val closeSource = remember { MutableInteractionSource() }
             IconButton(
                 onClick = onDismiss,
+                interactionSource = closeSource,
                 modifier = Modifier
                     .align(Alignment.TopEnd)
                     .statusBarsPadding()
                     .padding(8.dp)
+                    .focusHighlight(closeSource, color = Color.White)
             ) {
                 Icon(
                     Icons.Default.Close,

@@ -1,5 +1,6 @@
 package com.seance.app.ui.settings
 
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -36,6 +37,7 @@ import androidx.compose.ui.unit.dp
 import androidx.work.WorkInfo
 import androidx.work.WorkManager
 import com.seance.app.R
+import com.seance.app.ui.common.focusHighlight
 import com.seance.app.ui.common.reject
 import com.seance.app.ui.common.toggle
 import com.seance.app.work.PosterPreloadWorker
@@ -73,14 +75,24 @@ fun CacheScreen(
             title = { Text(stringResource(R.string.settings_poster_cache_disable_title)) },
             text = { Text(stringResource(R.string.settings_poster_cache_disable_message)) },
             confirmButton = {
-                TextButton(onClick = {
-                    haptics.reject()
-                    showDisableCachingConfirm = false
-                    onSetPosterCachingEnabled(false)
-                }) { Text(stringResource(R.string.settings_poster_cache_disable_confirm)) }
+                val confirmSource = remember { MutableInteractionSource() }
+                TextButton(
+                    onClick = {
+                        haptics.reject()
+                        showDisableCachingConfirm = false
+                        onSetPosterCachingEnabled(false)
+                    },
+                    interactionSource = confirmSource,
+                    modifier = Modifier.focusHighlight(confirmSource)
+                ) { Text(stringResource(R.string.settings_poster_cache_disable_confirm)) }
             },
             dismissButton = {
-                TextButton(onClick = { showDisableCachingConfirm = false }) {
+                val cancelSource = remember { MutableInteractionSource() }
+                TextButton(
+                    onClick = { showDisableCachingConfirm = false },
+                    interactionSource = cancelSource,
+                    modifier = Modifier.focusHighlight(cancelSource)
+                ) {
                     Text(stringResource(R.string.action_cancel))
                 }
             }
@@ -93,7 +105,8 @@ fun CacheScreen(
             TopAppBar(
                 title = { Text(stringResource(R.string.settings_cache)) },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
+                    val backSource = remember { MutableInteractionSource() }
+                    IconButton(onClick = onBack, interactionSource = backSource, modifier = Modifier.focusHighlight(backSource)) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.details_back))
                     }
                 }
@@ -118,7 +131,12 @@ fun CacheScreen(
                         )
                     },
                     trailingContent = {
-                        OutlinedButton(onClick = onClearCache) {
+                        val clearCacheSource = remember { MutableInteractionSource() }
+                        OutlinedButton(
+                            onClick = onClearCache,
+                            interactionSource = clearCacheSource,
+                            modifier = Modifier.focusHighlight(clearCacheSource)
+                        ) {
                             Text(stringResource(R.string.settings_cache_clear))
                         }
                     },
