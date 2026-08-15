@@ -32,6 +32,8 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.DownloadDone
 import androidx.compose.material.icons.filled.ErrorOutline
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.PlayArrow
@@ -72,6 +74,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import coil3.compose.AsyncImagePainter
 import coil3.compose.rememberAsyncImagePainter
 import com.seance.app.R
+import com.seance.app.data.image.episodeThumbModel
 import com.seance.app.data.image.fanartModel
 import com.seance.app.data.image.posterModel
 import com.seance.app.data.local.entity.DownloadEntity
@@ -86,6 +89,7 @@ import com.seance.app.ui.common.LocalNavAnimatedVisibilityScope
 import com.seance.app.ui.common.LocalSharedTransitionScope
 import com.seance.app.ui.common.PosterCard
 import com.seance.app.ui.common.RatingBadge
+import com.seance.app.ui.common.ThumbnailImage
 import com.seance.app.ui.common.posterTransitionKey
 import com.seance.app.ui.common.shimmer
 import com.seance.app.ui.common.ZoomableImageViewer
@@ -519,37 +523,81 @@ private fun EpisodeList(episodes: List<MediaItemEntity>, onPlay: (String) -> Uni
         .sortedWith(compareBy({ it.seasonNumber ?: 0 }, { it.episodeNumber ?: 0 }))
         .groupBy { it.seasonNumber }
 
+    // Collapsed by default ("spoiler"-style) - a season list can run to dozens of episode titles,
+    // which for an unwatched show is itself a spoiler (episode titles/synopses give away plot
+    // beats) as well as just a lot of scrolling to get past on the details page.
+    var expandedSeasons by remember { mutableStateOf(emptySet<Int?>()) }
+
     Column(modifier = Modifier.padding(top = 8.dp)) {
         bySeason.forEach { (season, seasonEpisodes) ->
-            Text(
-                if (season != null) stringResource(R.string.details_season, season) else stringResource(R.string.details_episodes),
-                style = MaterialTheme.typography.titleSmall,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
-            )
-            seasonEpisodes.forEach { episode ->
-                val label = listOfNotNull(
-                    episode.seasonNumber?.let { s -> episode.episodeNumber?.let { e -> "S${s}E$e" } },
-                    episode.title
-                ).joinToString(" · ")
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { onPlay(episode.stableId) }
-                        .padding(horizontal = 16.dp, vertical = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(Icons.Default.PlayArrow, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Text(
-                        label.ifBlank { episode.title },
-                        modifier = Modifier.padding(start = 12.dp).weight(1f)
-                    )
-                    episode.premiered?.let {
-                        Text(
-                            it,
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(start = 8.dp)
-                        )
+            val expanded = season in expandedSeasons
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable {
+                        expandedSeasons = if (expanded) expandedSeasons - season else expandedSeasons + season
+                    }
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    if (season != null) stringResource(R.string.details_season, season) else stringResource(R.string.details_episodes),
+                    style = MaterialTheme.typography.titleSmall,
+                    modifier = Modifier.weight(1f)
+                )
+                Text(
+                    stringResource(R.string.details_episode_count, seasonEpisodes.size),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(end = 4.dp)
+                )
+                Icon(
+                    if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            if (expanded) {
+                seasonEpisodes.forEach { episode ->
+                    val label = listOfNotNull(
+                        episode.seasonNumber?.let { s -> episode.episodeNumber?.let { e -> "S${s}E$e" } },
+                        episode.title
+                    ).joinToString(" · ")
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onPlay(episode.stableId) }
+                            .padding(horizontal = 16.dp, vertical = 12.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .width(120.dp)
+                                .aspectRatio(16f / 9f)
+                                .background(MaterialTheme.colorScheme.surfaceVariant)
+                        ) {
+                            ThumbnailImage(episode.episodeThumbModel, contentDescription = null)
+                        }
+                        Column(modifier = Modifier.padding(start = 12.dp).weight(1f)) {
+                            Row {
+                                Text(label.ifBlank { episode.title }, modifier = Modifier.weight(1f))
+                                episode.premiered?.let {
+                                    Text(
+                                        it,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.padding(start = 8.dp)
+                                    )
+                                }
+                            }
+                            episode.plot?.takeIf { it.isNotBlank() }?.let {
+                                Text(
+                                    it,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(top = 4.dp)
+                                )
+                            }
+                        }
                     }
                 }
             }

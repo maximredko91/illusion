@@ -219,6 +219,22 @@ class LibraryScanner(
             ?: metadata?.posterUrl?.takeIf { it.startsWith("http://") || it.startsWith("https://") }
         val fanartPath = findImage(setOf("fanart", "backdrop", "background"))?.path
             ?: metadata?.fanartUrl?.takeIf { it.startsWith("http://") || it.startsWith("https://") }
+        // Per-episode screenshot - Kodi/tinyMediaManager write these as "<video name>-thumb.jpg"
+        // next to the video, distinct from the show's own poster.jpg at the show root (which
+        // `posterPath` above already resolves to for every episode, since findImage checks
+        // showFolder too - that's the right thing for the show-grouped library card, but wrong for
+        // an individual episode row wanting its own screenshot). Only meaningful for episodes.
+        val episodeThumbPath = if (seriesStableId != null) {
+            imageFiles
+                .firstOrNull {
+                    it.path.substringBeforeLast('\\') == videoFolder &&
+                        it.baseName.equals("$baseName-thumb", ignoreCase = true)
+                }
+                ?.path
+                ?: metadata?.posterUrl?.takeIf { it.startsWith("http://") || it.startsWith("https://") }
+        } else {
+            null
+        }
 
         return MediaItemEntity(
             stableId = stableId,
@@ -238,6 +254,7 @@ class LibraryScanner(
             collectionName = metadata?.collectionName,
             posterPath = posterPath,
             fanartPath = fanartPath,
+            episodeThumbPath = episodeThumbPath,
             seasonNumber = metadata?.season,
             episodeNumber = metadata?.episode,
             seriesStableId = seriesStableId,

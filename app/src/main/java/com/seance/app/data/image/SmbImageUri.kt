@@ -42,3 +42,7 @@ val MediaItemEntity.posterModel: Any?
 /** Coil request model for this item's fanart/backdrop, or null if it has none. */
 val MediaItemEntity.fanartModel: Any?
     get() = SmbImageUri.resolve(sourceId, fanartPath)
+
+/** Coil request model for this episode's own screenshot, or null if it has none. */
+val MediaItemEntity.episodeThumbModel: Any?
+    get() = SmbImageUri.resolve(sourceId, episodeThumbPath)

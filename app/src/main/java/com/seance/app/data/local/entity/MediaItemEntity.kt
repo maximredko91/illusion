@@ -24,6 +24,7 @@ data class MediaItemEntity(
     val collectionName: String?,
     val posterPath: String?,
     val fanartPath: String?,
+    val episodeThumbPath: String? = null,
     val seasonNumber: Int?,
     val episodeNumber: Int?,
     val seriesStableId: String?,
