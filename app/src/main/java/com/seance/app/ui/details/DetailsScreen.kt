@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -265,7 +266,15 @@ private fun DetailsContent(
                     )
                 }
             }
-            IconButton(onClick = onBack, modifier = Modifier.padding(4.dp)) {
+            IconButton(
+                onClick = onBack,
+                modifier = Modifier
+                    .padding(4.dp)
+                    // A plain white icon washes out on a bright fanart (same problem the poster
+                    // corner badges already solve) - same translucent-black pill treatment as
+                    // RatingBadge/MpaaBadge, so it stays legible regardless of the image underneath.
+                    .background(Color.Black.copy(alpha = 0.5f), CircleShape)
+            ) {
                 Icon(
                     Icons.AutoMirrored.Filled.ArrowBack,
                     contentDescription = stringResource(R.string.details_back),
