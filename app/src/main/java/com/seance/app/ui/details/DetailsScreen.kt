@@ -10,18 +10,16 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.displayCutout
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
-import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -61,7 +59,9 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.style.TextAlign
@@ -180,6 +180,19 @@ private fun DetailsContent(
 ) {
     var zoomedImage by remember { mutableStateOf<Any?>(null) }
 
+    // Landscape on this device has a real display-cutout inset on one side only (front camera) -
+    // padding just that side (the naive fix) looks lopsided, since the cutout is physically on
+    // one edge but the reserved-safe-area column applies for the whole screen height. Mirror it:
+    // reserve the same width on both edges so the layout stays visually symmetric regardless of
+    // which side the hardware cutout is actually on. Zero in portrait (no cutout there), so no
+    // change from before on that orientation.
+    val density = LocalDensity.current
+    val layoutDirection = LocalLayoutDirection.current
+    val cutoutInsets = WindowInsets.displayCutout
+    val cutoutHorizontalDp = with(density) {
+        maxOf(cutoutInsets.getLeft(density, layoutDirection), cutoutInsets.getRight(density, layoutDirection)).toDp()
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -190,16 +203,7 @@ private fun DetailsContent(
             // (e.g. a poster with a white background) can't wash out status-bar icons if nothing
             // ever renders behind them.
             .statusBarsPadding()
-            // Landscape on this device has a real display-cutout inset on one side (front
-            // camera) - the rest of the app deliberately uses a fixed small margin instead of
-            // chasing the cutout dynamically (see CutoutAvoidance.kt, removed), but that fixed
-            // margin is narrower than the cutout itself, so content was rendering underneath it.
-            // Scoped to `displayCutout` specifically (not `safeDrawing`) - safeDrawing also folds
-            // in the gesture-nav side insets, which would add a left-side margin the rest of the
-            // app doesn't have and that isn't what's being fixed here. This is a static one-time
-            // inset (computed once, not per-scroll-position), unlike the rejected dynamic approach
-            // - it just widens the existing margin on whichever side the cutout actually is.
-            .windowInsetsPadding(WindowInsets.displayCutout.only(WindowInsetsSides.Horizontal))
+            .padding(horizontal = cutoutHorizontalDp)
     ) {
         Box {
             val fanart = item.fanartModel
@@ -228,10 +232,38 @@ private fun DetailsContent(
                         .fillMaxSize()
                         .background(
                             Brush.verticalGradient(
-                                colors = listOf(Color.Transparent, MaterialTheme.colorScheme.background)
+                                // Fanart now starts right below the status bar (flat background
+                                // above it, per the statusBarsPadding fix) - a plain hard cut into
+                                // the image there reads as an abrupt seam. Fade in from the same
+                                // background color over a short top strip, in addition to the
+                                // existing fade-out into the background at the bottom.
+                                0f to MaterialTheme.colorScheme.background,
+                                0.15f to Color.Transparent,
+                                0.6f to Color.Transparent,
+                                1f to MaterialTheme.colorScheme.background
                             )
                         )
                 )
+                if (fanart != null) {
+                    // Same idea as the top/bottom fade, on the left/right edges - a fixed-width
+                    // decorative soft edge, independent of `cutoutHorizontalDp` (that one's for
+                    // correctness/symmetry of the surrounding margin, this one's purely cosmetic
+                    // and applies in portrait too, where there's no cutout at all).
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.CenterStart)
+                            .fillMaxHeight()
+                            .width(24.dp)
+                            .background(Brush.horizontalGradient(listOf(MaterialTheme.colorScheme.background, Color.Transparent)))
+                    )
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.CenterEnd)
+                            .fillMaxHeight()
+                            .width(24.dp)
+                            .background(Brush.horizontalGradient(listOf(Color.Transparent, MaterialTheme.colorScheme.background)))
+                    )
+                }
             }
             IconButton(onClick = onBack, modifier = Modifier.padding(4.dp)) {
                 Icon(
