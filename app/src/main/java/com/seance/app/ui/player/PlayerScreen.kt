@@ -17,10 +17,12 @@ import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -103,12 +105,20 @@ fun PlayerScreen(
     var showSpeedDialog by remember { mutableStateOf(false) }
     var resizeMode by remember { mutableStateOf(AspectRatioFrameLayout.RESIZE_MODE_FIT) }
     var resizeModeLabel by remember { mutableStateOf<String?>(null) }
+    var showAspectRatioBlockedDialog by remember { mutableStateOf(false) }
     var playerViewRef by remember { mutableStateOf<PlayerView?>(null) }
 
     val fitLabel = stringResource(R.string.player_aspect_ratio_fit)
     val zoomLabel = stringResource(R.string.player_aspect_ratio_zoom)
     val fillLabel = stringResource(R.string.player_aspect_ratio_fill)
     fun cycleResizeMode() {
+        // Cycling the mode itself is harmless even when tainted (it just never has a visible
+        // effect - see PlayerViewModel.init), but showing the normal Fit/Zoom/Fill label instead
+        // of an explanation would look like the tap silently did nothing.
+        if (uiState.aspectRatioLockedBySharpen) {
+            showAspectRatioBlockedDialog = true
+            return
+        }
         resizeMode = when (resizeMode) {
             AspectRatioFrameLayout.RESIZE_MODE_FIT -> AspectRatioFrameLayout.RESIZE_MODE_ZOOM
             AspectRatioFrameLayout.RESIZE_MODE_ZOOM -> AspectRatioFrameLayout.RESIZE_MODE_FILL
@@ -119,6 +129,22 @@ fun PlayerScreen(
             AspectRatioFrameLayout.RESIZE_MODE_ZOOM -> zoomLabel
             else -> fillLabel
         }
+    }
+    if (showAspectRatioBlockedDialog) {
+        AlertDialog(
+            onDismissRequest = { showAspectRatioBlockedDialog = false },
+            title = { Text(stringResource(R.string.player_aspect_ratio_blocked_title)) },
+            text = { Text(stringResource(R.string.player_aspect_ratio_blocked_message)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    showAspectRatioBlockedDialog = false
+                    onBack()
+                }) { Text(stringResource(R.string.player_aspect_ratio_blocked_reload)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showAspectRatioBlockedDialog = false }) { Text(stringResource(R.string.player_close)) }
+            }
+        )
     }
     LaunchedEffect(resizeModeLabel) {
         if (resizeModeLabel != null) {

@@ -279,6 +279,27 @@ fun PlaybackSpeedDialog(
     onDismiss: () -> Unit
 ) {
     val speeds = listOf(0.5f, 0.75f, 1f, 1.25f, 1.5f, 2f)
+    // Turning sharpen on permanently switches this player session's video pipeline onto a Media3
+    // 1.11.0 code path whose onVideoSizeChanged is a deliberate upstream no-op (TODO b/292111083) -
+    // aspect-ratio cycling silently stops working for the rest of the session as a result. Warn
+    // before flipping the switch rather than let the user discover it later via a dead button.
+    var showEnableWarning by remember { mutableStateOf(false) }
+    if (showEnableWarning) {
+        AlertDialog(
+            onDismissRequest = { showEnableWarning = false },
+            title = { Text(stringResource(R.string.player_sharpen_enable_warning_title)) },
+            text = { Text(stringResource(R.string.player_sharpen_enable_warning_message)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    showEnableWarning = false
+                    onSharpenEnabledChange(true)
+                }) { Text(stringResource(R.string.player_sharpen_enable_warning_confirm)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showEnableWarning = false }) { Text(stringResource(R.string.action_cancel)) }
+            }
+        )
+    }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.player_speed)) },
@@ -293,7 +314,12 @@ fun PlaybackSpeedDialog(
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Text(stringResource(R.string.player_sharpen_toggle), modifier = Modifier.weight(1f))
-                    androidx.compose.material3.Switch(checked = sharpenEnabled, onCheckedChange = onSharpenEnabledChange)
+                    androidx.compose.material3.Switch(
+                        checked = sharpenEnabled,
+                        onCheckedChange = { enabled ->
+                            if (enabled) showEnableWarning = true else onSharpenEnabledChange(false)
+                        }
+                    )
                 }
                 androidx.compose.material3.HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
                 Text(stringResource(R.string.player_video_info_title), style = androidx.compose.material3.MaterialTheme.typography.labelLarge)

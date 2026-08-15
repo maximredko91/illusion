@@ -78,7 +78,9 @@ data class PlayerUiState(
     val thumbnailFrames: ThumbnailFrames? = null,
     val videoAspectRatio: Float = 16f / 9f,
     val sharpenEnabled: Boolean = false,
-    val seekDurationMs: Long = 10_000L
+    val seekDurationMs: Long = 10_000L,
+    /** True once sharpen has been turned on at least once this player session - aspect-ratio cycling is inert from that point on (see the comment in [PlayerViewModel.init]). */
+    val aspectRatioLockedBySharpen: Boolean = false
 )
 
 @OptIn(UnstableApi::class)
@@ -171,7 +173,7 @@ class PlayerViewModel(
                 } else if (effectsPipelineTainted) {
                     player.setVideoEffects(emptyList())
                 }
-                _state.update { it.copy(sharpenEnabled = enabled) }
+                _state.update { it.copy(sharpenEnabled = enabled, aspectRatioLockedBySharpen = effectsPipelineTainted) }
             }
         }
 

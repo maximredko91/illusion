@@ -167,6 +167,12 @@
     <string name="player_aspect_ratio_fit">По размеру экрана</string>
     <string name="player_aspect_ratio_zoom">Заполнить экран (обрезка)</string>
     <string name="player_aspect_ratio_fill">Растянуть</string>
+    <string name="player_sharpen_enable_warning_title">Включить резкость?</string>
+    <string name="player_sharpen_enable_warning_message">Из-за ограничения видеодвижка после включения резкости переключение соотношения сторон перестанет работать до конца этого просмотра. Если оно вам нужно — настройте его сейчас, до включения резкости, либо позже перезайдите в плеер.</string>
+    <string name="player_sharpen_enable_warning_confirm">Всё равно включить</string>
+    <string name="player_aspect_ratio_blocked_title">Соотношение сторон недоступно</string>
+    <string name="player_aspect_ratio_blocked_message">В этом сеансе была включена резкость — из-за ограничения видеодвижка переключение соотношения сторон больше не сработает. Перезайдите в плеер, чтобы сбросить это ограничение.</string>
+    <string name="player_aspect_ratio_blocked_reload">Перезайти в плеер</string>
 
     <string name="details_play">Смотреть</string>
     <string name="details_continue_watching">Продолжить просмотр</string>
