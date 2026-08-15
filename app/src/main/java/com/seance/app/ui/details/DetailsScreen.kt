@@ -76,7 +76,6 @@ import com.seance.app.data.repository.LibraryRepository
 import com.seance.app.data.repository.WatchProgressRepository
 import com.seance.app.ui.common.LocalNavAnimatedVisibilityScope
 import com.seance.app.ui.common.LocalSharedTransitionScope
-import com.seance.app.ui.common.MpaaBadge
 import com.seance.app.ui.common.PosterCard
 import com.seance.app.ui.common.RatingBadge
 import com.seance.app.ui.common.posterTransitionKey
@@ -248,9 +247,6 @@ private fun DetailsContent(
                     }
                     item.rating?.let { rating ->
                         RatingBadge(rating, modifier = Modifier.align(Alignment.TopStart).padding(6.dp))
-                    }
-                    item.mpaa?.let { mpaa ->
-                        MpaaBadge(mpaa, modifier = Modifier.align(Alignment.TopEnd).padding(6.dp))
                     }
                 }
             }

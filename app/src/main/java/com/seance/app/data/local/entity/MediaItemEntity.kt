@@ -20,6 +20,7 @@ data class MediaItemEntity(
     val plot: String?,
     val director: List<String>,
     val actors: List<String>,
+    val actorRoles: List<String> = emptyList(),
     val collectionName: String?,
     val posterPath: String?,
     val fanartPath: String?,
