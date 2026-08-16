@@ -8,8 +8,11 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import com.seance.app.data.local.entity.SmbSourceEntity
 import com.seance.app.data.repository.SmbSourceRepository
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
@@ -59,6 +62,17 @@ class SmbSourceFormViewModel(
         } ?: SmbSourceFormState()
     )
     val state: StateFlow<SmbSourceFormState> = _state.asStateFlow()
+
+    // Autofill convenience for repeat testing against the same NAS - not meant as validated
+    // history, just "what did I already type into a source before". Seeded with the dev's own
+    // NAS address/share so the suggestion is there from the very first source, not only after
+    // one's already been saved.
+    val hostSuggestions: StateFlow<List<String>> = smbSourceRepository.observeSources()
+        .map { sources -> (listOf(SEED_HOST) + sources.map { it.host }).distinct() }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), listOf(SEED_HOST))
+    val shareSuggestions: StateFlow<List<String>> = smbSourceRepository.observeSources()
+        .map { sources -> (listOf(SEED_SHARE) + sources.map { it.share }).distinct() }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), listOf(SEED_SHARE))
 
     fun updateDisplayName(value: String) = _state.update { it.copy(displayName = value) }
     fun updateHost(value: String) = _state.update { it.copy(host = value) }
@@ -127,6 +141,8 @@ class SmbSourceFormViewModel(
 
     companion object {
         private const val TAG = "SmbSourceForm"
+        private const val SEED_HOST = "192.168.2.1"
+        private const val SEED_SHARE = "Movies"
 
         fun factory(smbSourceRepository: SmbSourceRepository, existingSource: SmbSourceEntity? = null) = viewModelFactory {
             initializer { SmbSourceFormViewModel(smbSourceRepository, existingSource) }

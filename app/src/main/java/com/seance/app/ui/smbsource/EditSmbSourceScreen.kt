@@ -86,6 +86,8 @@ private fun EditSmbSourceForm(
         factory = SmbSourceFormViewModel.factory(smbSourceRepository, source)
     )
     val state by viewModel.state.collectAsState()
+    val hostSuggestions by viewModel.hostSuggestions.collectAsState()
+    val shareSuggestions by viewModel.shareSuggestions.collectAsState()
     val requestLocalNetwork = rememberLocalNetworkPermissionGate(onDenied = viewModel::reportLocalNetworkPermissionDenied)
 
     Column(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
@@ -107,7 +109,9 @@ private fun EditSmbSourceForm(
                     }
                 }
             },
-            saveLabel = stringResource(R.string.onboarding_save)
+            saveLabel = stringResource(R.string.onboarding_save),
+            hostSuggestions = hostSuggestions,
+            shareSuggestions = shareSuggestions
         )
     }
 }

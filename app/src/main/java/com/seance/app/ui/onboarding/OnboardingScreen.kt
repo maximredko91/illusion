@@ -61,6 +61,8 @@ fun OnboardingScreen(
     val context = LocalContext.current
     val viewModel: SmbSourceFormViewModel = viewModel(factory = SmbSourceFormViewModel.factory(smbSourceRepository))
     val state by viewModel.state.collectAsState()
+    val hostSuggestions by viewModel.hostSuggestions.collectAsState()
+    val shareSuggestions by viewModel.shareSuggestions.collectAsState()
     val requestLocalNetwork = rememberLocalNetworkPermissionGate(onDenied = viewModel::reportLocalNetworkPermissionDenied)
 
     Scaffold(
@@ -86,7 +88,9 @@ fun OnboardingScreen(
                         }
                     }
                 },
-                saveLabel = stringResource(R.string.onboarding_finish)
+                saveLabel = stringResource(R.string.onboarding_finish),
+                hostSuggestions = hostSuggestions,
+                shareSuggestions = shareSuggestions
             )
         }
     }

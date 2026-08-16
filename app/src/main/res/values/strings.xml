@@ -123,6 +123,8 @@
     <string name="onboarding_username">Логин (пусто — гостевой доступ)</string>
     <string name="onboarding_username_help">Оставьте пустым, если шара открыта без пароля (гостевой доступ). Заполните, если сервер запрашивает логин/пароль</string>
     <string name="onboarding_password">Пароль</string>
+    <string name="onboarding_password_show">Показать пароль</string>
+    <string name="onboarding_password_hide">Скрыть пароль</string>
     <string name="onboarding_test_connection">Проверить соединение</string>
     <string name="onboarding_test_testing">Проверка соединения…</string>
     <string name="onboarding_test_success">Соединение установлено</string>
