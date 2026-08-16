@@ -66,7 +66,7 @@ class SeanceApplication : Application(), Configuration.Provider, SingletonImageL
     val downloadRepository: DownloadRepository by lazy { DownloadRepository(this, database.downloadDao()) }
     val backupManager: BackupManager by lazy { BackupManager(smbSourceRepository, watchProgressRepository) }
     val audioTrackRepository: AudioTrackRepository by lazy { AudioTrackRepository(database.audioTrackDao()) }
-    val audioTrackProber: AudioTrackProber by lazy { AudioTrackProber(this, smbDataSourceFactory) }
+    val audioTrackProber: AudioTrackProber by lazy { AudioTrackProber(smbDataSourceFactory) }
 
     override val workManagerConfiguration: Configuration
         get() = Configuration.Builder()

@@ -105,7 +105,7 @@ class DetailsViewModel(
             _state.update { it.copy(audioTracks = cached.tracks) }
             return
         }
-        val probed = audioTrackProber.probe(item.sourceId, item.filePath, item.sizeBytes) ?: return
+        val probed = audioTrackProber.probe(item.sourceId, item.filePath) ?: return
         audioTrackRepository.save(item.stableId, probed, System.currentTimeMillis())
         _state.update { it.copy(audioTracks = probed) }
     }
