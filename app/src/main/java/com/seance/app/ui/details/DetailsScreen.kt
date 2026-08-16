@@ -75,8 +75,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import androidx.lifecycle.viewmodel.compose.viewModel
-import coil3.compose.AsyncImagePainter
-import coil3.compose.rememberAsyncImagePainter
+import coil3.compose.AsyncImage
 import com.seance.app.R
 import com.seance.app.data.image.episodeThumbModel
 import com.seance.app.data.image.fanartModel
@@ -245,15 +244,22 @@ private fun DetailsContent(
                     }
             ) {
                 if (fanart != null) {
-                    val painter = rememberAsyncImagePainter(model = fanart, contentScale = ContentScale.Crop)
-                    val state by painter.state.collectAsState()
-                    Image(
-                        painter = painter,
+                    // AsyncImage (not rememberAsyncImagePainter+Image) so Coil sizes the decode to
+                    // this Box's actual layout constraints instead of the fanart's full original
+                    // resolution - rememberAsyncImagePainter has no layout size to read, so without
+                    // this every fanart decoded at full source size regardless of the 220dp strip
+                    // it's drawn into, which is what made opening a card feel slow to load.
+                    var fanartLoading by remember { mutableStateOf(true) }
+                    AsyncImage(
+                        model = fanart,
                         contentDescription = null,
                         contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize()
+                        modifier = Modifier.fillMaxSize(),
+                        onLoading = { fanartLoading = true },
+                        onSuccess = { fanartLoading = false },
+                        onError = { fanartLoading = false }
                     )
-                    if (state is AsyncImagePainter.State.Loading) {
+                    if (fanartLoading) {
                         Box(modifier = Modifier.fillMaxSize().shimmer())
                     }
                 }
@@ -337,15 +343,17 @@ private fun DetailsContent(
                     .focusHighlight(posterSource)
                     .clickable(interactionSource = posterSource, indication = LocalIndication.current) { zoomedImage = poster }
                 Box(modifier = posterModifier) {
-                    val painter = rememberAsyncImagePainter(model = poster, contentScale = ContentScale.Crop)
-                    val state by painter.state.collectAsState()
-                    Image(
-                        painter = painter,
+                    var posterLoading by remember { mutableStateOf(true) }
+                    AsyncImage(
+                        model = poster,
                         contentDescription = item.title,
                         contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize()
+                        modifier = Modifier.fillMaxSize(),
+                        onLoading = { posterLoading = true },
+                        onSuccess = { posterLoading = false },
+                        onError = { posterLoading = false }
                     )
-                    if (state is AsyncImagePainter.State.Loading) {
+                    if (posterLoading) {
                         Box(modifier = Modifier.fillMaxSize().shimmer())
                     }
                     item.rating?.let { rating ->

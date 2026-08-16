@@ -1,5 +1,6 @@
 package com.seance.app.ui.search
 
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
@@ -28,6 +29,13 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusDirection
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -80,10 +88,11 @@ fun SearchScreen(
         Box(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
             LazyVerticalGrid(
                 columns = GridCells.Adaptive(minSize = 120.dp),
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier.fillMaxSize().focusGroup(),
                 contentPadding = PaddingValues(8.dp)
             ) {
                 item(span = { GridItemSpan(maxLineSpan) }) {
+                    val focusManager = LocalFocusManager.current
                     OutlinedTextField(
                         value = query,
                         onValueChange = viewModel::setQuery,
@@ -92,6 +101,28 @@ fun SearchScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(8.dp)
+                            // An empty field has no text to move a cursor through, but
+                            // BasicTextField still swallows DPAD_LEFT/UP for cursor handling
+                            // rather than yielding to focus search - stranding D-pad/remote users
+                            // on the field with no way back to the TV nav rail above/left of it.
+                            // Once there's a query, cursor movement through the text takes
+                            // priority again, matching normal text-editing expectations.
+                            //
+                            // DPAD_DOWN is swallowed the same way regardless of query state - a
+                            // single-line field has no "line below" to move a cursor into, but
+                            // BasicTextField still consumes the event rather than yielding, which
+                            // stranded focus on the field with the whole results grid unreachable
+                            // (confirmed on-device: DOWN from the field did nothing at all).
+                            .onPreviewKeyEvent { event ->
+                                if (event.type != KeyEventType.KeyDown) {
+                                    false
+                                } else when (event.key) {
+                                    Key.DirectionDown -> focusManager.moveFocus(FocusDirection.Down)
+                                    Key.DirectionLeft -> query.isEmpty() && focusManager.moveFocus(FocusDirection.Left)
+                                    Key.DirectionUp -> query.isEmpty() && focusManager.moveFocus(FocusDirection.Up)
+                                    else -> false
+                                }
+                            }
                     )
                 }
                 if (query.isBlank()) {

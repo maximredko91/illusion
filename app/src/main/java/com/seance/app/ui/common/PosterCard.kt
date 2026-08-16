@@ -1,7 +1,6 @@
 package com.seance.app.ui.common
 
 import androidx.compose.animation.ExperimentalSharedTransitionApi
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -24,9 +23,10 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -35,8 +35,8 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.unit.dp
 import java.util.Locale
+import coil3.compose.AsyncImage
 import coil3.compose.AsyncImagePainter
-import coil3.compose.rememberAsyncImagePainter
 import com.seance.app.data.image.posterModel
 import com.seance.app.data.local.entity.MediaItemEntity
 import com.seance.app.domain.model.Category
@@ -78,17 +78,24 @@ fun PosterCard(
             Box(modifier = posterBoxModifier) {
                 val model = item.posterModel
                 if (model != null) {
-                    val painter = rememberAsyncImagePainter(model = model, contentScale = ContentScale.Crop)
-                    val state by painter.state.collectAsState()
-                    Image(
-                        painter = painter,
+                    // AsyncImage (not rememberAsyncImagePainter+Image) so Coil sizes the decode to
+                    // this Box's actual grid-cell size instead of the poster's full original
+                    // resolution - rememberAsyncImagePainter has no layout size to read, so every
+                    // poster in every carousel/grid was decoding at full source size regardless of
+                    // how small the card actually renders it.
+                    var loadState by remember { mutableStateOf<AsyncImagePainter.State>(AsyncImagePainter.State.Empty) }
+                    AsyncImage(
+                        model = model,
                         contentDescription = item.title,
                         contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize()
+                        modifier = Modifier.fillMaxSize(),
+                        onLoading = { loadState = it },
+                        onSuccess = { loadState = it },
+                        onError = { loadState = it }
                     )
-                    if (state is AsyncImagePainter.State.Loading) {
+                    if (loadState is AsyncImagePainter.State.Loading) {
                         Box(modifier = Modifier.fillMaxSize().shimmer())
-                    } else if (state is AsyncImagePainter.State.Error) {
+                    } else if (loadState is AsyncImagePainter.State.Error) {
                         PosterPlaceholder(item.category)
                     }
                 } else {
