@@ -32,6 +32,13 @@ data class MediaItemEntity(
     val dateAdded: Long,
     val sizeBytes: Long,
     val subtitlePaths: List<String>,
+    /** SMB path of a sibling trailer file ("<video>-trailer.ext" or bare "trailer.ext" in the same folder), if one was found during scanning. */
+    val trailerPath: String? = null,
+    val trailerSizeBytes: Long? = null,
+    /** The video file's own SMB last-write-time, as of the scan that produced this row - lets a later rescan detect "this exact file, unchanged" and skip re-hashing/re-parsing it. */
+    val lastModified: Long = 0L,
+    /** Same idea as [lastModified] but for the sidecar .nfo (null if none exists) - an nfo edited without touching the video must still trigger a re-parse. */
+    val nfoLastModified: Long? = null,
     val introStartMs: Long? = null,
     val introEndMs: Long? = null,
     val mpaa: String? = null,

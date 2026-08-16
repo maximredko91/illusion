@@ -73,6 +73,7 @@ private const val EDGE_ZONE_FRACTION = 0.3f
 @Composable
 fun PlayerScreen(
     stableId: String,
+    isTrailer: Boolean = false,
     libraryRepository: LibraryRepository,
     watchProgressRepository: WatchProgressRepository,
     thumbnailRepository: ThumbnailRepository,
@@ -94,7 +95,7 @@ fun PlayerScreen(
             context
         )
     )
-    LaunchedEffect(stableId) { viewModel.load(stableId) }
+    LaunchedEffect(stableId, isTrailer) { viewModel.load(stableId, playTrailer = isTrailer) }
     val uiState by viewModel.state.collectAsState()
 
     KeepImmersiveFullscreen()

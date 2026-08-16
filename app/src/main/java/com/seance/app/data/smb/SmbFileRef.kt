@@ -30,3 +30,12 @@ val SmbFileRef.isImage: Boolean
 /** Base file name without its extension, e.g. "poster" for "poster.jpg". */
 val SmbFileRef.baseName: String
     get() = name.substringBeforeLast('.')
+
+// Kodi/tinyMediaManager trailer convention: either "<movie filename>-trailer.ext" next to the
+// movie, or a bare "trailer.ext" (optionally numbered - "trailer1.ext", "trailer-02.ext") in the
+// movie's own folder. Matches on the whole base name so a legitimately titled file like "Trailer
+// Park Boys.mp4" (extra words after "trailer") is never misdetected.
+private val TRAILER_NAME_PATTERN = Regex("(?:.*-)?trailer[-_]?\\d*", RegexOption.IGNORE_CASE)
+
+val SmbFileRef.isTrailer: Boolean
+    get() = isVideo && TRAILER_NAME_PATTERN.matches(baseName)

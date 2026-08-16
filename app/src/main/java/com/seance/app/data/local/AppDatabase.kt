@@ -32,7 +32,7 @@ import com.seance.app.data.local.entity.WatchProgressEntity
         DownloadEntity::class,
         AudioTrackEntity::class
     ],
-    version = 7
+    version = 9
 )
 @TypeConverters(Converters::class)
 abstract class AppDatabase : RoomDatabase() {
@@ -130,13 +130,31 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        private val MIGRATION_7_8 = object : Migration(7, 8) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `media_items` ADD COLUMN `trailerPath` TEXT")
+                db.execSQL("ALTER TABLE `media_items` ADD COLUMN `trailerSizeBytes` INTEGER")
+            }
+        }
+
+        // lastModified defaults to 0 for pre-existing rows, which never matches a real SMB
+        // last-write-time - the "unchanged since last scan" fast path in LibraryScanner naturally
+        // falls through to a full re-scan for every row exactly once (the first scan after
+        // upgrading), then benefits from the fast path on every scan after that.
+        private val MIGRATION_8_9 = object : Migration(8, 9) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `media_items` ADD COLUMN `lastModified` INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE `media_items` ADD COLUMN `nfoLastModified` INTEGER")
+            }
+        }
+
         fun getInstance(context: Context): AppDatabase =
             instance ?: synchronized(this) {
                 instance ?: Room.databaseBuilder(
                     context.applicationContext,
                     AppDatabase::class.java,
                     "seance.db"
-                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7).build().also { instance = it }
+                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9).build().also { instance = it }
             }
     }
 }

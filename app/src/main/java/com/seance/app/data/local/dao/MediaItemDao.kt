@@ -56,6 +56,9 @@ interface MediaItemDao {
     @Query("SELECT * FROM media_items")
     suspend fun getAll(): List<MediaItemEntity>
 
+    @Query("SELECT * FROM media_items WHERE sourceId = :sourceId")
+    suspend fun getBySource(sourceId: Long): List<MediaItemEntity>
+
     @Query("SELECT * FROM media_items WHERE stableId NOT IN (SELECT mediaItemStableId FROM thumbnail_sprites)")
     suspend fun getItemsWithoutThumbnails(): List<MediaItemEntity>
 }

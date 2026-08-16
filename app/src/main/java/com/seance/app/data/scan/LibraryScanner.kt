@@ -14,6 +14,7 @@ import com.seance.app.data.smb.StableIdGenerator
 import com.seance.app.data.smb.baseName
 import com.seance.app.data.smb.isImage
 import com.seance.app.data.smb.isSubtitle
+import com.seance.app.data.smb.isTrailer
 import com.seance.app.data.smb.isVideo
 import com.seance.app.domain.model.Category
 import java.util.concurrent.ConcurrentHashMap
@@ -72,9 +73,20 @@ class LibraryScanner(
                     )
                 }
             }
-            val videoFiles = allFiles.filter { it.isVideo }
+            // A trailer file matches isVideo too - carve it out first so it's never indexed as its
+            // own library item, only ever attached to the real movie/episode it sits next to.
+            val videoFiles = allFiles.filter { it.isVideo && !it.isTrailer }
+            val trailerFiles = allFiles.filter { it.isTrailer }
             val subtitleFiles = allFiles.filter { it.isSubtitle }
             val imageFiles = allFiles.filter { it.isImage }
+
+            // Every file this walk saw, keyed by path - lets per-video .nfo existence be read back
+            // from the listing already in memory instead of a second SMB round trip to ask again.
+            val filesByPath = allFiles.associateBy { it.path }
+            // What's already indexed for this source, keyed by path - the fast path in toMediaItem
+            // compares against this to skip re-hashing/re-parsing a file that hasn't changed since
+            // the last scan (see toMediaItem's unchanged check).
+            val existingByPath = libraryRepository.getBySource(source.id).associateBy { it.filePath }
 
             val indexed = AtomicInteger(0)
             // Kodi's per-episode .nfo (episodedetails) rarely carries genre/year - those live only
@@ -85,7 +97,7 @@ class LibraryScanner(
                 videoFiles.map { file ->
                     async {
                         val item = withConnection(pool) { connection ->
-                            toMediaItem(source, connection, file, subtitleFiles, imageFiles, showNfoCache)
+                            toMediaItem(source, connection, file, subtitleFiles, imageFiles, trailerFiles, filesByPath, existingByPath, showNfoCache)
                         }
                         onProgress(
                             ScanProgress(
@@ -148,16 +160,14 @@ class LibraryScanner(
         file: SmbFileRef,
         subtitleFiles: List<SmbFileRef>,
         imageFiles: List<SmbFileRef>,
+        trailerFiles: List<SmbFileRef>,
+        filesByPath: Map<String, SmbFileRef>,
+        existingByPath: Map<String, MediaItemEntity>,
         showNfoCache: ConcurrentHashMap<String, NfoMetadata?>
     ): MediaItemEntity {
-        val (headBytes, tailBytes) = connection.readEdgeSamples(file.path, file.sizeBytes, STABLE_ID_SAMPLE_BYTES)
-        val stableId = StableIdGenerator.forFile(source.id, file.sizeBytes, headBytes, tailBytes)
         val nfoPath = file.path.substringBeforeLast('.', file.path) + ".nfo"
-        val metadata = if (connection.fileExists(nfoPath)) {
-            connection.openInputStream(nfoPath).use { nfoParser.parse(it) }
-        } else {
-            null
-        }
+        // Already part of this walk's listing - no need to ask the server again whether it exists.
+        val nfoRef = filesByPath[nfoPath]
         val baseName = file.name.substringBeforeLast('.')
         val videoFolder = file.path.substringBeforeLast('\\')
         val subtitlePaths = subtitleFiles
@@ -185,12 +195,6 @@ class LibraryScanner(
         // fall back to the show's own root folder - a season subfolder rarely has its own poster,
         // that normally sits at .../Сериалы/ShowName/poster.jpg, one level above "Сезон N".
         val showFolder = seriesStableId?.substringAfter('|')
-        // Fallback for fields Kodi/tinyMediaManager write once at the show level (tvshow.nfo)
-        // rather than repeating in every episode's own .nfo - genre and year most commonly,
-        // sometimes rating/country/plot too. Without this, series categories end up with no
-        // genre/year on any item, which silently disables the Library genre/year filter chips
-        // (they only render when at least one item in the category has a value).
-        val showMetadata = showFolder?.let { fetchShowNfo(connection, it, showNfoCache) }
         val imageSearchFolders = listOfNotNull(videoFolder, showFolder).distinct()
         // Beyond a plain "poster.jpg"/"fanart.jpg", also match Kodi/tinyMediaManager's
         // "<video name>-fanart.jpg" convention and numbered extrafanart variants like
@@ -214,27 +218,82 @@ class LibraryScanner(
         }
         // Radarr/Sonarr-style libraries drop poster.jpg/fanart.jpg as real files rather than
         // pointing <thumb> at something reachable over SMB - prefer those; a <thumb> value is only
-        // usable as a fallback when it's a real scraper URL, not a path from the machine that wrote the .nfo.
-        val posterPath = findImage(setOf("poster", "folder", "cover"))?.path
-            ?: metadata?.posterUrl?.takeIf { it.startsWith("http://") || it.startsWith("https://") }
-        val fanartPath = findImage(setOf("fanart", "backdrop", "background"))?.path
-            ?: metadata?.fanartUrl?.takeIf { it.startsWith("http://") || it.startsWith("https://") }
+        // usable as a fallback when it's a real scraper URL, not a path from the machine that wrote
+        // the .nfo. These are local-file lookups only (no metadata dependency) so the unchanged
+        // fast path below can compute them without touching the .nfo at all - it falls back to
+        // whatever was resolved last scan (including a metadata-URL fallback) when no local file is
+        // found, which is exactly equivalent to recomputing it since the .nfo hasn't changed either.
+        val localPosterPath = findImage(setOf("poster", "folder", "cover"))?.path
+        val localFanartPath = findImage(setOf("fanart", "backdrop", "background"))?.path
         // Per-episode screenshot - Kodi/tinyMediaManager write these as "<video name>-thumb.jpg"
         // next to the video, distinct from the show's own poster.jpg at the show root (which
         // `posterPath` above already resolves to for every episode, since findImage checks
         // showFolder too - that's the right thing for the show-grouped library card, but wrong for
         // an individual episode row wanting its own screenshot). Only meaningful for episodes.
-        val episodeThumbPath = if (seriesStableId != null) {
+        val localEpisodeThumbPath = if (seriesStableId != null) {
             imageFiles
                 .firstOrNull {
                     it.path.substringBeforeLast('\\') == videoFolder &&
                         it.baseName.equals("$baseName-thumb", ignoreCase = true)
                 }
                 ?.path
-                ?: metadata?.posterUrl?.takeIf { it.startsWith("http://") || it.startsWith("https://") }
         } else {
             null
         }
+        // Same folder as the video only (not the show root) - trailers are per-movie/per-episode,
+        // never shared across a whole series the way a poster is. "<basename>-trailer[N]" wins over
+        // a bare "trailer[N]" when both happen to be present.
+        fun matchesTrailer(ref: SmbFileRef): Boolean {
+            val refBase = ref.baseName.lowercase()
+            val prefix = "${baseName.lowercase()}-trailer"
+            if (refBase == prefix || (refBase.startsWith(prefix) && refBase.substring(prefix.length).all { it.isDigit() || it == '-' || it == '_' })) return true
+            if (refBase == "trailer" || (refBase.startsWith("trailer") && refBase.substring("trailer".length).all { it.isDigit() || it == '-' || it == '_' })) return true
+            return false
+        }
+        val trailerFile = trailerFiles
+            .filter { it.path.substringBeforeLast('\\') == videoFolder && matchesTrailer(it) }
+            .minByOrNull { it.name }
+
+        // Fields that only ever come from an SMB read of the video itself (content-hash stableId)
+        // or its .nfo (everything metadata-shaped) never need re-deriving when neither has changed
+        // since the last scan - reuse them wholesale rather than paying for the hash read + nfo
+        // fetch/parse again. Path-derived and sibling-file-derived fields above (category, poster/
+        // fanart/trailer/subtitles...) are always recomputed fresh regardless, since those can
+        // change (a poster or trailer added, say) without the video file itself changing at all.
+        val previous = existingByPath[file.path]
+        val unchanged = previous != null &&
+            previous.sizeBytes == file.sizeBytes &&
+            previous.lastModified == file.lastModified &&
+            previous.nfoLastModified == nfoRef?.lastModified
+        if (unchanged) {
+            return previous!!.copy(
+                category = category,
+                posterPath = localPosterPath ?: previous.posterPath,
+                fanartPath = localFanartPath ?: previous.fanartPath,
+                episodeThumbPath = localEpisodeThumbPath ?: previous.episodeThumbPath,
+                seriesStableId = seriesStableId,
+                sizeBytes = file.sizeBytes,
+                subtitlePaths = subtitlePaths,
+                trailerPath = trailerFile?.path,
+                trailerSizeBytes = trailerFile?.sizeBytes,
+                lastModified = file.lastModified,
+                nfoLastModified = nfoRef?.lastModified
+            )
+        }
+
+        val (headBytes, tailBytes) = connection.readEdgeSamples(file.path, file.sizeBytes, STABLE_ID_SAMPLE_BYTES)
+        val stableId = StableIdGenerator.forFile(source.id, file.sizeBytes, headBytes, tailBytes)
+        val metadata = if (nfoRef != null) {
+            connection.openInputStream(nfoPath).use { nfoParser.parse(it) }
+        } else {
+            null
+        }
+        // Fallback for fields Kodi/tinyMediaManager write once at the show level (tvshow.nfo)
+        // rather than repeating in every episode's own .nfo - genre and year most commonly,
+        // sometimes rating/country/plot too. Without this, series categories end up with no
+        // genre/year on any item, which silently disables the Library genre/year filter chips
+        // (they only render when at least one item in the category has a value).
+        val showMetadata = showFolder?.let { fetchShowNfo(connection, it, showNfoCache) }
 
         return MediaItemEntity(
             stableId = stableId,
@@ -252,16 +311,21 @@ class LibraryScanner(
             director = metadata?.director ?: emptyList(),
             actors = metadata?.actors ?: emptyList(),
             collectionName = metadata?.collectionName,
-            posterPath = posterPath,
-            fanartPath = fanartPath,
-            episodeThumbPath = episodeThumbPath,
+            posterPath = localPosterPath ?: metadata?.posterUrl?.takeIf { it.startsWith("http://") || it.startsWith("https://") },
+            fanartPath = localFanartPath ?: metadata?.fanartUrl?.takeIf { it.startsWith("http://") || it.startsWith("https://") },
+            episodeThumbPath = localEpisodeThumbPath
+                ?: metadata?.posterUrl?.takeIf { seriesStableId != null && (it.startsWith("http://") || it.startsWith("https://")) },
             seasonNumber = metadata?.season,
             episodeNumber = metadata?.episode,
             seriesStableId = seriesStableId,
             hasNfo = metadata != null,
-            dateAdded = System.currentTimeMillis(),
+            dateAdded = previous?.dateAdded ?: System.currentTimeMillis(),
             sizeBytes = file.sizeBytes,
             subtitlePaths = subtitlePaths,
+            trailerPath = trailerFile?.path,
+            trailerSizeBytes = trailerFile?.sizeBytes,
+            lastModified = file.lastModified,
+            nfoLastModified = nfoRef?.lastModified,
             mpaa = metadata?.mpaa ?: showMetadata?.mpaa,
             tagline = metadata?.tagline,
             studio = metadata?.studio ?: showMetadata?.studio,

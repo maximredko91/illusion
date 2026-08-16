@@ -185,6 +185,7 @@
 
     <string name="details_play">Смотреть</string>
     <string name="details_continue_watching">Продолжить просмотр</string>
+    <string name="details_trailer">Трейлер</string>
     <string name="details_image_viewer_close">Закрыть просмотр изображения</string>
     <string name="details_favorite_add">Добавить в избранное</string>
     <string name="details_favorite_remove">Убрать из избранного</string>

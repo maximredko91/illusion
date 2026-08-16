@@ -32,7 +32,7 @@ sealed interface Destination {
     data object Downloads : Destination
 
     @Serializable
-    data class Player(val stableId: String) : Destination
+    data class Player(val stableId: String, val trailer: Boolean = false) : Destination
 
     @Serializable
     data object Settings : Destination

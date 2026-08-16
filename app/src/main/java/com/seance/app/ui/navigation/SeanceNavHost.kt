@@ -370,6 +370,7 @@ private fun SeanceNavGraph(app: SeanceApplication, navController: NavHostControl
                         audioTrackRepository = app.audioTrackRepository,
                         audioTrackProber = app.audioTrackProber,
                         onPlay = { stableId -> navController.navigate(Destination.Player(stableId)) },
+                        onPlayTrailer = { stableId -> navController.navigate(Destination.Player(stableId, trailer = true)) },
                         onOpenPerson = { name -> navController.navigate(Destination.Person(name)) },
                         onOpenItem = { stableId -> navController.navigate(Destination.Details(stableId)) },
                         onBack = { navController.popBackStack() }
@@ -390,6 +391,7 @@ private fun SeanceNavGraph(app: SeanceApplication, navController: NavHostControl
                 val player = entry.toRoute<Destination.Player>()
                 PlayerScreen(
                     stableId = player.stableId,
+                    isTrailer = player.trailer,
                     libraryRepository = app.libraryRepository,
                     watchProgressRepository = app.watchProgressRepository,
                     thumbnailRepository = app.thumbnailRepository,

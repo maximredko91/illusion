@@ -117,6 +117,7 @@ class PlayerViewModel(
     val state: StateFlow<PlayerUiState> = _state.asStateFlow()
 
     private var currentItem: MediaItemEntity? = null
+    private var currentTrailerItem: MediaItemEntity? = null
     private var nextEpisode: MediaItemEntity? = null
     private var tickerJob: Job? = null
     private var lastSavedAtMs = 0L
@@ -188,13 +189,18 @@ class PlayerViewModel(
         viewModelScope.launch { settingsRepository.setSharpenEnabled(enabled) }
     }
 
-    fun load(stableId: String) {
+    fun load(stableId: String, playTrailer: Boolean = false) {
         viewModelScope.launch {
             val item = libraryRepository.getById(stableId) ?: run {
                 _state.update { it.copy(error = "Файл не найден в библиотеке", isLoading = false) }
                 return@launch
             }
+            if (playTrailer) {
+                loadTrailer(item)
+                return@launch
+            }
             currentItem = item
+            currentTrailerItem = null
             val resume = watchProgressRepository.getProgress(stableId)
             val startPositionMs = resume?.takeIf { !it.watched }?.positionMs ?: 0L
 
@@ -234,6 +240,39 @@ class PlayerViewModel(
 
             checkNextEpisode(item)
             launch { loadThumbnailFrames(item.stableId) }
+        }
+    }
+
+    /**
+     * Plays the trailer file found next to [item] during scanning, not [item] itself. Deliberately
+     * leaves `currentItem`/`nextEpisode` unset - a trailer isn't a library item in its own right, so
+     * watch-progress persistence, autoplay-next and skip-intro (all gated on `currentItem`) simply
+     * no-op for the duration, which is the correct behavior here.
+     */
+    private fun loadTrailer(item: MediaItemEntity) {
+        val path = item.trailerPath ?: run {
+            _state.update { it.copy(error = "Трейлер не найден", isLoading = false) }
+            return
+        }
+        currentItem = null
+        currentTrailerItem = item
+        nextEpisode = null
+        val uri = SmbMediaUri.build(item.sourceId, path, item.trailerSizeBytes ?: -1L)
+        val mediaItem = MediaItem.Builder()
+            .setUri(uri)
+            .setMediaMetadata(MediaMetadata.Builder().setTitle(item.title).build())
+            .build()
+        player.setMediaItem(mediaItem, 0L)
+        player.prepare()
+        player.playWhenReady = true
+        _state.update {
+            PlayerUiState(
+                isLoading = true,
+                title = "${item.title} — трейлер",
+                subtitlesEnabled = it.subtitlesEnabled,
+                sharpenEnabled = it.sharpenEnabled,
+                seekDurationMs = it.seekDurationMs
+            )
         }
     }
 
@@ -373,6 +412,7 @@ class PlayerViewModel(
     fun retry() {
         _state.update { it.copy(error = null) }
         currentItem?.let { load(it.stableId) }
+        currentTrailerItem?.let { load(it.stableId, playTrailer = true) }
     }
 
     private fun updateTracksFromPlayer(tracks: Tracks) {

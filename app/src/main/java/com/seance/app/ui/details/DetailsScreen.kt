@@ -41,6 +41,7 @@ import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Theaters
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
@@ -109,6 +110,7 @@ fun DetailsScreen(
     audioTrackRepository: AudioTrackRepository,
     audioTrackProber: AudioTrackProber,
     onPlay: (String) -> Unit,
+    onPlayTrailer: (String) -> Unit,
     onOpenPerson: (String) -> Unit,
     onOpenItem: (String) -> Unit,
     onBack: () -> Unit,
@@ -158,6 +160,7 @@ fun DetailsScreen(
                 onRemoveSeasonDownloads = { ids -> viewModel.removeSeasonDownloads(context, ids) },
                 onDownloadError = { message -> scope.launch { snackbarHostState.showSnackbar(message) } },
                 onPlay = onPlay,
+                onPlayTrailer = onPlayTrailer,
                 onOpenPerson = onOpenPerson,
                 onOpenItem = onOpenItem,
                 onBack = onBack
@@ -195,6 +198,7 @@ private fun DetailsContent(
     onRemoveSeasonDownloads: (List<String>) -> Unit,
     onDownloadError: (String) -> Unit,
     onPlay: (String) -> Unit,
+    onPlayTrailer: (String) -> Unit,
     onOpenPerson: (String) -> Unit,
     onOpenItem: (String) -> Unit,
     onBack: () -> Unit
@@ -409,6 +413,16 @@ private fun DetailsContent(
                     stringResource(if (hasStartedWatching) R.string.details_continue_watching else R.string.details_play),
                     modifier = Modifier.padding(start = 8.dp)
                 )
+            }
+            if (item.trailerPath != null) {
+                val trailerSource = remember { MutableInteractionSource() }
+                IconButton(
+                    onClick = { onPlayTrailer(item.stableId) },
+                    interactionSource = trailerSource,
+                    modifier = Modifier.focusHighlight(trailerSource)
+                ) {
+                    Icon(Icons.Default.Theaters, contentDescription = stringResource(R.string.details_trailer))
+                }
             }
             val haptics = LocalHapticFeedback.current
             val favoriteSource = remember { MutableInteractionSource() }
