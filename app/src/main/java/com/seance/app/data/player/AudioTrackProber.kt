@@ -29,13 +29,25 @@ import kotlinx.coroutines.Dispatchers
  * ExoPlayer. Track groups come from container parsing during preparation and are populated
  * before any renderer is enabled/decodes anything, so this never actually touches audio/video
  * frames - only the container header goes over the network.
+ *
+ * For MP4 files, [Format.label] from that probe is always null - Media3's MP4 extractor never
+ * parses the container's per-track title box (confirmed by decompiling `BoxParser.java`, see
+ * [Mp4AudioTrackTitleReader]'s doc) - so [mp4TrackTitleReader] separately reads that title
+ * straight from the raw bytes and the two results are merged in [audioLabel].
  */
 @OptIn(UnstableApi::class)
 class AudioTrackProber(
     private val context: Context,
-    private val dataSourceFactory: SmbDataSourceFactory
+    private val dataSourceFactory: SmbDataSourceFactory,
+    private val mp4TrackTitleReader: Mp4AudioTrackTitleReader = Mp4AudioTrackTitleReader()
 ) {
-    suspend fun probe(sourceId: Long, filePath: String, sizeBytes: Long): List<String>? =
+    suspend fun probe(sourceId: Long, filePath: String, sizeBytes: Long): List<String>? {
+        val tracks = probeTracks(sourceId, filePath, sizeBytes) ?: return null
+        val mp4Titles = if (isMp4(filePath)) readMp4Titles(sourceId, filePath) else emptyList()
+        return audioLabels(tracks, mp4Titles)
+    }
+
+    private suspend fun probeTracks(sourceId: Long, filePath: String, sizeBytes: Long): Tracks? =
         withContext(Dispatchers.Main) {
             val player = ExoPlayer.Builder(context, DefaultRenderersFactory(context))
                 .setMediaSourceFactory(
@@ -49,7 +61,7 @@ class AudioTrackProber(
                         val listener = object : Player.Listener {
                             override fun onTracksChanged(tracks: Tracks) {
                                 player.removeListener(this)
-                                if (continuation.isActive) continuation.resume(audioLabels(tracks))
+                                if (continuation.isActive) continuation.resume(tracks)
                             }
 
                             override fun onPlayerError(error: PlaybackException) {
@@ -67,18 +79,37 @@ class AudioTrackProber(
             }
         }
 
-    private fun audioLabels(tracks: Tracks): List<String> =
+    /** Best-effort - a read failure here still leaves the language-only labels from [probeTracks] intact. */
+    private suspend fun readMp4Titles(sourceId: Long, filePath: String): List<String?> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                dataSourceFactory.openFile(sourceId, filePath).use { raf ->
+                    mp4TrackTitleReader.readAudioTrackTitles(raf)
+                }
+            }.getOrDefault(emptyList())
+        }
+
+    private fun isMp4(filePath: String): Boolean =
+        filePath.substringAfterLast('.', "").lowercase() in setOf("mp4", "m4v")
+
+    /**
+     * [mp4Titles] is indexed in raw `trak` file order - matched against this same audio-track
+     * enumeration order, which for the overwhelmingly common single-audio-track case is trivially
+     * correct.
+     */
+    private fun audioLabels(tracks: Tracks, mp4Titles: List<String?>): List<String> =
         tracks.groups
             .asSequence()
             .filter { it.type == C.TRACK_TYPE_AUDIO }
             .flatMap { group -> (0 until group.length).map { i -> group.getTrackFormat(i) } }
-            .map { format -> audioLabel(format) }
+            .mapIndexed { index, format -> audioLabel(format, mp4Titles.getOrNull(index)) }
             .distinct()
             .toList()
 
-    private fun audioLabel(format: Format): String {
+    private fun audioLabel(format: Format, mp4Title: String?): String {
         val language = format.language?.let { languageName(it) }
         val label = format.label?.takeIf { it.isNotBlank() && !it.equals(format.language, ignoreCase = true) }
+            ?: mp4Title?.takeIf { it.isNotBlank() }
         return listOfNotNull(language, label).joinToString(" · ").ifBlank { "Без описания" }
     }
 
