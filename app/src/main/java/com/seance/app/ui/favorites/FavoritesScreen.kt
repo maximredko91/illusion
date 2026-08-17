@@ -32,6 +32,7 @@ import com.seance.app.data.repository.LibraryRepository
 import com.seance.app.data.repository.WatchProgressRepository
 import com.seance.app.ui.common.PosterCard
 import com.seance.app.ui.common.focusHighlight
+import com.seance.app.ui.common.posterCardMinWidth
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -67,7 +68,7 @@ fun FavoritesScreen(
             }
         } else {
             LazyVerticalGrid(
-                columns = GridCells.Adaptive(minSize = 120.dp),
+                columns = GridCells.Adaptive(minSize = posterCardMinWidth()),
                 modifier = Modifier.fillMaxSize().padding(innerPadding).focusGroup(),
                 contentPadding = PaddingValues(8.dp)
             ) {

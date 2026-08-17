@@ -23,6 +23,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.seance.app.R
 import com.seance.app.data.repository.LibraryRepository
 import com.seance.app.ui.common.PosterCard
+import com.seance.app.ui.common.posterCardMinWidth
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -43,7 +44,7 @@ fun PersonScreen(
         topBar = { TopAppBar(title = { Text(stringResource(R.string.person_title, name)) }) }
     ) { innerPadding ->
         LazyVerticalGrid(
-            columns = GridCells.Adaptive(minSize = 120.dp),
+            columns = GridCells.Adaptive(minSize = posterCardMinWidth()),
             modifier = Modifier.fillMaxSize().padding(innerPadding),
             contentPadding = PaddingValues(8.dp)
         ) {

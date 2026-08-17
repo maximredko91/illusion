@@ -33,6 +33,7 @@ import com.seance.app.R
 import com.seance.app.data.local.entity.MediaItemEntity
 import com.seance.app.ui.common.PosterCard
 import com.seance.app.ui.common.focusHighlight
+import com.seance.app.ui.common.posterCardMinWidth
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -118,7 +119,7 @@ private fun MediaCarousel(
                 PosterCard(
                     item = item,
                     onClick = { onOpenItem(item.stableId) },
-                    modifier = Modifier.width(120.dp)
+                    modifier = Modifier.width(posterCardMinWidth())
                 )
             }
         }

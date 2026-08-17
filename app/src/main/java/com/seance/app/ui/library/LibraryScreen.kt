@@ -53,6 +53,7 @@ import com.seance.app.domain.model.Category
 import com.seance.app.domain.model.SortOrder
 import com.seance.app.ui.common.PosterCard
 import com.seance.app.ui.common.focusHighlight
+import com.seance.app.ui.common.posterCardMinWidth
 import com.seance.app.ui.common.segmentTick
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -189,7 +190,7 @@ fun LibraryScreen(
                         )
                     }
                     else -> LazyVerticalGrid(
-                        columns = GridCells.Adaptive(minSize = 120.dp),
+                        columns = GridCells.Adaptive(minSize = posterCardMinWidth()),
                         state = gridState,
                         modifier = Modifier.fillMaxSize().focusGroup(),
                         contentPadding = PaddingValues(8.dp)

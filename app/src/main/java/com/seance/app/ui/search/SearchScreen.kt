@@ -43,6 +43,7 @@ import com.seance.app.R
 import com.seance.app.data.repository.LibraryRepository
 import com.seance.app.ui.common.PosterCard
 import com.seance.app.ui.common.focusHighlight
+import com.seance.app.ui.common.posterCardMinWidth
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -87,7 +88,7 @@ fun SearchScreen(
     ) { innerPadding ->
         Box(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
             LazyVerticalGrid(
-                columns = GridCells.Adaptive(minSize = 120.dp),
+                columns = GridCells.Adaptive(minSize = posterCardMinWidth()),
                 modifier = Modifier.fillMaxSize().focusGroup(),
                 contentPadding = PaddingValues(8.dp)
             ) {
