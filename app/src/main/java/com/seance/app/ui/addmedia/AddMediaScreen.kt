@@ -466,12 +466,20 @@ private fun SmbFolderPickerDialog(
     LaunchedEffect(currentPath) {
         isLoading = true
         loadError = null
+        android.util.Log.d("AddMediaScreen", "folder picker: listing sourceId=$sourceId path='$currentPath'")
         val outcome = runCatching {
             val info = sourceRepository.connectionInfoById(sourceId) ?: error("Источник SMB недоступен")
+            android.util.Log.d("AddMediaScreen", "folder picker: connectionInfo rootPath='${info.rootPath}' share='${info.share}'")
             smbClient.connect(info).use { connection ->
-                connection.listDirectory(currentPath).directoryPaths.map { it.substringAfterLast('\\') }.sorted()
+                val listing = connection.listDirectory(currentPath)
+                android.util.Log.d(
+                    "AddMediaScreen",
+                    "folder picker: got ${listing.files.size} files, ${listing.directoryPaths.size} dirs: ${listing.directoryPaths}"
+                )
+                listing.directoryPaths.map { it.substringAfterLast('\\') }.sorted()
             }
         }
+        outcome.exceptionOrNull()?.let { android.util.Log.e("AddMediaScreen", "folder picker: list failed", it) }
         // A path that doesn't exist yet (e.g. the very first open, still on a not-yet-created
         // suggested folder name) would otherwise dead-end on an error with no way to see the real
         // tree - fall back to the source root once instead, rather than making the developer guess
