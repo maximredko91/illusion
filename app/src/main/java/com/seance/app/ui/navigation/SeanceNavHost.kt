@@ -391,6 +391,7 @@ private fun SeanceNavGraph(app: SeanceApplication, navController: NavHostControl
                     smbClient = app.smbClient,
                     tmdbClient = app.tmdbClient,
                     nfoWriter = app.nfoWriter,
+                    devAccessStore = app.devAccessStore,
                     onRescanNow = {
                         val workId = WorkScheduler.enqueueOneTimeScan(context)
                         navController.navigate(Destination.ScanProgress(workId.toString()))

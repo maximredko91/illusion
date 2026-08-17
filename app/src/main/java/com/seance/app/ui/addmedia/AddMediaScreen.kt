@@ -2,6 +2,7 @@ package com.seance.app.ui.addmedia
 
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -9,6 +10,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -17,6 +19,9 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.Key
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
@@ -56,6 +61,7 @@ import coil3.compose.AsyncImage
 import com.seance.app.R
 import com.seance.app.data.nfo.NfoWriter
 import com.seance.app.data.repository.SmbSourceRepository
+import com.seance.app.data.security.DevAccessStore
 import com.seance.app.data.smb.SmbClient
 import com.seance.app.data.tmdb.TmdbClient
 import com.seance.app.data.tmdb.TmdbSearchResult
@@ -69,13 +75,14 @@ fun AddMediaScreen(
     smbClient: SmbClient,
     tmdbClient: TmdbClient,
     nfoWriter: NfoWriter,
+    devAccessStore: DevAccessStore,
     onRescanNow: () -> Unit,
     onBack: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
     val viewModel: AddMediaViewModel = viewModel(
-        factory = AddMediaViewModel.factory(sourceRepository, smbClient, tmdbClient, nfoWriter)
+        factory = AddMediaViewModel.factory(sourceRepository, smbClient, tmdbClient, nfoWriter, devAccessStore)
     )
     val state by viewModel.state.collectAsState()
 
@@ -101,6 +108,21 @@ fun AddMediaScreen(
         if (uri != null) viewModel.pickFile(context, uri)
     }
 
+    var showFolderPicker by remember { mutableStateOf(false) }
+    if (showFolderPicker) {
+        val sourceId = state.selectedSourceId
+        if (sourceId != null) {
+            SmbFolderPickerDialog(
+                sourceRepository = sourceRepository,
+                smbClient = smbClient,
+                sourceId = sourceId,
+                initialPath = "",
+                onPick = { path -> viewModel.setDestinationFolder(path); showFolderPicker = false },
+                onDismiss = { showFolderPicker = false }
+            )
+        }
+    }
+
     Scaffold(
         modifier = modifier,
         topBar = {
@@ -110,14 +132,25 @@ fun AddMediaScreen(
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.addmedia_back))
                     }
+                },
+                actions = {
+                    if (state.isTmdbConfigured && !state.showTmdbKeyEditor) {
+                        IconButton(onClick = viewModel::openTmdbKeyEditor) {
+                            Icon(Icons.Default.Key, contentDescription = stringResource(R.string.addmedia_tmdb_key_change))
+                        }
+                    }
                 }
             )
         }
     ) { innerPadding ->
-        if (!tmdbClient.isConfigured) {
-            Box(modifier = Modifier.fillMaxSize().padding(innerPadding), contentAlignment = Alignment.Center) {
-                Text(stringResource(R.string.addmedia_not_configured), modifier = Modifier.padding(24.dp))
-            }
+        if (!state.isTmdbConfigured || state.showTmdbKeyEditor) {
+            TmdbKeyEntryStep(
+                keyInput = state.tmdbKeyInput,
+                onKeyChange = viewModel::setTmdbKeyInput,
+                onSave = viewModel::saveTmdbApiKey,
+                onCancel = if (state.isTmdbConfigured) viewModel::cancelTmdbKeyEditor else null,
+                modifier = Modifier.padding(innerPadding)
+            )
             return@Scaffold
         }
 
@@ -149,11 +182,43 @@ fun AddMediaScreen(
                 onPlotChange = viewModel::updateFetchedPlot,
                 onFolderChange = viewModel::setDestinationFolder,
                 onFileNameChange = viewModel::setDestinationFileName,
+                onBrowseFolder = { showFolderPicker = true },
                 onConfirm = { viewModel.confirmAndUpload(context) },
                 modifier = Modifier.padding(innerPadding)
             )
             AddMediaStep.UPLOADING -> UploadingStep(state = state, modifier = Modifier.padding(innerPadding))
             AddMediaStep.DONE -> DoneStep(onRescanNow = onRescanNow, modifier = Modifier.padding(innerPadding))
+        }
+    }
+}
+
+@Composable
+private fun TmdbKeyEntryStep(
+    keyInput: String,
+    onKeyChange: (String) -> Unit,
+    onSave: () -> Unit,
+    onCancel: (() -> Unit)?,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier.fillMaxSize().padding(24.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Text(stringResource(R.string.addmedia_not_configured))
+        OutlinedTextField(
+            value = keyInput,
+            onValueChange = onKeyChange,
+            label = { Text(stringResource(R.string.addmedia_tmdb_key_label)) },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth()
+        )
+        Button(onClick = onSave, enabled = keyInput.isNotBlank(), modifier = Modifier.fillMaxWidth()) {
+            Text(stringResource(R.string.addmedia_tmdb_key_save))
+        }
+        if (onCancel != null) {
+            TextButton(onClick = onCancel, modifier = Modifier.fillMaxWidth()) {
+                Text(stringResource(R.string.action_cancel))
+            }
         }
     }
 }
@@ -307,6 +372,7 @@ private fun ConfirmStep(
     onPlotChange: (String) -> Unit,
     onFolderChange: (String) -> Unit,
     onFileNameChange: (String) -> Unit,
+    onBrowseFolder: () -> Unit,
     onConfirm: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -325,7 +391,15 @@ private fun ConfirmStep(
         fetched.rating?.let { Text("★ %.1f".format(it), style = MaterialTheme.typography.bodySmall) }
 
         HorizontalDivider()
-        OutlinedTextField(value = state.destinationFolder, onValueChange = onFolderChange, label = { Text(stringResource(R.string.addmedia_destination_folder)) }, modifier = Modifier.fillMaxWidth())
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedTextField(
+                value = state.destinationFolder,
+                onValueChange = onFolderChange,
+                label = { Text(stringResource(R.string.addmedia_destination_folder)) },
+                modifier = Modifier.weight(1f)
+            )
+            OutlinedButton(onClick = onBrowseFolder) { Text(stringResource(R.string.addmedia_browse)) }
+        }
         OutlinedTextField(value = state.destinationFileName, onValueChange = onFileNameChange, label = { Text(stringResource(R.string.addmedia_destination_file)) }, modifier = Modifier.fillMaxWidth())
 
         if (state.prepareError != null) Text(state.prepareError, color = MaterialTheme.colorScheme.error)
@@ -365,4 +439,107 @@ private fun DoneStep(onRescanNow: () -> Unit, modifier: Modifier = Modifier) {
         Text(stringResource(R.string.addmedia_upload_done), style = MaterialTheme.typography.titleMedium)
         Button(onClick = onRescanNow) { Text(stringResource(R.string.addmedia_rescan_now)) }
     }
+}
+
+/**
+ * Browses the real folder tree of [sourceId] over SMB (reuses [SmbConnection.listDirectory], the
+ * same call the scanner itself uses) so the developer picks an actual existing destination instead
+ * of typing a raw path blind. Typing a name into "новая папка" and tapping "+" only extends the
+ * in-dialog path client-side - the folder itself is created later, when [SmbConnection.mkdirs] runs
+ * as part of the real write in `AddMediaViewModel.confirmAndUpload`.
+ */
+@Composable
+private fun SmbFolderPickerDialog(
+    sourceRepository: SmbSourceRepository,
+    smbClient: SmbClient,
+    sourceId: Long,
+    initialPath: String,
+    onPick: (String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var currentPath by remember { mutableStateOf(initialPath.trim('\\')) }
+    var folders by remember { mutableStateOf<List<String>>(emptyList()) }
+    var isLoading by remember { mutableStateOf(true) }
+    var loadError by remember { mutableStateOf<String?>(null) }
+    var newFolderName by remember { mutableStateOf("") }
+
+    LaunchedEffect(currentPath) {
+        isLoading = true
+        loadError = null
+        val outcome = runCatching {
+            val info = sourceRepository.connectionInfoById(sourceId) ?: error("Источник SMB недоступен")
+            smbClient.connect(info).use { connection ->
+                connection.listDirectory(currentPath).directoryPaths.map { it.substringAfterLast('\\') }.sorted()
+            }
+        }
+        // A path that doesn't exist yet (e.g. the very first open, still on a not-yet-created
+        // suggested folder name) would otherwise dead-end on an error with no way to see the real
+        // tree - fall back to the source root once instead, rather than making the developer guess
+        // to hit "Вверх" themselves.
+        if (outcome.isFailure && currentPath.isNotBlank()) {
+            currentPath = ""
+            return@LaunchedEffect
+        }
+        folders = outcome.getOrDefault(emptyList())
+        loadError = outcome.exceptionOrNull()?.message
+        isLoading = false
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(currentPath.ifBlank { "\\" }) },
+        text = {
+            Column {
+                if (currentPath.isNotBlank()) {
+                    TextButton(onClick = { currentPath = currentPath.substringBeforeLast('\\', "") }) {
+                        Text(stringResource(R.string.addmedia_folder_picker_up))
+                    }
+                }
+                when {
+                    isLoading -> Box(modifier = Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator()
+                    }
+                    loadError != null -> Text(loadError.orEmpty(), color = MaterialTheme.colorScheme.error)
+                    folders.isEmpty() -> Text(stringResource(R.string.addmedia_folder_picker_empty), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    else -> LazyColumn(modifier = Modifier.heightIn(max = 280.dp)) {
+                        items(folders) { name ->
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { currentPath = if (currentPath.isBlank()) name else "$currentPath\\$name" }
+                                    .padding(vertical = 10.dp)
+                            ) {
+                                Icon(Icons.Default.Folder, contentDescription = null, modifier = Modifier.padding(end = 8.dp))
+                                Text(name)
+                            }
+                        }
+                    }
+                }
+                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(
+                        value = newFolderName,
+                        onValueChange = { newFolderName = it },
+                        label = { Text(stringResource(R.string.addmedia_folder_picker_new_folder)) },
+                        singleLine = true,
+                        modifier = Modifier.weight(1f)
+                    )
+                    TextButton(
+                        onClick = {
+                            currentPath = if (currentPath.isBlank()) newFolderName.trim() else "$currentPath\\${newFolderName.trim()}"
+                            newFolderName = ""
+                        },
+                        enabled = newFolderName.isNotBlank()
+                    ) { Text("+") }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onPick(currentPath) }) { Text(stringResource(R.string.addmedia_folder_picker_choose)) }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) }
+        }
+    )
 }

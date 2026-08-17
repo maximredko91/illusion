@@ -12,8 +12,11 @@ import com.seance.app.data.local.entity.SmbSourceEntity
 import com.seance.app.data.nfo.NfoMetadata
 import com.seance.app.data.nfo.NfoWriter
 import com.seance.app.data.repository.SmbSourceRepository
+import com.seance.app.data.security.DevAccessStore
 import com.seance.app.data.smb.SmbClient
 import com.seance.app.data.tmdb.TmdbClient
+import com.seance.app.data.tmdb.TmdbContentRatingsResponse
+import com.seance.app.data.tmdb.TmdbReleaseDatesResponse
 import com.seance.app.data.tmdb.TmdbSearchResult
 import com.seance.app.work.UploadWorker
 import com.seance.app.work.WorkScheduler
@@ -30,6 +33,9 @@ enum class AddMediaStep { SETUP, SEARCH, CONFIRM, UPLOADING, DONE }
 
 data class AddMediaUiState(
     val step: AddMediaStep = AddMediaStep.SETUP,
+    val isTmdbConfigured: Boolean = false,
+    val showTmdbKeyEditor: Boolean = false,
+    val tmdbKeyInput: String = "",
     val sources: List<SmbSourceEntity> = emptyList(),
     val selectedSourceId: Long? = null,
     val kind: MediaKind = MediaKind.MOVIE,
@@ -56,25 +62,40 @@ data class AddMediaUiState(
     val uploadError: String? = null
 )
 
-/** Everything pulled from TMDB for the picked title/episode, editable by the developer before writing. */
+/**
+ * Everything pulled from TMDB for the picked title/episode, editable by the developer before
+ * writing. Mirrors every field `NfoMetadata`/`NfoWriter` can express - same set Details actually
+ * shows (tagline, studio, country, runtime) plus a few more useful ones (mpaa, collection,
+ * premiered) that scanning already reads from an .nfo but this flow hadn't been filling in.
+ * Deliberately does NOT include a trailer: TMDB only returns YouTube video keys, never a
+ * downloadable file, and this app's player only plays local SMB files - there's no TMDB path to
+ * the sibling `-trailer.ext` file `LibraryScanner` looks for, that has to be added by hand.
+ */
 data class FetchedMetadata(
     val tmdbId: Int,
     val title: String,
     val originalTitle: String?,
     val year: Int?,
     val plot: String?,
+    val tagline: String?,
     val genres: List<String>,
     val rating: Double?,
     val cast: List<String>,
     val directors: List<String>,
     val studio: String?,
+    val country: String?,
+    val runtimeMinutes: Int?,
+    val collectionName: String?,
+    val mpaa: String?,
+    val premiered: String?,
     val imdbId: String?,
     val posterPath: String?,
     val backdropPath: String?,
     // TV_EPISODE only - the specific episode within the picked show, on top of the show-level fields above
     val episodeTitle: String? = null,
     val episodePlot: String? = null,
-    val episodeStillPath: String? = null
+    val episodeStillPath: String? = null,
+    val episodePremiered: String? = null
 )
 
 /**
@@ -89,10 +110,11 @@ class AddMediaViewModel(
     private val sourceRepository: SmbSourceRepository,
     private val smbClient: SmbClient,
     private val tmdbClient: TmdbClient,
-    private val nfoWriter: NfoWriter
+    private val nfoWriter: NfoWriter,
+    private val devAccessStore: DevAccessStore
 ) : ViewModel() {
 
-    private val _state = MutableStateFlow(AddMediaUiState())
+    private val _state = MutableStateFlow(AddMediaUiState(isTmdbConfigured = tmdbClient.isConfigured))
     val state: StateFlow<AddMediaUiState> = _state.asStateFlow()
 
     init {
@@ -100,6 +122,18 @@ class AddMediaViewModel(
             val sources = sourceRepository.getEnabledSources()
             _state.update { it.copy(sources = sources, selectedSourceId = sources.firstOrNull()?.id) }
         }
+    }
+
+    fun setTmdbKeyInput(value: String) = _state.update { it.copy(tmdbKeyInput = value) }
+
+    fun openTmdbKeyEditor() = _state.update { it.copy(showTmdbKeyEditor = true, tmdbKeyInput = devAccessStore.tmdbApiKey ?: "") }
+
+    fun cancelTmdbKeyEditor() = _state.update { it.copy(showTmdbKeyEditor = false, tmdbKeyInput = "") }
+
+    /** Takes effect immediately - [TmdbClient] reads the stored key fresh on every request, no restart needed. */
+    fun saveTmdbApiKey() {
+        devAccessStore.tmdbApiKey = _state.value.tmdbKeyInput.trim()
+        _state.update { it.copy(isTmdbConfigured = tmdbClient.isConfigured, showTmdbKeyEditor = false, tmdbKeyInput = "") }
     }
 
     fun selectSource(sourceId: Long) = _state.update { it.copy(selectedSourceId = sourceId) }
@@ -188,11 +222,17 @@ class AddMediaViewModel(
             originalTitle = details.originalTitle,
             year = details.releaseDate?.take(4)?.toIntOrNull(),
             plot = details.overview,
+            tagline = details.tagline?.takeIf { it.isNotBlank() },
             genres = details.genres.map { it.name },
             rating = details.voteAverage,
             cast = details.credits?.cast.orEmpty().sortedBy { it.order }.take(MAX_CAST).map { it.name },
             directors = details.credits?.crew.orEmpty().filter { it.job == "Director" }.map { it.name },
             studio = details.productionCompanies.firstOrNull()?.name,
+            country = details.productionCountries.firstOrNull()?.name,
+            runtimeMinutes = details.runtime,
+            collectionName = details.belongsToCollection?.name,
+            mpaa = certificationFrom(details.releaseDates),
+            premiered = details.releaseDate,
             imdbId = details.externalIds?.imdbId,
             posterPath = details.posterPath,
             backdropPath = details.backdropPath
@@ -209,18 +249,38 @@ class AddMediaViewModel(
             originalTitle = details.originalName,
             year = details.firstAirDate?.take(4)?.toIntOrNull(),
             plot = details.overview,
+            tagline = details.tagline?.takeIf { it.isNotBlank() },
             genres = details.genres.map { it.name },
             rating = details.voteAverage,
             cast = details.credits?.cast.orEmpty().sortedBy { it.order }.take(MAX_CAST).map { it.name },
             directors = details.createdBy.map { it.name },
             studio = details.networks.firstOrNull()?.name,
+            country = details.originCountry.firstOrNull(),
+            runtimeMinutes = details.episodeRunTime.firstOrNull(),
+            collectionName = null,
+            mpaa = certificationFromTv(details.contentRatings),
+            premiered = details.firstAirDate,
             imdbId = details.externalIds?.imdbId,
             posterPath = details.posterPath,
             backdropPath = details.backdropPath,
             episodeTitle = episodeInfo?.name,
             episodePlot = episodeInfo?.overview,
-            episodeStillPath = episodeInfo?.stillPath
+            episodeStillPath = episodeInfo?.stillPath,
+            episodePremiered = episodeInfo?.airDate
         )
+    }
+
+    /** Prefers a Russian certification, then US, then whatever's first - TMDB's release-date certifications are per-country and RU/US aren't always both present. */
+    private fun certificationFrom(response: TmdbReleaseDatesResponse?): String? {
+        val countries = response?.results ?: return null
+        val preferred = countries.firstOrNull { it.country == "RU" } ?: countries.firstOrNull { it.country == "US" } ?: countries.firstOrNull()
+        return preferred?.releaseDates?.firstOrNull { it.certification.isNotBlank() }?.certification
+    }
+
+    private fun certificationFromTv(response: TmdbContentRatingsResponse?): String? {
+        val countries = response?.results ?: return null
+        val preferred = countries.firstOrNull { it.country == "RU" } ?: countries.firstOrNull { it.country == "US" } ?: countries.firstOrNull()
+        return preferred?.rating?.takeIf { it.isNotBlank() }
     }
 
     private fun applySuggestedDestination(fetched: FetchedMetadata) {
@@ -314,7 +374,12 @@ class AddMediaViewModel(
 
             val videoPath = outcome.getOrNull()
             if (videoPath == null) {
-                _state.update { it.copy(isPreparing = false, prepareError = outcome.exceptionOrNull()?.message ?: "Не удалось подготовить папку на NAS") }
+                val error = outcome.exceptionOrNull()
+                android.util.Log.e("AddMediaViewModel", "confirmAndUpload: prepare failed", error)
+                val message = error?.message?.takeIf { it.isNotBlank() }
+                    ?: error?.let { "${it::class.simpleName}" }
+                    ?: "Не удалось подготовить папку на NAS"
+                _state.update { it.copy(isPreparing = false, prepareError = message) }
                 return@launch
             }
 
@@ -384,9 +449,10 @@ class AddMediaViewModel(
             sourceRepository: SmbSourceRepository,
             smbClient: SmbClient,
             tmdbClient: TmdbClient,
-            nfoWriter: NfoWriter
+            nfoWriter: NfoWriter,
+            devAccessStore: DevAccessStore
         ) = viewModelFactory {
-            initializer { AddMediaViewModel(sourceRepository, smbClient, tmdbClient, nfoWriter) }
+            initializer { AddMediaViewModel(sourceRepository, smbClient, tmdbClient, nfoWriter, devAccessStore) }
         }
     }
 }
@@ -400,7 +466,13 @@ private fun FetchedMetadata.toMovieNfo() = NfoMetadata(
     plot = plot,
     director = directors,
     actors = cast,
+    country = country,
+    runtimeMinutes = runtimeMinutes,
+    collectionName = collectionName,
     studio = studio,
+    mpaa = mpaa,
+    tagline = tagline,
+    premiered = premiered,
     imdbId = imdbId,
     tmdbId = tmdbId.toString()
 )
@@ -414,7 +486,11 @@ private fun FetchedMetadata.toTvShowNfo() = NfoMetadata(
     plot = plot,
     director = directors,
     actors = cast,
+    country = country,
     studio = studio,
+    mpaa = mpaa,
+    tagline = tagline,
+    premiered = premiered,
     imdbId = imdbId,
     tmdbId = tmdbId.toString()
 )
@@ -426,5 +502,6 @@ private fun FetchedMetadata.toEpisodeNfo(season: Int, episode: Int) = NfoMetadat
     director = directors,
     season = season,
     episode = episode,
+    premiered = episodePremiered,
     tmdbId = tmdbId.toString()
 )

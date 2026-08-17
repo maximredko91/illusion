@@ -76,7 +76,9 @@ class SeanceApplication : Application(), Configuration.Provider, SingletonImageL
     // gate, ui/addmedia for the flow) - the only place this app calls out to the internet for
     // metadata, and the only place it ever writes to an SMB share instead of reading from one.
     val devAccessStore: DevAccessStore by lazy { DevAccessStore(this) }
-    val tmdbClient: TmdbClient by lazy { TmdbClient() }
+    val tmdbClient: TmdbClient by lazy {
+        TmdbClient { devAccessStore.tmdbApiKey ?: BuildConfig.TMDB_API_KEY }
+    }
     val nfoWriter: NfoWriter by lazy { NfoWriter() }
 
     override val workManagerConfiguration: Configuration

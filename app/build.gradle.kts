@@ -37,8 +37,8 @@ android {
         // Bump versionCode with every build installed for testing, and versionName's alphaN
         // suffix when it's a meaningfully new build - lets Settings show which exact build is on
         // a device instead of guessing from install timestamps.
-        versionCode = 53
-        versionName = "0.1.0-alpha52"
+        versionCode = 55
+        versionName = "0.1.0-alpha54"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("String", "TMDB_API_KEY", "\"$tmdbApiKey\"")

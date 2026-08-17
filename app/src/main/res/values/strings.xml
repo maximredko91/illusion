@@ -238,12 +238,21 @@
     <string name="addmedia_field_year">Год</string>
     <string name="addmedia_field_plot">Описание</string>
     <string name="addmedia_destination_folder">Папка на NAS</string>
+    <string name="addmedia_browse">Обзор…</string>
+    <string name="addmedia_folder_picker_title">Выбор папки</string>
+    <string name="addmedia_folder_picker_up">⬆ Вверх</string>
+    <string name="addmedia_folder_picker_new_folder">Новая папка</string>
+    <string name="addmedia_folder_picker_choose">Выбрать эту папку</string>
+    <string name="addmedia_folder_picker_empty">Пусто</string>
     <string name="addmedia_destination_file">Имя файла</string>
     <string name="addmedia_upload_button">Загрузить на NAS</string>
     <string name="addmedia_uploading">Загрузка на NAS…</string>
     <string name="addmedia_upload_done">Готово — файл на месте</string>
     <string name="addmedia_upload_error">Ошибка загрузки: %1$s</string>
     <string name="addmedia_rescan_now">Пересканировать библиотеку</string>
-    <string name="addmedia_not_configured">TMDB API-ключ не настроен (seance.tmdb.apiKey в local.properties)</string>
+    <string name="addmedia_not_configured">Нужен TMDB API-ключ (бесплатный, на themoviedb.org → Settings → API). Вставьте его сюда — сохранится на устройстве.</string>
+    <string name="addmedia_tmdb_key_label">TMDB API-ключ</string>
+    <string name="addmedia_tmdb_key_save">Сохранить</string>
+    <string name="addmedia_tmdb_key_change">Изменить TMDB-ключ</string>
     <string name="addmedia_back">Назад</string>
 </resources>

@@ -16,11 +16,15 @@ import okhttp3.Request
  * only place this app ever calls out to the internet for metadata, and only ever at the moment
  * new media is being added, not on every scan/view (this is otherwise an offline-first app). No
  * retrofit/DI: three-ish endpoints, plain OkHttp + kotlinx.serialization is enough.
+ *
+ * [apiKeyProvider] is read fresh on every call rather than cached once - lets the key be entered
+ * in-app (`DevAccessStore.tmdbApiKey`, editable from `AddMediaScreen`) and take effect immediately
+ * without restarting the app, instead of only ever coming from a local.properties rebuild.
  */
-class TmdbClient {
-    private val apiKey = BuildConfig.TMDB_API_KEY
+class TmdbClient(private val apiKeyProvider: () -> String = { BuildConfig.TMDB_API_KEY }) {
+    private val apiKey: String get() = apiKeyProvider()
 
-    /** False if `seance.tmdb.apiKey` was never set in local.properties - callers should disable the add-media entry point rather than let every request fail. */
+    /** False if no key has been entered in-app or set via `seance.tmdb.apiKey` in local.properties - callers should disable the add-media entry point rather than let every request fail. */
     val isConfigured: Boolean get() = apiKey.isNotBlank()
 
     private val http = OkHttpClient.Builder()
@@ -50,7 +54,7 @@ class TmdbClient {
         json.decodeFromString(
             get("movie/$id") {
                 addQueryParameter("language", language)
-                addQueryParameter("append_to_response", "credits,external_ids")
+                addQueryParameter("append_to_response", "credits,external_ids,release_dates")
             }
         )
 
@@ -58,7 +62,7 @@ class TmdbClient {
         json.decodeFromString(
             get("tv/$id") {
                 addQueryParameter("language", language)
-                addQueryParameter("append_to_response", "credits,external_ids")
+                addQueryParameter("append_to_response", "credits,external_ids,content_ratings")
             }
         )
 

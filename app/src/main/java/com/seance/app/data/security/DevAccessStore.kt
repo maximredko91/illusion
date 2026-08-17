@@ -39,6 +39,19 @@ class DevAccessStore(context: Context) {
 
     fun verify(password: String): Boolean = prefs.getString(KEY_HASH, null) == hash(password)
 
+    /**
+     * The TMDB API key, entered in-app (AddMediaScreen) rather than rebuilt in via
+     * local.properties - stored encrypted here alongside the password hash since both are the
+     * same "developer-only" secret area. Null if never set; [com.seance.app.data.tmdb.TmdbClient]
+     * falls back to the build-time `seance.tmdb.apiKey` local.properties key when this is unset,
+     * so either path keeps working.
+     */
+    var tmdbApiKey: String?
+        get() = prefs.getString(KEY_TMDB_API_KEY, null)
+        set(value) {
+            prefs.edit().putString(KEY_TMDB_API_KEY, value?.takeIf { it.isNotBlank() }).apply()
+        }
+
     private fun hash(password: String): String =
         MessageDigest.getInstance("SHA-256")
             .digest(password.toByteArray(Charsets.UTF_8))
@@ -46,6 +59,7 @@ class DevAccessStore(context: Context) {
 
     companion object {
         private const val KEY_HASH = "password_hash"
+        private const val KEY_TMDB_API_KEY = "tmdb_api_key"
         private const val PASSWORD_LENGTH = 10
         private const val PASSWORD_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789"
     }
