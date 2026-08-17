@@ -107,6 +107,7 @@ fun HistoryScreen(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
+                            .animateItem()
                             .focusHighlight(rowSource)
                             .clickable(interactionSource = rowSource, indication = LocalIndication.current) { onOpenItem(entry.item.stableId) }
                             .padding(8.dp)

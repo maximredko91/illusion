@@ -73,7 +73,7 @@ fun FavoritesScreen(
                 contentPadding = PaddingValues(8.dp)
             ) {
                 items(items, key = { it.stableId }) { item ->
-                    PosterCard(item = item, onClick = { onOpenItem(item.stableId) }, modifier = Modifier.padding(4.dp))
+                    PosterCard(item = item, onClick = { onOpenItem(item.stableId) }, modifier = Modifier.padding(4.dp).animateItem())
                 }
             }
         }

@@ -42,6 +42,26 @@ MVVM, package-by-feature, **no DI framework** — `SeanceApplication.kt` manuall
 
 **Not a gap (previously mis-tracked as one, corrected 2026-08-16)**: offline downloads DO include subtitles — `DownloadWorker.downloadSubtitles()` fetches every `item.subtitlePaths` entry alongside the video into the same per-title folder, stores them on `DownloadEntity.subtitles`, and `PlayerViewModel.load()` uses those local `content://` Uris (falling back to live SMB only when a completed download has no subtitles). Present since the initial commit — a stale audit note had called this "still streams over SMB," which was wrong; don't re-flag without re-checking `DownloadWorker.kt`/`PlayerViewModel.kt:201-207` first.
 
+## Polish backlog (from a 3-way parallel audit, 2026-08-17 — check off/update as items land)
+
+Performance:
+1. [x] `HomeScreen.kt` continue-watching/recently-added `LazyRow` `items()` had no `key` — fixed, now `key = { it.stableId }` like every other list/grid.
+2. [ ] No `@Index` anywhere in the Room schema despite `MediaItemDao` filtering on `category`/`seriesStableId`/`collectionName`/`sourceId` — full-table scans on a 3000+ row table. Needs a Room migration.
+3. [ ] Details→Person does two independent full-table `getAll()` scans back to back (`DetailsViewModel` then `LibraryRepository.getFilmography`) — should be one SQL-level query.
+4. [ ] `LibraryRepository.getSimilar()` pulls the whole category into memory to filter/sort in Kotlin — lower priority, genres being a `List<String>` column makes a SQL-level fix costlier than the payoff right now.
+
+Animation:
+5. [x] Player controls show/hide (`PlayerScreen.kt`) and the skip-intro banner were a hard `if` — fixed, both now `AnimatedVisibility` (fade for controls; fade+slide for the banner).
+6. [x] List/grid item removal had no exit animation in Favorites/History/Downloads/Library — fixed, all four now use `Modifier.animateItem()`.
+7. [x] Details season expand/collapse was an instant snap — fixed, now `AnimatedVisibility` with `fadeIn()+expandVertically()`/`fadeOut()+shrinkVertically()`.
+8. [x] Details favorite-toggle icon swapped instantly — fixed, now `Crossfade`.
+
+Polish/consistency:
+9. [x] `PersonScreen.kt`'s filmography `LazyVerticalGrid` was missing `.focusGroup()` — fixed, now consistent with every other grid.
+10. [ ] `MediaItemEntity.hasNfo` is written during scan but never read anywhere — mirror image of the intro-skip dead-reader bug fixed this session. Needs a decision: wire up (e.g. a "no metadata" badge) or delete the field.
+11. [ ] Scan failure message is generic ("scan failed") — `LibraryScanWorker` doesn't distinguish network-unreachable / auth-failed / single-bad-file.
+12. [ ] Settings has no "reset to defaults"/re-run-onboarding action — low priority for a single-user app, noted only because it's the one settings-completeness gap found.
+
 ## Working conventions
 
 - **Communicate in Russian** on this project (user's explicit preference).

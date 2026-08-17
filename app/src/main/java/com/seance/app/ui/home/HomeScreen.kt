@@ -115,7 +115,7 @@ private fun MediaCarousel(
             contentPadding = PaddingValues(horizontal = 16.dp),
             modifier = Modifier.focusGroup()
         ) {
-            items(items) { item ->
+            items(items, key = { it.stableId }) { item ->
                 PosterCard(
                     item = item,
                     onClick = { onOpenItem(item.stableId) },

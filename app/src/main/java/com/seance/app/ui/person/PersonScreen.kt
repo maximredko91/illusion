@@ -1,5 +1,6 @@
 package com.seance.app.ui.person
 
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
@@ -45,7 +46,7 @@ fun PersonScreen(
     ) { innerPadding ->
         LazyVerticalGrid(
             columns = GridCells.Adaptive(minSize = posterCardMinWidth()),
-            modifier = Modifier.fillMaxSize().padding(innerPadding),
+            modifier = Modifier.fillMaxSize().padding(innerPadding).focusGroup(),
             contentPadding = PaddingValues(8.dp)
         ) {
             items(items, key = { it.stableId }) { item ->

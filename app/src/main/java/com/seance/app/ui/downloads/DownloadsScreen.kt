@@ -104,6 +104,7 @@ fun DownloadsScreen(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
+                            .animateItem()
                             .focusHighlight(rowSource)
                             .clickable(
                                 enabled = entry.download.status == DownloadStatus.COMPLETED,

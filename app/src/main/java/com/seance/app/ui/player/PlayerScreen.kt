@@ -5,6 +5,11 @@ import android.content.Context
 import android.content.ContextWrapper
 import android.media.AudioManager
 import android.view.WindowManager
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -236,18 +241,26 @@ fun PlayerScreen(
         }
 
         if (!isInPip) {
-            if (uiState.showSkipIntro) {
-                SkipIntroBanner(
-                    onSkip = viewModel::skipIntro,
-                    modifier = Modifier
-                        .align(Alignment.BottomEnd)
-                        .padding(24.dp)
-                )
+            AnimatedVisibility(
+                visible = uiState.showSkipIntro,
+                enter = fadeIn() + slideInVertically(initialOffsetY = { it / 2 }),
+                exit = fadeOut() + slideOutVertically(targetOffsetY = { it / 2 }),
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(24.dp)
+            ) {
+                SkipIntroBanner(onSkip = viewModel::skipIntro)
             }
 
-            when {
-                isLocked -> LockedOverlay(onUnlock = { isLocked = false; controlsVisible = true })
-                controlsVisible -> Column(
+            if (isLocked) {
+                LockedOverlay(onUnlock = { isLocked = false; controlsVisible = true })
+            }
+            AnimatedVisibility(
+                visible = controlsVisible && !isLocked,
+                enter = fadeIn(),
+                exit = fadeOut()
+            ) {
+                Column(
                     modifier = Modifier
                         .fillMaxSize()
                         .windowInsetsPadding(WindowInsets.safeDrawing)

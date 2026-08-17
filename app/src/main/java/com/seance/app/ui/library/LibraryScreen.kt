@@ -199,7 +199,7 @@ fun LibraryScreen(
                             PosterCard(
                                 item = item,
                                 onClick = { onOpenItem(item.stableId) },
-                                modifier = Modifier.padding(4.dp),
+                                modifier = Modifier.padding(4.dp).animateItem(),
                                 showRatingBadge = sortOrder == SortOrder.RATING
                             )
                         }

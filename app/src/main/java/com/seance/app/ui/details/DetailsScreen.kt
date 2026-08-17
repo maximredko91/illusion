@@ -1,6 +1,12 @@
 package com.seance.app.ui.details
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.Crossfade
 import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
@@ -437,12 +443,14 @@ private fun DetailsContent(
                 interactionSource = favoriteSource,
                 modifier = Modifier.focusHighlight(favoriteSource)
             ) {
-                Icon(
-                    imageVector = if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                    contentDescription = stringResource(
-                        if (isFavorite) R.string.details_favorite_remove else R.string.details_favorite_add
+                Crossfade(targetState = isFavorite, label = "favoriteIcon") { favorite ->
+                    Icon(
+                        imageVector = if (favorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                        contentDescription = stringResource(
+                            if (favorite) R.string.details_favorite_remove else R.string.details_favorite_add
+                        )
                     )
-                )
+                }
             }
             DownloadButton(
                 download = download,
@@ -742,7 +750,12 @@ private fun EpisodeList(
                     tint = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-            if (expanded) {
+            AnimatedVisibility(
+                visible = expanded,
+                enter = fadeIn() + expandVertically(),
+                exit = fadeOut() + shrinkVertically()
+            ) {
+                Column {
                 seasonEpisodes.forEach { episode ->
                     val label = listOfNotNull(
                         episode.seasonNumber?.let { s -> episode.episodeNumber?.let { e -> "S${s}E$e" } },
@@ -816,6 +829,7 @@ private fun EpisodeList(
                             }
                         }
                     }
+                }
                 }
             }
         }
