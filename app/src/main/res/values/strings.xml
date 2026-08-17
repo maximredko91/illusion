@@ -210,4 +210,40 @@
     <string name="details_download_season_remove_confirm_message">Скачанные серии этого сезона (%1$d шт.) будут удалены с устройства.</string>
 
     <string name="person_title">Фильмография: %1$s</string>
+
+    <string name="settings_dev_password_generated_title">Пароль для добавления медиа</string>
+    <string name="settings_dev_password_generated_message">%1$s\n\nЗапомни или сохрани его — больше он не покажется. Он понадобится при следующих входах в этот раздел.</string>
+    <string name="settings_dev_password_saved">Сохранил</string>
+    <string name="settings_dev_password_title">Пароль разработчика</string>
+    <string name="settings_dev_password_label">Пароль</string>
+    <string name="settings_dev_password_wrong">Неверный пароль</string>
+    <string name="settings_dev_access_confirm">Войти</string>
+
+    <string name="addmedia_title">Добавить медиа</string>
+    <string name="addmedia_source">Источник SMB</string>
+    <string name="addmedia_kind_movie">Фильм</string>
+    <string name="addmedia_kind_episode">Серия сериала</string>
+    <string name="addmedia_pick_file">Выбрать файл</string>
+    <string name="addmedia_picked_file">Выбран: %1$s</string>
+    <string name="addmedia_show_title">Название сериала</string>
+    <string name="addmedia_season">Сезон</string>
+    <string name="addmedia_episode">Эпизод</string>
+    <string name="addmedia_search_query">Название для поиска в TMDB</string>
+    <string name="addmedia_search_button">Искать</string>
+    <string name="addmedia_no_results">Ничего не найдено</string>
+    <string name="addmedia_next">Далее</string>
+    <string name="addmedia_confirm_title">Проверьте данные</string>
+    <string name="addmedia_field_title">Название</string>
+    <string name="addmedia_field_original_title">Оригинальное название</string>
+    <string name="addmedia_field_year">Год</string>
+    <string name="addmedia_field_plot">Описание</string>
+    <string name="addmedia_destination_folder">Папка на NAS</string>
+    <string name="addmedia_destination_file">Имя файла</string>
+    <string name="addmedia_upload_button">Загрузить на NAS</string>
+    <string name="addmedia_uploading">Загрузка на NAS…</string>
+    <string name="addmedia_upload_done">Готово — файл на месте</string>
+    <string name="addmedia_upload_error">Ошибка загрузки: %1$s</string>
+    <string name="addmedia_rescan_now">Пересканировать библиотеку</string>
+    <string name="addmedia_not_configured">TMDB API-ключ не настроен (seance.tmdb.apiKey в local.properties)</string>
+    <string name="addmedia_back">Назад</string>
 </resources>

@@ -14,6 +14,7 @@ import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import java.io.InputStream
+import java.io.OutputStream
 import java.net.SocketTimeoutException
 import java.util.EnumSet
 import java.util.concurrent.TimeUnit
@@ -104,6 +105,62 @@ class SmbConnection internal constructor(
 
     fun fileExists(path: String): Boolean = diskShare.fileExists(path)
 
+    fun folderExists(path: String): Boolean = diskShare.folderExists(path)
+
+    /** Creates every missing segment of [path] in order - used by the developer-only media-add flow, never by scanning/playback. */
+    fun mkdirs(path: String) {
+        var current = ""
+        for (segment in path.split('\\').filter { it.isNotBlank() }) {
+            current = if (current.isEmpty()) segment else "$current\\$segment"
+            if (!diskShare.folderExists(current)) {
+                diskShare.mkdir(current)
+            }
+        }
+    }
+
+    /**
+     * Opens [path] for writing (creating or overwriting) - small files only (.nfo, poster/fanart
+     * images), no resume support needed at that size. Parent folder must already exist, see
+     * [mkdirs]. Write-only, used by the developer-only media-add flow - the read paths above never
+     * call this.
+     */
+    fun openOutputStream(path: String): OutputStream {
+        val file = diskShare.openFile(
+            path,
+            EnumSet.of(AccessMask.GENERIC_WRITE),
+            null,
+            SMB2ShareAccess.ALL,
+            SMB2CreateDisposition.FILE_OVERWRITE_IF,
+            null
+        )
+        return file.outputStream
+    }
+
+    /**
+     * Opens [path] for positional writes - the write-side counterpart to [openRandomAccessFile],
+     * used for the one big/slow copy in the developer-only media-add flow (the video file itself)
+     * so a dropped connection mid-upload can reconnect and resume from the last written offset
+     * instead of restarting, the same way [readEdgeSamples]'s caller (the download path) does for
+     * reads. [createNew] truncates/creates the file - only the very first open of a given upload
+     * attempt should pass true; a reconnect mid-copy must pass false to keep what's already there.
+     */
+    fun openRandomAccessFileForWrite(path: String, createNew: Boolean): SmbRandomAccessWriteFile {
+        val file = diskShare.openFile(
+            path,
+            EnumSet.of(AccessMask.GENERIC_WRITE),
+            null,
+            SMB2ShareAccess.ALL,
+            if (createNew) SMB2CreateDisposition.FILE_OVERWRITE_IF else SMB2CreateDisposition.FILE_OPEN,
+            null
+        )
+        return SmbRandomAccessWriteFile(file)
+    }
+
+    /** Best-effort cleanup of a partially-written file after a failed/cancelled upload - never called from the read/scan paths. */
+    fun deleteFile(path: String) {
+        if (diskShare.fileExists(path)) diskShare.rm(path)
+    }
+
     /**
      * Reads up to [sampleSize] bytes from the start and end of [path], for [StableIdGenerator] -
      * a content sample survives the file being renamed or moved, unlike hashing the name/path.
@@ -150,6 +207,16 @@ class SmbRandomAccessFile internal constructor(
      */
     fun read(buffer: ByteArray, filePosition: Long, offset: Int = 0, length: Int = buffer.size): Int =
         file.read(buffer, filePosition, offset, length)
+
+    override fun close() = file.close()
+}
+
+class SmbRandomAccessWriteFile internal constructor(
+    private val file: com.hierynomus.smbj.share.File
+) : java.io.Closeable {
+    /** Writes [length] bytes from [buffer] (starting at [offset]) to [filePosition] in the remote file - the write-side counterpart to [SmbRandomAccessFile.read]. */
+    fun write(buffer: ByteArray, filePosition: Long, offset: Int = 0, length: Int = buffer.size): Long =
+        file.write(buffer, filePosition, offset, length)
 
     override fun close() = file.close()
 }

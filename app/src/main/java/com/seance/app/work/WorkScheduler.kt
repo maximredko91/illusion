@@ -115,4 +115,32 @@ object WorkScheduler {
     fun cancelDownload(context: Context, stableId: String) {
         WorkManager.getInstance(context).cancelUniqueWork(downloadWorkName(stableId))
     }
+
+    /** Copies a picked local video to [destinationPath] on SMB source [sourceId] - the developer-only "add media" scraper's one background step. Returns the work id so the UI can observe progress. */
+    fun enqueueUpload(context: Context, sourceId: Long, videoUri: String, destinationPath: String, totalBytes: Long): UUID {
+        val constraints = Constraints.Builder()
+            .setRequiredNetworkType(NetworkType.CONNECTED)
+            .build()
+
+        val request = OneTimeWorkRequestBuilder<UploadWorker>()
+            .setConstraints(constraints)
+            .setInputData(
+                workDataOf(
+                    UploadWorker.KEY_SOURCE_ID to sourceId,
+                    UploadWorker.KEY_VIDEO_URI to videoUri,
+                    UploadWorker.KEY_DESTINATION_PATH to destinationPath,
+                    UploadWorker.KEY_TOTAL_BYTES to totalBytes
+                )
+            )
+            .build()
+
+        WorkManager.getInstance(context).enqueueUniqueWork(
+            ADD_MEDIA_UPLOAD_WORK_NAME,
+            ExistingWorkPolicy.REPLACE,
+            request
+        )
+        return request.id
+    }
+
+    private const val ADD_MEDIA_UPLOAD_WORK_NAME = "add_media_upload"
 }

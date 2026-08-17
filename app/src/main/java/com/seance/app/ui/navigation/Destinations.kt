@@ -56,4 +56,8 @@ sealed interface Destination {
 
     @Serializable
     data class ScanProgress(val workId: String) : Destination
+
+    /** Developer-only "add media" scraper - only reachable via the hidden password gate in Settings, see DevAccessStore. */
+    @Serializable
+    data object AddMedia : Destination
 }

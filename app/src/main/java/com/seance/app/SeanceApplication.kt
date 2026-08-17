@@ -13,6 +13,7 @@ import com.seance.app.data.image.SmbImageConnectionPool
 import com.seance.app.data.image.SmbImageFetcher
 import com.seance.app.data.local.AppDatabase
 import com.seance.app.data.nfo.NfoParser
+import com.seance.app.data.nfo.NfoWriter
 import com.seance.app.data.player.AudioTrackProber
 import com.seance.app.data.player.SmbDataSourceFactory
 import com.seance.app.data.repository.AudioTrackRepository
@@ -23,9 +24,11 @@ import com.seance.app.data.repository.ThumbnailRepository
 import com.seance.app.data.repository.WatchProgressRepository
 import com.seance.app.data.scan.LibraryScanner
 import com.seance.app.data.scan.ThumbnailGenerator
+import com.seance.app.data.security.DevAccessStore
 import com.seance.app.data.settings.SettingsRepository
 import com.seance.app.data.smb.SmbClient
 import com.seance.app.data.smb.SmbCredentialStore
+import com.seance.app.data.tmdb.TmdbClient
 import com.seance.app.work.SeanceWorkerFactory
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -68,6 +71,13 @@ class SeanceApplication : Application(), Configuration.Provider, SingletonImageL
     val backupManager: BackupManager by lazy { BackupManager(smbSourceRepository, watchProgressRepository) }
     val audioTrackRepository: AudioTrackRepository by lazy { AudioTrackRepository(database.audioTrackDao()) }
     val audioTrackProber: AudioTrackProber by lazy { AudioTrackProber(smbDataSourceFactory) }
+
+    // Developer-only "add media" scraper (see data/security/DevAccessStore's KDoc for the access
+    // gate, ui/addmedia for the flow) - the only place this app calls out to the internet for
+    // metadata, and the only place it ever writes to an SMB share instead of reading from one.
+    val devAccessStore: DevAccessStore by lazy { DevAccessStore(this) }
+    val tmdbClient: TmdbClient by lazy { TmdbClient() }
+    val nfoWriter: NfoWriter by lazy { NfoWriter() }
 
     override val workManagerConfiguration: Configuration
         get() = Configuration.Builder()

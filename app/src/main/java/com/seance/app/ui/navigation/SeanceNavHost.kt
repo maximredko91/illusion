@@ -68,6 +68,7 @@ import com.seance.app.ui.common.LocalShimmerProgress
 import com.seance.app.ui.common.LocalUiMode
 import com.seance.app.ui.common.focusHighlight
 import com.seance.app.ui.common.segmentTick
+import com.seance.app.ui.addmedia.AddMediaScreen
 import com.seance.app.ui.details.DetailsScreen
 import com.seance.app.ui.downloads.DownloadsScreen
 import com.seance.app.ui.favorites.FavoritesScreen
@@ -321,7 +322,7 @@ private fun SeanceNavGraph(app: SeanceApplication, navController: NavHostControl
             composable<Destination.Settings> {
                 val context = LocalContext.current
                 val settingsViewModel: SettingsViewModel = viewModel(
-                    factory = SettingsViewModel.factory(app.smbSourceRepository, app.settingsRepository, app.thumbnailRepository, app.downloadRepository, app.backupManager)
+                    factory = SettingsViewModel.factory(app.smbSourceRepository, app.settingsRepository, app.thumbnailRepository, app.downloadRepository, app.backupManager, app.devAccessStore)
                 )
                 val sources by settingsViewModel.sources.collectAsState()
                 val cacheSizeBytes by settingsViewModel.cacheSizeBytes.collectAsState()
@@ -361,13 +362,17 @@ private fun SeanceNavGraph(app: SeanceApplication, navController: NavHostControl
                     onDismissBackupMessage = { settingsViewModel.dismissBackupMessage() },
                     onAddSource = { navController.navigate(Destination.AddSmbSource) },
                     onEditSource = { source -> navController.navigate(Destination.EditSmbSource(source.id)) },
-                    onDeleteSource = { source -> settingsViewModel.deleteSource(source) }
+                    onDeleteSource = { source -> settingsViewModel.deleteSource(source) },
+                    hasDevPassword = settingsViewModel::hasDevPassword,
+                    onGenerateDevPassword = settingsViewModel::generateDevPassword,
+                    onVerifyDevPassword = settingsViewModel::verifyDevPassword,
+                    onDevAccessGranted = { navController.navigate(Destination.AddMedia) }
                 )
             }
             composable<Destination.Cache> {
                 val context = LocalContext.current
                 val settingsViewModel: SettingsViewModel = viewModel(
-                    factory = SettingsViewModel.factory(app.smbSourceRepository, app.settingsRepository, app.thumbnailRepository, app.downloadRepository, app.backupManager)
+                    factory = SettingsViewModel.factory(app.smbSourceRepository, app.settingsRepository, app.thumbnailRepository, app.downloadRepository, app.backupManager, app.devAccessStore)
                 )
                 val cacheSizeBytes by settingsViewModel.cacheSizeBytes.collectAsState()
                 CacheScreen(
@@ -376,6 +381,20 @@ private fun SeanceNavGraph(app: SeanceApplication, navController: NavHostControl
                     onClearCache = { settingsViewModel.clearCache(context) },
                     posterCachingEnabled = settingsViewModel.posterCachingEnabled,
                     onSetPosterCachingEnabled = { enabled -> settingsViewModel.setPosterCachingEnabled(context, enabled) },
+                    onBack = { navController.popBackStack() }
+                )
+            }
+            composable<Destination.AddMedia> {
+                val context = LocalContext.current
+                AddMediaScreen(
+                    sourceRepository = app.smbSourceRepository,
+                    smbClient = app.smbClient,
+                    tmdbClient = app.tmdbClient,
+                    nfoWriter = app.nfoWriter,
+                    onRescanNow = {
+                        val workId = WorkScheduler.enqueueOneTimeScan(context)
+                        navController.navigate(Destination.ScanProgress(workId.toString()))
+                    },
                     onBack = { navController.popBackStack() }
                 )
             }

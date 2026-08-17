@@ -1,0 +1,430 @@
+package com.seance.app.ui.addmedia
+
+import android.content.ContentResolver
+import android.content.Context
+import android.net.Uri
+import android.provider.OpenableColumns
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import androidx.lifecycle.viewmodel.initializer
+import androidx.lifecycle.viewmodel.viewModelFactory
+import com.seance.app.data.local.entity.SmbSourceEntity
+import com.seance.app.data.nfo.NfoMetadata
+import com.seance.app.data.nfo.NfoWriter
+import com.seance.app.data.repository.SmbSourceRepository
+import com.seance.app.data.smb.SmbClient
+import com.seance.app.data.tmdb.TmdbClient
+import com.seance.app.data.tmdb.TmdbSearchResult
+import com.seance.app.work.UploadWorker
+import com.seance.app.work.WorkScheduler
+import java.util.UUID
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
+
+enum class MediaKind { MOVIE, TV_EPISODE }
+
+enum class AddMediaStep { SETUP, SEARCH, CONFIRM, UPLOADING, DONE }
+
+data class AddMediaUiState(
+    val step: AddMediaStep = AddMediaStep.SETUP,
+    val sources: List<SmbSourceEntity> = emptyList(),
+    val selectedSourceId: Long? = null,
+    val kind: MediaKind = MediaKind.MOVIE,
+    val pickedFileUri: Uri? = null,
+    val pickedFileName: String? = null,
+    val pickedFileSize: Long = 0L,
+    val showTitleInput: String = "",
+    val seasonNumber: String = "1",
+    val episodeNumber: String = "1",
+    val searchQuery: String = "",
+    val isSearching: Boolean = false,
+    val searchResults: List<TmdbSearchResult> = emptyList(),
+    val searchError: String? = null,
+    val isFetchingDetails: Boolean = false,
+    val fetchError: String? = null,
+    val fetched: FetchedMetadata? = null,
+    val destinationFolder: String = "",
+    val destinationFileName: String = "",
+    val isPreparing: Boolean = false,
+    val prepareError: String? = null,
+    val uploadWorkId: UUID? = null,
+    val uploadedBytes: Long = 0L,
+    val uploadTotalBytes: Long = 0L,
+    val uploadError: String? = null
+)
+
+/** Everything pulled from TMDB for the picked title/episode, editable by the developer before writing. */
+data class FetchedMetadata(
+    val tmdbId: Int,
+    val title: String,
+    val originalTitle: String?,
+    val year: Int?,
+    val plot: String?,
+    val genres: List<String>,
+    val rating: Double?,
+    val cast: List<String>,
+    val directors: List<String>,
+    val studio: String?,
+    val imdbId: String?,
+    val posterPath: String?,
+    val backdropPath: String?,
+    // TV_EPISODE only - the specific episode within the picked show, on top of the show-level fields above
+    val episodeTitle: String? = null,
+    val episodePlot: String? = null,
+    val episodeStillPath: String? = null
+)
+
+/**
+ * Backs the developer-only "add media" scraper (see [com.seance.app.data.security.DevAccessStore]
+ * for the access gate). Fetches metadata from TMDB once, writes it + poster/fanart as local files
+ * next to the video on the NAS (same layout [com.seance.app.data.scan.LibraryScanner] already
+ * reads), then hands the actual (potentially large, slow) video byte-copy to [UploadWorker] so it
+ * survives the screen closing. A manual rescan afterwards is what actually adds the item to the
+ * library - this class never touches Room directly.
+ */
+class AddMediaViewModel(
+    private val sourceRepository: SmbSourceRepository,
+    private val smbClient: SmbClient,
+    private val tmdbClient: TmdbClient,
+    private val nfoWriter: NfoWriter
+) : ViewModel() {
+
+    private val _state = MutableStateFlow(AddMediaUiState())
+    val state: StateFlow<AddMediaUiState> = _state.asStateFlow()
+
+    init {
+        viewModelScope.launch {
+            val sources = sourceRepository.getEnabledSources()
+            _state.update { it.copy(sources = sources, selectedSourceId = sources.firstOrNull()?.id) }
+        }
+    }
+
+    fun selectSource(sourceId: Long) = _state.update { it.copy(selectedSourceId = sourceId) }
+
+    fun selectKind(kind: MediaKind) = _state.update { it.copy(kind = kind) }
+
+    fun setShowTitleInput(value: String) = _state.update { it.copy(showTitleInput = value) }
+
+    fun setSeasonNumber(value: String) = _state.update { it.copy(seasonNumber = value.filter { c -> c.isDigit() }) }
+
+    fun setEpisodeNumber(value: String) = _state.update { it.copy(episodeNumber = value.filter { c -> c.isDigit() }) }
+
+    fun setSearchQuery(value: String) = _state.update { it.copy(searchQuery = value) }
+
+    fun pickFile(context: Context, uri: Uri) {
+        context.contentResolver.takePersistableUriPermissionSafely(uri)
+        val (name, size) = queryNameAndSize(context.contentResolver, uri)
+        val guess = guessTitle(name ?: "")
+        _state.update {
+            it.copy(
+                pickedFileUri = uri,
+                pickedFileName = name,
+                pickedFileSize = size,
+                searchQuery = if (it.kind == MediaKind.TV_EPISODE) it.showTitleInput.ifBlank { guess } else guess
+            )
+        }
+    }
+
+    fun goToSearch() {
+        val current = _state.value
+        val query = (if (current.kind == MediaKind.TV_EPISODE) current.showTitleInput else current.searchQuery).ifBlank { current.searchQuery }
+        _state.update { it.copy(step = AddMediaStep.SEARCH, searchQuery = query) }
+        search()
+    }
+
+    fun search() {
+        val query = _state.value.searchQuery.trim()
+        if (query.isEmpty()) return
+        val kind = _state.value.kind
+        viewModelScope.launch {
+            _state.update { it.copy(isSearching = true, searchError = null) }
+            val result = runCatching {
+                if (kind == MediaKind.MOVIE) tmdbClient.searchMovies(query) else tmdbClient.searchTvShows(query)
+            }
+            _state.update {
+                it.copy(
+                    isSearching = false,
+                    searchResults = result.getOrDefault(emptyList()),
+                    searchError = result.exceptionOrNull()?.message
+                )
+            }
+        }
+    }
+
+    fun selectResult(result: TmdbSearchResult) {
+        val current = _state.value
+        viewModelScope.launch {
+            _state.update { it.copy(isFetchingDetails = true, fetchError = null) }
+            val outcome = runCatching {
+                if (current.kind == MediaKind.MOVIE) {
+                    fetchMovie(result.id)
+                } else {
+                    val season = current.seasonNumber.toIntOrNull() ?: 1
+                    val episode = current.episodeNumber.toIntOrNull() ?: 1
+                    fetchTvEpisode(result.id, season, episode)
+                }
+            }
+            val fetched = outcome.getOrNull()
+            _state.update {
+                it.copy(
+                    isFetchingDetails = false,
+                    fetchError = outcome.exceptionOrNull()?.message,
+                    fetched = fetched,
+                    step = if (fetched != null) AddMediaStep.CONFIRM else it.step
+                )
+            }
+            if (fetched != null) applySuggestedDestination(fetched)
+        }
+    }
+
+    private suspend fun fetchMovie(tmdbId: Int): FetchedMetadata {
+        val details = tmdbClient.getMovieDetails(tmdbId)
+        return FetchedMetadata(
+            tmdbId = details.id,
+            title = details.title,
+            originalTitle = details.originalTitle,
+            year = details.releaseDate?.take(4)?.toIntOrNull(),
+            plot = details.overview,
+            genres = details.genres.map { it.name },
+            rating = details.voteAverage,
+            cast = details.credits?.cast.orEmpty().sortedBy { it.order }.take(MAX_CAST).map { it.name },
+            directors = details.credits?.crew.orEmpty().filter { it.job == "Director" }.map { it.name },
+            studio = details.productionCompanies.firstOrNull()?.name,
+            imdbId = details.externalIds?.imdbId,
+            posterPath = details.posterPath,
+            backdropPath = details.backdropPath
+        )
+    }
+
+    private suspend fun fetchTvEpisode(tmdbId: Int, season: Int, episode: Int): FetchedMetadata {
+        val details = tmdbClient.getTvDetails(tmdbId)
+        val seasonDetails = runCatching { tmdbClient.getSeasonDetails(tmdbId, season) }.getOrNull()
+        val episodeInfo = seasonDetails?.episodes?.firstOrNull { it.episodeNumber == episode }
+        return FetchedMetadata(
+            tmdbId = details.id,
+            title = details.name,
+            originalTitle = details.originalName,
+            year = details.firstAirDate?.take(4)?.toIntOrNull(),
+            plot = details.overview,
+            genres = details.genres.map { it.name },
+            rating = details.voteAverage,
+            cast = details.credits?.cast.orEmpty().sortedBy { it.order }.take(MAX_CAST).map { it.name },
+            directors = details.createdBy.map { it.name },
+            studio = details.networks.firstOrNull()?.name,
+            imdbId = details.externalIds?.imdbId,
+            posterPath = details.posterPath,
+            backdropPath = details.backdropPath,
+            episodeTitle = episodeInfo?.name,
+            episodePlot = episodeInfo?.overview,
+            episodeStillPath = episodeInfo?.stillPath
+        )
+    }
+
+    private fun applySuggestedDestination(fetched: FetchedMetadata) {
+        val current = _state.value
+        val extension = current.pickedFileName?.substringAfterLast('.', "")?.takeIf { it.isNotBlank() } ?: "mkv"
+        val titleYear = sanitize(fetched.year?.let { "${fetched.title} ($it)" } ?: fetched.title)
+        val folder: String
+        val fileName: String
+        if (current.kind == MediaKind.MOVIE) {
+            folder = titleYear
+            fileName = "$titleYear.$extension"
+        } else {
+            val showFolder = sanitize(fetched.year?.let { "${fetched.title} ($it)" } ?: fetched.title)
+            val season = current.seasonNumber.toIntOrNull() ?: 1
+            val episode = current.episodeNumber.toIntOrNull() ?: 1
+            folder = "$showFolder\\Сезон $season"
+            val episodeLabel = fetched.episodeTitle?.let { " - $it" } ?: ""
+            fileName = sanitize("$showFolder - S${season.pad2()}E${episode.pad2()}$episodeLabel") + ".$extension"
+        }
+        _state.update { it.copy(destinationFolder = folder, destinationFileName = fileName) }
+    }
+
+    fun setDestinationFolder(value: String) = _state.update { it.copy(destinationFolder = value) }
+    fun setDestinationFileName(value: String) = _state.update { it.copy(destinationFileName = value) }
+
+    fun updateFetchedTitle(value: String) = updateFetched { it.copy(title = value) }
+    fun updateFetchedOriginalTitle(value: String) = updateFetched { it.copy(originalTitle = value) }
+    fun updateFetchedYear(value: String) = updateFetched { it.copy(year = value.toIntOrNull()) }
+    fun updateFetchedPlot(value: String) = updateFetched { it.copy(plot = value) }
+
+    private fun updateFetched(transform: (FetchedMetadata) -> FetchedMetadata) {
+        _state.update { state -> state.fetched?.let { state.copy(fetched = transform(it)) } ?: state }
+    }
+
+    /**
+     * Writes the .nfo(s) and poster/fanart images straight to the NAS (fast, small - done inline
+     * here rather than via WorkManager), then hands off to [UploadWorker] for the video's own byte
+     * copy, which is the only part slow/large enough to need survive-backgrounding + resume.
+     */
+    fun confirmAndUpload(context: Context) {
+        val current = _state.value
+        val fetched = current.fetched ?: return
+        val sourceId = current.selectedSourceId ?: return
+        val videoUri = current.pickedFileUri ?: return
+        if (current.destinationFolder.isBlank() || current.destinationFileName.isBlank()) return
+
+        viewModelScope.launch {
+            _state.update { it.copy(isPreparing = true, prepareError = null) }
+            val outcome = runCatching {
+                val info = sourceRepository.connectionInfoById(sourceId)
+                    ?: error("Источник SMB недоступен")
+                smbClient.connect(info).use { connection ->
+                    val root = info.rootPath.trim('\\')
+                    val folderPath = listOf(root, current.destinationFolder.trim('\\'))
+                        .filter { it.isNotBlank() }
+                        .joinToString("\\")
+                    connection.mkdirs(folderPath)
+
+                    val videoPath = "$folderPath\\${current.destinationFileName}"
+                    val nfoPath = videoPath.substringBeforeLast('.') + ".nfo"
+
+                    if (current.kind == MediaKind.MOVIE) {
+                        connection.openOutputStream(nfoPath).use { out ->
+                            nfoWriter.writeMovie(out, fetched.toMovieNfo())
+                        }
+                        writeImageIfAbsent(connection, folderPath, "poster.jpg", fetched.posterPath)
+                        writeImageIfAbsent(connection, folderPath, "fanart.jpg", fetched.backdropPath)
+                    } else {
+                        val season = current.seasonNumber.toIntOrNull() ?: 1
+                        val episode = current.episodeNumber.toIntOrNull() ?: 1
+                        connection.openOutputStream(nfoPath).use { out ->
+                            nfoWriter.writeEpisode(out, fetched.toEpisodeNfo(season, episode))
+                        }
+                        fetched.episodeStillPath?.let { still ->
+                            writeImageIfAbsent(connection, folderPath, "${current.destinationFileName.substringBeforeLast('.')}-thumb.jpg", still)
+                        }
+                        // Show-root sits one level above the "Сезон N" folder this episode's own folderPath points into.
+                        val showFolder = folderPath.substringBeforeLast('\\')
+                        val tvNfoPath = "$showFolder\\tvshow.nfo"
+                        if (!connection.fileExists(tvNfoPath)) {
+                            connection.openOutputStream(tvNfoPath).use { out ->
+                                nfoWriter.writeTvShow(out, fetched.toTvShowNfo())
+                            }
+                        }
+                        writeImageIfAbsent(connection, showFolder, "poster.jpg", fetched.posterPath)
+                        writeImageIfAbsent(connection, showFolder, "fanart.jpg", fetched.backdropPath)
+                    }
+                    videoPath
+                }
+            }
+
+            val videoPath = outcome.getOrNull()
+            if (videoPath == null) {
+                _state.update { it.copy(isPreparing = false, prepareError = outcome.exceptionOrNull()?.message ?: "Не удалось подготовить папку на NAS") }
+                return@launch
+            }
+
+            val workId = WorkScheduler.enqueueUpload(context, sourceId, videoUri.toString(), videoPath, current.pickedFileSize)
+            _state.update {
+                it.copy(
+                    isPreparing = false,
+                    step = AddMediaStep.UPLOADING,
+                    uploadWorkId = workId,
+                    uploadTotalBytes = current.pickedFileSize
+                )
+            }
+        }
+    }
+
+    fun onUploadProgress(uploaded: Long, total: Long) =
+        _state.update { it.copy(uploadedBytes = uploaded, uploadTotalBytes = total) }
+
+    fun onUploadFinished(success: Boolean, error: String?) =
+        _state.update { it.copy(step = if (success) AddMediaStep.DONE else it.step, uploadError = error) }
+
+    private suspend fun writeImageIfAbsent(
+        connection: com.seance.app.data.smb.SmbConnection,
+        folderPath: String,
+        fileName: String,
+        tmdbImagePath: String?
+    ) {
+        if (tmdbImagePath == null) return
+        val path = "$folderPath\\$fileName"
+        if (connection.fileExists(path)) return
+        val bytes = runCatching { tmdbClient.downloadImage(tmdbImagePath) }.getOrNull() ?: return
+        connection.openOutputStream(path).use { it.write(bytes) }
+    }
+
+    private fun queryNameAndSize(resolver: ContentResolver, uri: Uri): Pair<String?, Long> {
+        resolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME, OpenableColumns.SIZE), null, null, null)?.use { cursor ->
+            if (cursor.moveToFirst()) {
+                val nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                val sizeIndex = cursor.getColumnIndex(OpenableColumns.SIZE)
+                val name = if (nameIndex >= 0) cursor.getString(nameIndex) else null
+                val size = if (sizeIndex >= 0) cursor.getLong(sizeIndex) else 0L
+                return name to size
+            }
+        }
+        return null to 0L
+    }
+
+    private fun ContentResolver.takePersistableUriPermissionSafely(uri: Uri) {
+        runCatching { takePersistableUriPermission(uri, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION) }
+    }
+
+    private fun guessTitle(fileName: String): String =
+        fileName.substringBeforeLast('.')
+            .replace(Regex("[._]"), " ")
+            .replace(Regex("(?i)\\b(1080p|720p|2160p|4k|x264|x265|hevc|web-?dl|bluray|brrip|webrip)\\b"), "")
+            .replace(Regex("\\s+"), " ")
+            .trim()
+
+    private fun sanitize(name: String): String = name.replace(Regex("[\\\\/:*?\"<>|]"), "_").trim()
+
+    private fun Int.pad2(): String = toString().padStart(2, '0')
+
+    companion object {
+        private const val MAX_CAST = 15
+
+        fun factory(
+            sourceRepository: SmbSourceRepository,
+            smbClient: SmbClient,
+            tmdbClient: TmdbClient,
+            nfoWriter: NfoWriter
+        ) = viewModelFactory {
+            initializer { AddMediaViewModel(sourceRepository, smbClient, tmdbClient, nfoWriter) }
+        }
+    }
+}
+
+private fun FetchedMetadata.toMovieNfo() = NfoMetadata(
+    title = title,
+    originalTitle = originalTitle,
+    year = year,
+    genres = genres,
+    rating = rating,
+    plot = plot,
+    director = directors,
+    actors = cast,
+    studio = studio,
+    imdbId = imdbId,
+    tmdbId = tmdbId.toString()
+)
+
+private fun FetchedMetadata.toTvShowNfo() = NfoMetadata(
+    title = title,
+    originalTitle = originalTitle,
+    year = year,
+    genres = genres,
+    rating = rating,
+    plot = plot,
+    director = directors,
+    actors = cast,
+    studio = studio,
+    imdbId = imdbId,
+    tmdbId = tmdbId.toString()
+)
+
+private fun FetchedMetadata.toEpisodeNfo(season: Int, episode: Int) = NfoMetadata(
+    title = episodeTitle ?: title,
+    plot = episodePlot,
+    actors = cast,
+    director = directors,
+    season = season,
+    episode = episode,
+    tmdbId = tmdbId.toString()
+)

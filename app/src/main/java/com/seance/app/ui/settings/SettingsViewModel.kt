@@ -14,6 +14,7 @@ import com.seance.app.data.local.entity.SmbSourceEntity
 import com.seance.app.data.repository.DownloadRepository
 import com.seance.app.data.repository.SmbSourceRepository
 import com.seance.app.data.repository.ThumbnailRepository
+import com.seance.app.data.security.DevAccessStore
 import com.seance.app.data.settings.SettingsRepository
 import com.seance.app.domain.model.UiMode
 import com.seance.app.work.WorkScheduler
@@ -34,8 +35,12 @@ class SettingsViewModel(
     private val settingsRepository: SettingsRepository,
     private val thumbnailRepository: ThumbnailRepository,
     private val downloadRepository: DownloadRepository,
-    private val backupManager: BackupManager
+    private val backupManager: BackupManager,
+    private val devAccessStore: DevAccessStore
 ) : ViewModel() {
+    fun hasDevPassword(): Boolean = devAccessStore.hasPassword
+    fun generateDevPassword(): String = devAccessStore.generatePassword()
+    fun verifyDevPassword(password: String): Boolean = devAccessStore.verify(password)
     val sources: StateFlow<List<SmbSourceEntity>> = smbSourceRepository.observeSources()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
@@ -246,9 +251,10 @@ class SettingsViewModel(
             settingsRepository: SettingsRepository,
             thumbnailRepository: ThumbnailRepository,
             downloadRepository: DownloadRepository,
-            backupManager: BackupManager
+            backupManager: BackupManager,
+            devAccessStore: DevAccessStore
         ) = viewModelFactory {
-            initializer { SettingsViewModel(smbSourceRepository, settingsRepository, thumbnailRepository, downloadRepository, backupManager) }
+            initializer { SettingsViewModel(smbSourceRepository, settingsRepository, thumbnailRepository, downloadRepository, backupManager, devAccessStore) }
         }
     }
 }

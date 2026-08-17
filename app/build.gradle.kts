@@ -19,6 +19,11 @@ val ffmpegExtensionAar = localProperties.getProperty("seance.ffmpegExtension.aar
     ?.let { file(it) }
     ?.takeIf { it.exists() }
 
+// TMDB API key for the developer-only "add media" scraper (data/tmdb/TmdbClient.kt) - a free key
+// from https://www.themoviedb.org/settings/api, kept out of version control the same way as the
+// ffmpeg extension path above. Empty string if unset; TmdbClient treats that as "feature disabled."
+val tmdbApiKey = localProperties.getProperty("seance.tmdb.apiKey") ?: ""
+
 android {
     namespace = "com.seance.app"
     compileSdk {
@@ -32,10 +37,11 @@ android {
         // Bump versionCode with every build installed for testing, and versionName's alphaN
         // suffix when it's a meaningfully new build - lets Settings show which exact build is on
         // a device instead of guessing from install timestamps.
-        versionCode = 52
-        versionName = "0.1.0-alpha51"
+        versionCode = 53
+        versionName = "0.1.0-alpha52"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        buildConfigField("String", "TMDB_API_KEY", "\"$tmdbApiKey\"")
     }
 
     buildTypes {
@@ -97,6 +103,7 @@ dependencies {
 
     implementation(libs.smbj)
     implementation(libs.androidx.security.crypto)
+    implementation(libs.okhttp)
 
     ffmpegExtensionAar?.let { implementation(files(it)) }
 

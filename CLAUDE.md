@@ -7,12 +7,14 @@ Android media-center app (Kotlin, Jetpack Compose/Material3, `com.seance.app`, m
 MVVM, package-by-feature, **no DI framework** — `SeanceApplication.kt` manually wires all singletons. This is intentional (user prefers minimal abstraction, not an oversight).
 
 - `data/local` — Room: `SmbSourceEntity`, `MediaItemEntity`, `WatchProgressEntity`, `FavoriteEntity`, `ThumbnailSpriteEntity` + DAOs
-- `data/smb` — `SmbClient`/`SmbConnection` (wraps `smbj` 0.14.0), `SmbCredentialStore` (EncryptedSharedPreferences, never Room), `StableIdGenerator`
-- `data/nfo` — Kodi-style `.nfo` XML parser
+- `data/smb` — `SmbClient`/`SmbConnection` (wraps `smbj` 0.14.0), `SmbCredentialStore` (EncryptedSharedPreferences, never Room), `StableIdGenerator`. Read-only for scanning/playback; `SmbConnection.mkdirs`/`openOutputStream`/`openRandomAccessFileForWrite`/`deleteFile` exist solely for the developer-only add-media flow below.
+- `data/nfo` — Kodi-style `.nfo` XML parser (`NfoParser`) + writer (`NfoWriter`, developer-only add-media flow only)
+- `data/tmdb` — `TmdbClient` (developer-only add-media flow only - the only place this app calls the internet for metadata)
+- `data/security` — `DevAccessStore`, the password gate for the add-media flow
 - `data/player` — custom Media3 `SmbDataSource`/`SmbDataSourceFactory`, positional reads via `SmbRandomAccessFile` (no local download)
 - `data/scan` — `LibraryScanner`, `ThumbnailGenerator`, `SmbMediaDataSource`
-- `work` — WorkManager: `LibraryScanWorker`, `ThumbnailGenerationWorker`, `WorkScheduler`
-- `ui/*` — per-feature screens; `ui/player/*` is the most fully-built subsystem (gestures, gradient overlay, scrub thumbnails, PiP, GPU sharpen shader via Media3 Effects)
+- `work` — WorkManager: `LibraryScanWorker`, `ThumbnailGenerationWorker`, `WorkScheduler`, `UploadWorker` (developer-only add-media flow)
+- `ui/*` — per-feature screens; `ui/player/*` is the most fully-built subsystem (gestures, gradient overlay, scrub thumbnails, PiP, GPU sharpen shader via Media3 Effects); `ui/addmedia/*` is developer-only, see below
 
 ## Key decisions (don't relitigate without reason)
 
@@ -34,6 +36,13 @@ MVVM, package-by-feature, **no DI framework** — `SeanceApplication.kt` manuall
 **TV support**: manual Phone/TV mode toggle (Settings + onboarding), left-edge `NavigationRail` in TV mode (bottom `NavigationBar` was a confirmed D-pad dead end), D-pad focus (`ui/common/TvFocus.kt` `focusHighlight()`/`focusGroup()`) wired and on-device-verified across every screen (Home, Library, Search, Favorites, Details, Settings, Downloads, History, Player, onboarding/SMB forms, scan progress, cache screen). Poster grids/carousels size cards via `posterCardMinWidth()` (`ui/common/AdaptiveSizing.kt`), `LocalUiMode`-aware (176dp in TV mode vs 120dp on phone) rather than a fixed `GridCells.Adaptive` minSize — `GridCells.Adaptive` already recomputes column *count* for a wider screen on its own, the fix was card *size* for couch-distance viewing, not adding runtime `WindowSizeClass` detection (deliberately not used — see the manual-toggle-only note on `UiMode.kt`).
 
 **Intro skipping**: manual, not audio-fingerprint. Player's settings dialog (gear icon, series episodes only) has "mark end of intro" — tapping it at the current position writes `introStartMs=0`/`introEndMs=<position>` to every episode in that season at once (`LibraryRepository.markIntroEnd`), and a "reset" action once marked. True audio-fingerprint cross-episode auto-detection (decode + correlate, Jellyfin/Plex-style) is real DSP work, deliberately deferred - this is the interim stand-in, not a bug.
+
+**Developer-only "add media" scraper** (2026-08-17): lets the developer (only) pick a local video file, search TMDB, and write it straight onto the NAS in the same Kodi-style layout `LibraryScanner`/`NfoParser` already read — a manual rescan afterwards is what actually adds it to the library, this flow never touches Room directly. Deliberately hidden and gated, not exposed as a normal feature:
+- **Access**: 7 taps on the version string at the bottom of Settings. First-ever unlock generates a random password, shows it once, stores only its SHA-256 hash (`DevAccessStore`, mirrors `SmbCredentialStore`'s EncryptedSharedPreferences pattern) — every unlock after that requires typing it. Not real security (a decompiled APK could bypass the check) - just enough to keep it out of reach of anyone else using this install, per explicit design.
+- **TMDB**: only place this app ever calls the internet for metadata, and only at this one deliberate moment - never on scan/browse, matching the app's offline-first architecture. Needs a free API key from themoviedb.org in `local.properties` as `seance.tmdb.apiKey` (same pattern as `seance.ffmpegExtension.aarPath` - not committed, exposed via `BuildConfig.TMDB_API_KEY`). Without a key, `AddMediaScreen` shows a "not configured" message instead of the flow.
+- **Write path**: `SmbConnection` gained `mkdirs`/`openOutputStream`/`openRandomAccessFileForWrite`/`deleteFile` (verified against smbj's actual `DiskShare`/`File` class bytecode + GitHub source before writing, not guessed - `write(byte[], long fileOffset, int offset, int length)` mirrors the existing read-side positional API exactly). `NfoWriter` writes `<movie>`/`<tvshow>`/`<episodedetails>` XML with exactly the tags `NfoParser` reads back; poster/fanart are downloaded and written as real local `poster.jpg`/`fanart.jpg` files (never embedded as remote `<thumb>` URLs) so nothing needs a live fetch again after this one-time write.
+- **Upload**: `AddMediaViewModel` writes the (small) .nfo/images inline, then hands the video's own (potentially large/slow) byte copy to `UploadWorker` - mirrors `DownloadWorker`'s reconnect-and-resume approach but reversed (local read is reliable, the NAS write side is what can drop), observed by the UI directly via `WorkManager`'s own progress `Data`, no dedicated Room table (unlike `DownloadsScreen`'s queue).
+- **Not yet built / known limits**: no cross-app-restart resume for the upload (a killed app loses progress, would need to be re-added from scratch); destination folder path is manually typed/edited by the developer, not auto-inferred per source's actual category-folder convention (varies per NAS layout, out of scope); TV mode/D-pad focus not wired into `ui/addmedia/*` (phone-first, developer's own use).
 
 **Remaining real gaps**:
 1. Cast/DLNA not implemented (deliberate, see above — not a gap to close).

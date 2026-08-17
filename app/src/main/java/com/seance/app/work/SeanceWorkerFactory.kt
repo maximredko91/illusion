@@ -35,6 +35,8 @@ class SeanceWorkerFactory(
             PosterPreloadWorker(appContext, workerParameters, libraryRepository)
         DownloadWorker::class.java.name ->
             DownloadWorker(appContext, workerParameters, libraryRepository, smbSourceRepository, smbClient, downloadRepository, settingsRepository)
+        UploadWorker::class.java.name ->
+            UploadWorker(appContext, workerParameters, smbSourceRepository, smbClient)
         else -> null
     }
 }
