@@ -16,6 +16,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -42,6 +43,7 @@ fun HomeScreen(
     onOpenFavorites: () -> Unit,
     onOpenHistory: () -> Unit,
     onOpenDownloads: () -> Unit,
+    onOpenSearch: () -> Unit,
     onOpenItem: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -51,6 +53,10 @@ fun HomeScreen(
             TopAppBar(
                 title = { Text(stringResource(R.string.app_name)) },
                 actions = {
+                    val searchSource = remember { MutableInteractionSource() }
+                    IconButton(onClick = onOpenSearch, interactionSource = searchSource, modifier = Modifier.focusHighlight(searchSource)) {
+                        Icon(Icons.Default.Search, contentDescription = stringResource(R.string.nav_search))
+                    }
                     val favoritesSource = remember { MutableInteractionSource() }
                     IconButton(onClick = onOpenFavorites, interactionSource = favoritesSource, modifier = Modifier.focusHighlight(favoritesSource)) {
                         Icon(Icons.Default.Favorite, contentDescription = stringResource(R.string.favorites_title))

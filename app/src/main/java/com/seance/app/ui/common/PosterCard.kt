@@ -19,6 +19,7 @@ import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.SmartDisplay
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -56,6 +57,10 @@ fun PosterCard(
     val interactionSource = remember { MutableInteractionSource() }
 
     Card(
+        // A dozen-plus grid cards each casting their own shadow is real GPU compositing cost on
+        // the very first frame a screen full of them appears - flat cards render just as well in
+        // a grid where the poster image itself already provides all the visual separation needed.
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
         modifier = modifier
             .focusHighlight(interactionSource)
             .clickable(interactionSource = interactionSource, indication = LocalIndication.current) {

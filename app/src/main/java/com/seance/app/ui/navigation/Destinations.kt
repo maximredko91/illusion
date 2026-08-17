@@ -7,11 +7,16 @@ sealed interface Destination {
     @Serializable
     data object Splash : Destination
 
+    /**
+     * Hosts Home + all three Library categories as one NavHost entry, switching between them via
+     * local state (a Crossfade) instead of separate backstack entries - see the comment in
+     * SeanceNavHost.TabsHost for why: NavController's popUpTo+saveState+restoreState round trip
+     * (needed to preserve scroll position across tab visits) made Navigation Compose's
+     * AnimatedContent treat every tab switch as a full backstack replace, hard-cutting to a blank
+     * frame instead of running any transition.
+     */
     @Serializable
-    data object Home : Destination
-
-    @Serializable
-    data class Library(val category: Category) : Destination
+    data object Tabs : Destination
 
     @Serializable
     data object Search : Destination

@@ -5,6 +5,7 @@ import androidx.work.Configuration
 import coil3.ImageLoader
 import coil3.PlatformContext
 import coil3.SingletonImageLoader
+import coil3.request.crossfade
 import com.seance.app.data.backup.BackupManager
 import com.seance.app.data.image.PosterCacheSettings
 import com.seance.app.data.image.PosterCachePolicyInterceptor
@@ -102,5 +103,9 @@ class SeanceApplication : Application(), Configuration.Provider, SingletonImageL
                 add(SmbImageFetcher.Factory(smbImagePool))
                 add(PosterCachePolicyInterceptor())
             }
+            // Posters stream in one-by-one over SMB as each fetch completes, popping in with no
+            // transition of their own - a crossfade turns that into a soft fade instead of a hard
+            // "hlop", so a grid filling in at staggered times reads as intentional, not janky.
+            .crossfade(true)
             .build()
 }

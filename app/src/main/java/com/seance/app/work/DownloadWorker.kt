@@ -87,8 +87,10 @@ class DownloadWorker(
             // from here instead of re-downloading everything.
             failWith(stableId, videoUri, item.sizeBytes, e.message ?: "Ошибка загрузки")
         } catch (e: CancellationException) {
-            DownloadStorage.delete(applicationContext, videoUri)
-            downloadRepository.remove(stableId)
+            // Leave the partial file and its DB row alone - an explicit user cancel already deletes
+            // both via DownloadRepository.remove() (wired to the cancel button), and any other stop
+            // reason (lost network constraint, Doze/battery restrictions, a stray touch) should resume
+            // from here on the next attempt rather than restart from zero.
             Result.failure()
         }
     }

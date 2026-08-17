@@ -56,6 +56,10 @@ class SmbImageConnectionPool(
     }
 
     companion object {
-        private const val POOL_SIZE_PER_SOURCE = 3
+        // Grid screens request every visible poster's image at once in layout order (top-left to
+        // bottom-right) - too small a pool serializes them into a visible staggered/diagonal
+        // pop-in as each fetch finishes. 6 lets a full row or more load in parallel while still
+        // bounding how many concurrent SMB reads one screen can put on the NAS.
+        private const val POOL_SIZE_PER_SOURCE = 6
     }
 }

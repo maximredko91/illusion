@@ -19,6 +19,9 @@ class LibraryScanWorker(
         val totalIndexed = scanner.scanAll { progress -> setProgress(progress.toData()) }
         val requireCharging = settingsRepository.requireChargingForHeavyTasks.first()
         WorkScheduler.enqueueThumbnailGeneration(applicationContext, requireCharging)
+        if (settingsRepository.posterCachingEnabled.first()) {
+            WorkScheduler.enqueuePosterPreload(applicationContext, requireCharging)
+        }
         return Result.success(workDataOf(KEY_TOTAL_INDEXED to totalIndexed))
     }
 

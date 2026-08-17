@@ -81,22 +81,27 @@ class DetailsViewModel(
             val episodes = item.seriesStableId
                 ?.let { libraryRepository.observeEpisodes(it).first() }
                 ?: emptyList()
-            // One getAll() scan shared across every person on this item, rather than a separate
-            // getFilmography() library scan per name.
-            val allItems = libraryRepository.getAll()
-            val clickablePersons = (item.director + item.actors).distinct()
-                .filter { name -> allItems.count { name in it.actors || name in it.director } > 1 }
-                .toSet()
             _state.value = DetailsUiState(
                 item = item,
                 similar = similar,
                 collection = collection,
                 episodes = episodes,
-                clickablePersons = clickablePersons,
                 isLoading = false
             )
             loadAudioTracks(item)
+            loadClickablePersons(item)
         }
+    }
+
+    /** Which actors/directors have more than one title in the library - only these are worth opening a filmography for. A full-library scan, so it runs after the screen is already showing rather than gating [DetailsUiState.isLoading]. */
+    private suspend fun loadClickablePersons(item: MediaItemEntity) {
+        // One getAll() scan shared across every person on this item, rather than a separate
+        // getFilmography() library scan per name.
+        val allItems = libraryRepository.getAll()
+        val clickablePersons = (item.director + item.actors).distinct()
+            .filter { name -> allItems.count { name in it.actors || name in it.director } > 1 }
+            .toSet()
+        _state.update { it.copy(clickablePersons = clickablePersons) }
     }
 
     private suspend fun loadAudioTracks(item: MediaItemEntity) {

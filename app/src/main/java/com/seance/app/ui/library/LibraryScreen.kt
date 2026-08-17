@@ -1,6 +1,8 @@
 package com.seance.app.ui.library
 
+import androidx.compose.animation.Crossfade
 import androidx.compose.foundation.focusGroup
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -9,14 +11,16 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.CircularProgressIndicator
@@ -65,15 +69,19 @@ fun LibraryScreen(
     yearFilter: Int?,
     onYearFilterChange: (Int?) -> Unit,
     availableYears: List<Int>,
+    gridState: LazyGridState,
     onOpenItem: (String) -> Unit,
     onOpenSettings: () -> Unit,
     onOpenFavorites: () -> Unit,
     onOpenHistory: () -> Unit,
     onOpenDownloads: () -> Unit,
+    onOpenSearch: () -> Unit,
     onCategoryChange: (Category) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
-    val gridState = rememberLazyGridState()
+    // gridState is hoisted by the caller (one per category, kept alive across tab switches via a
+    // local Crossfade instead of Navigation Compose's saveState/restoreState) so scroll position
+    // survives switching away and back.
     // Only jump to the top when the user actively changes a filter/sort/category - never on
     // recomposition from returning via back navigation, which should restore where they were.
     // Scrolling immediately on click would race the new sort order's items arriving from Room
@@ -96,6 +104,10 @@ fun LibraryScreen(
             TopAppBar(
                 title = { Text(categoryTitle(category)) },
                 actions = {
+                    val searchSource = remember { MutableInteractionSource() }
+                    IconButton(onClick = onOpenSearch, interactionSource = searchSource, modifier = Modifier.focusHighlight(searchSource)) {
+                        Icon(Icons.Default.Search, contentDescription = stringResource(R.string.nav_search))
+                    }
                     val favoritesSource = remember { MutableInteractionSource() }
                     IconButton(onClick = onOpenFavorites, interactionSource = favoritesSource, modifier = Modifier.focusHighlight(favoritesSource)) {
                         Icon(Icons.Default.Favorite, contentDescription = stringResource(R.string.favorites_title))
@@ -131,7 +143,9 @@ fun LibraryScreen(
 
             Row(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp)
+                modifier = Modifier
+                    .horizontalScroll(rememberScrollState())
+                    .padding(horizontal = 8.dp, vertical = 8.dp)
             ) {
                 SortMenu(sortOrder, onSortOrderChange = { scrollToTop(); onSortOrderChange(it) })
                 if (availableGenres.isNotEmpty()) {
@@ -152,37 +166,42 @@ fun LibraryScreen(
                 }
             }
 
-            if (isLoading) {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator()
-                }
-            } else if (items.isEmpty()) {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text(
-                        stringResource(
-                            if (genreFilter != null || yearFilter != null) {
-                                R.string.library_empty_filtered
-                            } else {
-                                R.string.library_empty
-                            }
-                        ),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            } else {
-                LazyVerticalGrid(
-                    columns = GridCells.Adaptive(minSize = 120.dp),
-                    state = gridState,
-                    modifier = Modifier.fillMaxSize().focusGroup(),
-                    contentPadding = PaddingValues(8.dp)
-                ) {
-                    items(items, key = { it.stableId }) { item ->
-                        PosterCard(
-                            item = item,
-                            onClick = { onOpenItem(item.stableId) },
-                            modifier = Modifier.padding(4.dp),
-                            showRatingBadge = sortOrder == SortOrder.RATING
+            // Crossfades only the loading/empty/grid branch itself (keyed on that 3-way state, not
+            // on `items`) - Room's query is async even when fast, so switching to this tab a beat
+            // before the first emission lands would otherwise hard-cut from spinner to grid with no
+            // animation of its own once the (separately animated) tab-switch transition has already
+            // finished playing.
+            Crossfade(targetState = if (isLoading) 0 else if (items.isEmpty()) 1 else 2) { state ->
+                when (state) {
+                    0 -> Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator()
+                    }
+                    1 -> Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Text(
+                            stringResource(
+                                if (genreFilter != null || yearFilter != null) {
+                                    R.string.library_empty_filtered
+                                } else {
+                                    R.string.library_empty
+                                }
+                            ),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
+                    }
+                    else -> LazyVerticalGrid(
+                        columns = GridCells.Adaptive(minSize = 120.dp),
+                        state = gridState,
+                        modifier = Modifier.fillMaxSize().focusGroup(),
+                        contentPadding = PaddingValues(8.dp)
+                    ) {
+                        items(items, key = { it.stableId }) { item ->
+                            PosterCard(
+                                item = item,
+                                onClick = { onOpenItem(item.stableId) },
+                                modifier = Modifier.padding(4.dp),
+                                showRatingBadge = sortOrder == SortOrder.RATING
+                            )
+                        }
                     }
                 }
             }
