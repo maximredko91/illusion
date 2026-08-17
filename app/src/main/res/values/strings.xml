@@ -165,6 +165,10 @@
     <string name="player_subtitles_title">Субтитры</string>
     <string name="player_video_info_title">Информация о видео</string>
     <string name="player_sharpen_toggle">Повышение резкости (GPU)</string>
+    <string name="player_mark_intro_end">Отметить конец заставки</string>
+    <string name="player_mark_intro_end_hint">Применится ко всем сериям этого сезона</string>
+    <string name="player_intro_marked_at">Заставка отмечена: 0:00–%1$s</string>
+    <string name="player_clear_intro_markers">Сбросить</string>
     <string name="player_back">Назад</string>
     <string name="player_subtitles_button">Субтитры</string>
     <string name="player_audio_tracks_button">Аудиодорожка</string>

@@ -311,6 +311,10 @@ fun PlayerScreen(
             videoFormatSummary = viewModel.currentVideoFormatSummary(),
             sharpenEnabled = uiState.sharpenEnabled,
             onSharpenEnabledChange = viewModel::setSharpenEnabled,
+            canMarkIntro = uiState.canMarkIntro,
+            introMarkedEndMs = uiState.introMarkedEndMs,
+            onMarkIntroEnd = { viewModel.markIntroEnd(); showSpeedDialog = false },
+            onClearIntroMarkers = { viewModel.clearIntroMarkers(); showSpeedDialog = false },
             onSelect = { speed -> viewModel.setPlaybackSpeed(speed); showSpeedDialog = false },
             onDismiss = { showSpeedDialog = false }
         )

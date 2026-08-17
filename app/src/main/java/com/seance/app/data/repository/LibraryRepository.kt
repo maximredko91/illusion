@@ -77,4 +77,32 @@ class LibraryRepository(private val dao: MediaItemDao) {
     /** Everything a person appears in as an actor or director, for the filmography screen. */
     suspend fun getFilmography(personName: String): List<MediaItemEntity> =
         dao.getAll().filter { personName in it.actors || personName in it.director }
+
+    /**
+     * Manual stand-in for the audio-fingerprint auto-detection that isn't built yet: the user
+     * taps "mark end of intro" once, at the position where this episode's intro ends, and it's
+     * assumed to start at 0 and be identical across the season (true for the overwhelming
+     * majority of shows), so it's written to every episode in [item]'s season at once rather than
+     * just this one. Re-marking from a later episode simply overwrites the season's marker.
+     */
+    suspend fun markIntroEnd(item: MediaItemEntity, endMs: Long) {
+        val seriesId = item.seriesStableId
+        val season = item.seasonNumber
+        if (seriesId != null && season != null) {
+            dao.setIntroMarkersForSeason(seriesId, season, 0L, endMs)
+        } else {
+            dao.setIntroMarkers(item.stableId, 0L, endMs)
+        }
+    }
+
+    /** Undoes [markIntroEnd] - same single-item-vs-whole-season scoping. */
+    suspend fun clearIntroMarkers(item: MediaItemEntity) {
+        val seriesId = item.seriesStableId
+        val season = item.seasonNumber
+        if (seriesId != null && season != null) {
+            dao.clearIntroMarkersForSeason(seriesId, season)
+        } else {
+            dao.clearIntroMarkers(item.stableId)
+        }
+    }
 }

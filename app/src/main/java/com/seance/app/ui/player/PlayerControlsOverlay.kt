@@ -293,6 +293,10 @@ fun PlaybackSpeedDialog(
     videoFormatSummary: String,
     sharpenEnabled: Boolean,
     onSharpenEnabledChange: (Boolean) -> Unit,
+    canMarkIntro: Boolean,
+    introMarkedEndMs: Long?,
+    onMarkIntroEnd: () -> Unit,
+    onClearIntroMarkers: () -> Unit,
     onSelect: (Float) -> Unit,
     onDismiss: () -> Unit
 ) {
@@ -337,6 +341,29 @@ fun PlaybackSpeedDialog(
                         onCheckedChange = { enabled ->
                             if (enabled) showEnableWarning = true else onSharpenEnabledChange(false)
                         }
+                    )
+                }
+                if (canMarkIntro) {
+                    androidx.compose.material3.HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                    if (introMarkedEndMs != null) {
+                        Text(
+                            stringResource(R.string.player_intro_marked_at, formatTime(introMarkedEndMs)),
+                            style = androidx.compose.material3.MaterialTheme.typography.bodySmall
+                        )
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        TextButton(onClick = onMarkIntroEnd) {
+                            Text(stringResource(R.string.player_mark_intro_end))
+                        }
+                        if (introMarkedEndMs != null) {
+                            TextButton(onClick = onClearIntroMarkers) {
+                                Text(stringResource(R.string.player_clear_intro_markers))
+                            }
+                        }
+                    }
+                    Text(
+                        stringResource(R.string.player_mark_intro_end_hint),
+                        style = androidx.compose.material3.MaterialTheme.typography.bodySmall
                     )
                 }
                 androidx.compose.material3.HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))

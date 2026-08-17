@@ -74,6 +74,10 @@ data class PlayerUiState(
     val subtitlesEnabled: Boolean = true,
     val hasNextEpisode: Boolean = false,
     val showSkipIntro: Boolean = false,
+    /** Whether "mark end of intro" makes sense for the current item - only for series episodes, where the marker also propagates to the rest of the season. */
+    val canMarkIntro: Boolean = false,
+    /** Non-null when this episode/season already has an intro marker, so the settings dialog can show it and offer to clear it instead of only offering to (re-)mark it. */
+    val introMarkedEndMs: Long? = null,
     val playbackSpeed: Float = 1f,
     val thumbnailFrames: ThumbnailFrames? = null,
     val videoAspectRatio: Float = 16f / 9f,
@@ -234,7 +238,9 @@ class PlayerViewModel(
                     episodeLabel = episodeLabel,
                     subtitlesEnabled = it.subtitlesEnabled,
                     sharpenEnabled = it.sharpenEnabled,
-                    seekDurationMs = it.seekDurationMs
+                    seekDurationMs = it.seekDurationMs,
+                    canMarkIntro = item.seriesStableId != null && item.seasonNumber != null,
+                    introMarkedEndMs = item.introEndMs
                 )
             }
 
@@ -340,6 +346,33 @@ class PlayerViewModel(
 
     fun skipIntro() {
         currentItem?.introEndMs?.let { seekTo(it) }
+    }
+
+    /**
+     * Manual stand-in for audio-fingerprint auto-detection (not built yet - see
+     * LibraryRepository.markIntroEnd): the user taps this at the moment the intro actually ends,
+     * marking 0..currentPosition as the intro for this episode and, via the repository, every
+     * other episode in the same season. Updates [currentItem] in memory too so the skip-intro
+     * banner can react without waiting for a reload.
+     */
+    fun markIntroEnd() {
+        val item = currentItem ?: return
+        val positionMs = player.currentPosition.coerceAtLeast(0)
+        currentItem = item.copy(introStartMs = 0L, introEndMs = positionMs)
+        _state.update { it.copy(introMarkedEndMs = positionMs) }
+        viewModelScope.launch {
+            libraryRepository.markIntroEnd(item, positionMs)
+        }
+    }
+
+    /** Undoes [markIntroEnd] for the whole season, in case it was marked at the wrong spot. */
+    fun clearIntroMarkers() {
+        val item = currentItem ?: return
+        currentItem = item.copy(introStartMs = null, introEndMs = null)
+        _state.update { it.copy(introMarkedEndMs = null, showSkipIntro = false) }
+        viewModelScope.launch {
+            libraryRepository.clearIntroMarkers(item)
+        }
     }
 
     fun setPlaybackSpeed(speed: Float) {

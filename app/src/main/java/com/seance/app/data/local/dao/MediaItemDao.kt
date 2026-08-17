@@ -61,4 +61,16 @@ interface MediaItemDao {
 
     @Query("SELECT * FROM media_items WHERE stableId NOT IN (SELECT mediaItemStableId FROM thumbnail_sprites)")
     suspend fun getItemsWithoutThumbnails(): List<MediaItemEntity>
+
+    @Query("UPDATE media_items SET introStartMs = :startMs, introEndMs = :endMs WHERE stableId = :stableId")
+    suspend fun setIntroMarkers(stableId: String, startMs: Long, endMs: Long)
+
+    @Query("UPDATE media_items SET introStartMs = :startMs, introEndMs = :endMs WHERE seriesStableId = :seriesStableId AND seasonNumber = :seasonNumber")
+    suspend fun setIntroMarkersForSeason(seriesStableId: String, seasonNumber: Int, startMs: Long, endMs: Long)
+
+    @Query("UPDATE media_items SET introStartMs = NULL, introEndMs = NULL WHERE stableId = :stableId")
+    suspend fun clearIntroMarkers(stableId: String)
+
+    @Query("UPDATE media_items SET introStartMs = NULL, introEndMs = NULL WHERE seriesStableId = :seriesStableId AND seasonNumber = :seasonNumber")
+    suspend fun clearIntroMarkersForSeason(seriesStableId: String, seasonNumber: Int)
 }
