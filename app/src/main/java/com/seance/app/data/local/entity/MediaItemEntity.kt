@@ -1,10 +1,22 @@
 package com.seance.app.data.local.entity
 
 import androidx.room.Entity
+import androidx.room.Index
 import androidx.room.PrimaryKey
 import com.seance.app.domain.model.Category
 
-@Entity(tableName = "media_items")
+// Indices match MediaItemDao's actual WHERE clauses (observeByCategory, observeSeriesGroupedByCategory,
+// observeByCollection, connectionInfoById-adjacent sourceId lookups) - added after the schema had been
+// running full-table scans on a 3000+ row table since the first commit (see CLAUDE.md polish backlog).
+@Entity(
+    tableName = "media_items",
+    indices = [
+        Index("category"),
+        Index("seriesStableId"),
+        Index("collectionName"),
+        Index("sourceId")
+    ]
+)
 data class MediaItemEntity(
     @PrimaryKey val stableId: String,
     val sourceId: Long,
@@ -28,7 +40,6 @@ data class MediaItemEntity(
     val seasonNumber: Int?,
     val episodeNumber: Int?,
     val seriesStableId: String?,
-    val hasNfo: Boolean,
     val dateAdded: Long,
     val sizeBytes: Long,
     val subtitlePaths: List<String>,

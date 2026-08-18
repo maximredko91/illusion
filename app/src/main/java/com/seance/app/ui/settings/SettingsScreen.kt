@@ -102,6 +102,7 @@ fun SettingsScreen(
     onAddSource: () -> Unit,
     onEditSource: (SmbSourceEntity) -> Unit,
     onDeleteSource: (SmbSourceEntity) -> Unit,
+    onResetToDefaults: () -> Unit,
     hasDevPassword: () -> Boolean,
     onGenerateDevPassword: () -> String,
     onVerifyDevPassword: (String) -> Boolean,
@@ -509,6 +510,44 @@ fun SettingsScreen(
                         }
                     }
                 }
+            }
+
+            var showResetConfirm by remember { mutableStateOf(false) }
+            SettingsGroupLabel(stringResource(R.string.settings_reset_section))
+            SettingsGroup(modifier = Modifier.padding(bottom = 24.dp)) {
+                ListItem(
+                    headlineContent = { Text(stringResource(R.string.settings_reset_to_defaults)) },
+                    supportingContent = { Text(stringResource(R.string.settings_reset_to_defaults_description)) },
+                    trailingContent = {
+                        val resetSource = remember { MutableInteractionSource() }
+                        OutlinedButton(
+                            onClick = { showResetConfirm = true },
+                            interactionSource = resetSource,
+                            modifier = Modifier.focusHighlight(resetSource)
+                        ) {
+                            Text(stringResource(R.string.settings_reset_to_defaults_action))
+                        }
+                    },
+                    colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+            if (showResetConfirm) {
+                AlertDialog(
+                    onDismissRequest = { showResetConfirm = false },
+                    title = { Text(stringResource(R.string.settings_reset_to_defaults)) },
+                    text = { Text(stringResource(R.string.settings_reset_to_defaults_confirm)) },
+                    confirmButton = {
+                        TextButton(onClick = {
+                            haptics.reject()
+                            onResetToDefaults()
+                            showResetConfirm = false
+                        }) { Text(stringResource(R.string.settings_reset_to_defaults_action)) }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showResetConfirm = false }) { Text(stringResource(R.string.action_cancel)) }
+                    }
+                )
             }
 
             Text(

@@ -16,6 +16,20 @@ interface MediaItemDao {
     @Query("SELECT * FROM media_items WHERE stableId = :stableId")
     suspend fun getById(stableId: String): MediaItemEntity?
 
+    // actors/director are stored as a JSON string array (Converters.fromStringList) - matching
+    // against a quoted name (`"Name"`) avoids a false positive on a name that's merely a substring
+    // of another (e.g. "Anna" inside "Anna-Maria"). Filters at the DB level instead of pulling
+    // every row into memory to filter in Kotlin (previously LibraryRepository.getFilmography did
+    // a full getAll() scan, redundant with the one DetailsViewModel already does for the same item
+    // just to compute which names are worth linking).
+    @Query(
+        """
+        SELECT * FROM media_items
+        WHERE actors LIKE '%"' || :name || '"%' OR director LIKE '%"' || :name || '"%'
+        """
+    )
+    suspend fun getFilmography(name: String): List<MediaItemEntity>
+
     @Query(
         """
         SELECT * FROM media_items WHERE category = :category

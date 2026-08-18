@@ -264,29 +264,29 @@ class SmbClient {
         }
     }
 
-    private fun mapConnectionError(e: Throwable): Exception = when (e) {
-        is TimeoutCancellationException, is SocketTimeoutException ->
-            Exception("Не удалось подключиться: сервер не отвечает (проверьте адрес и что телефон в той же сети)")
-        is java.net.UnknownHostException ->
-            Exception("Не удалось найти хост \"${e.message}\" - проверьте адрес сервера")
-        is java.net.ConnectException ->
-            Exception("Соединение отклонено - проверьте адрес и порт SMB (445)")
-        else -> {
-            val message = e.message ?: e::class.simpleName ?: "неизвестная ошибка"
-            if (message.contains("STATUS_LOGON_FAILURE", ignoreCase = true) ||
-                message.contains("STATUS_ACCESS_DENIED", ignoreCase = true)
-            ) {
-                Exception("Неверный логин или пароль")
-            } else if (message.contains("STATUS_BAD_NETWORK_NAME", ignoreCase = true)) {
-                Exception("Шара с таким именем не найдена на сервере")
-            } else {
-                Exception("Не удалось подключиться: $message")
-            }
-        }
-    }
+    private fun mapConnectionError(e: Throwable): Exception = Exception(classifySmbError(e))
 
     companion object {
         private const val TAG = "SmbClient"
         private const val CONNECTION_TIMEOUT_SECONDS = 10L
+    }
+}
+
+/** Shared by [SmbClient.testConnection]'s error dialog and [com.seance.app.data.scan.LibraryScanner]'s per-source scan-failure reporting - one place classifying the same handful of SMB failure shapes into a Russian message the user can act on. */
+fun classifySmbError(e: Throwable): String = when (e) {
+    is TimeoutCancellationException, is SocketTimeoutException ->
+        "Не удалось подключиться: сервер не отвечает (проверьте адрес и что телефон в той же сети)"
+    is java.net.UnknownHostException ->
+        "Не удалось найти хост \"${e.message}\" - проверьте адрес сервера"
+    is java.net.ConnectException ->
+        "Соединение отклонено - проверьте адрес и порт SMB (445)"
+    else -> {
+        val message = e.message ?: e::class.simpleName ?: "неизвестная ошибка"
+        when {
+            message.contains("STATUS_LOGON_FAILURE", ignoreCase = true) ||
+                message.contains("STATUS_ACCESS_DENIED", ignoreCase = true) -> "Неверный логин или пароль"
+            message.contains("STATUS_BAD_NETWORK_NAME", ignoreCase = true) -> "Шара с таким именем не найдена на сервере"
+            else -> "Не удалось подключиться: $message"
+        }
     }
 }

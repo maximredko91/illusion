@@ -12,6 +12,7 @@ import com.seance.app.data.smb.SmbConnectionInfo
 import com.seance.app.data.smb.SmbFileRef
 import com.seance.app.data.smb.StableIdGenerator
 import com.seance.app.data.smb.baseName
+import com.seance.app.data.smb.classifySmbError
 import com.seance.app.data.smb.isImage
 import com.seance.app.data.smb.isSubtitle
 import com.seance.app.data.smb.isTrailer
@@ -35,18 +36,32 @@ import kotlinx.coroutines.withContext
  * trip each), so both fan out across a small pool of connections instead of going one request at
  * a time - a share with thousands of files/folders was otherwise the slow, silent part of a scan.
  */
+data class ScanResult(val totalIndexed: Int, val sourceErrors: List<SourceScanError>)
+data class SourceScanError(val sourceName: String, val message: String)
+
 class LibraryScanner(
     private val sourceRepository: SmbSourceRepository,
     private val libraryRepository: LibraryRepository,
     private val smbClient: SmbClient,
     private val nfoParser: NfoParser
 ) {
-    /** Returns the total number of video files indexed across all sources, for a completion summary. */
-    suspend fun scanAll(onProgress: suspend (ScanProgress) -> Unit = {}): Int = withContext(Dispatchers.IO) {
+    /**
+     * Scans every enabled source, tolerating a single source being unreachable (bad
+     * credentials, network down, ...) rather than aborting the whole scan - the other sources
+     * still get indexed. Previously each source's failure was silently swallowed
+     * (`runCatching { }.getOrDefault(0)`) with no trace of what happened or which source;
+     * now it's classified via [classifySmbError] (the same mapping [SmbClient.testConnection]
+     * uses) and returned so the caller can surface it instead of a generic "scan failed".
+     */
+    suspend fun scanAll(onProgress: suspend (ScanProgress) -> Unit = {}): ScanResult = withContext(Dispatchers.IO) {
         val sources = sourceRepository.getEnabledSources()
-        sources.foldIndexed(0) { index, total, source ->
-            total + (runCatching { scanSource(source, index, sources.size, onProgress) }.getOrDefault(0))
+        val errors = mutableListOf<SourceScanError>()
+        val total = sources.foldIndexed(0) { index, sum, source ->
+            val outcome = runCatching { scanSource(source, index, sources.size, onProgress) }
+            outcome.exceptionOrNull()?.let { errors += SourceScanError(source.displayName, classifySmbError(it)) }
+            sum + outcome.getOrDefault(0)
         }
+        ScanResult(totalIndexed = total, sourceErrors = errors)
     }
 
     private suspend fun scanSource(
@@ -318,7 +333,6 @@ class LibraryScanner(
             seasonNumber = metadata?.season,
             episodeNumber = metadata?.episode,
             seriesStableId = seriesStableId,
-            hasNfo = metadata != null,
             dateAdded = previous?.dateAdded ?: System.currentTimeMillis(),
             sizeBytes = file.sizeBytes,
             subtitlePaths = subtitlePaths,

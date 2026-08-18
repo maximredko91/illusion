@@ -65,6 +65,10 @@ class SettingsViewModel(
         viewModelScope.launch { settingsRepository.setHapticsEnabled(enabled) }
     }
 
+    fun resetToDefaults() {
+        viewModelScope.launch { settingsRepository.resetToDefaults() }
+    }
+
     private val _cacheSizeBytes = MutableStateFlow<Long?>(null)
     val cacheSizeBytes: StateFlow<Long?> = _cacheSizeBytes.asStateFlow()
 

@@ -76,7 +76,7 @@ class LibraryRepository(private val dao: MediaItemDao) {
 
     /** Everything a person appears in as an actor or director, for the filmography screen. */
     suspend fun getFilmography(personName: String): List<MediaItemEntity> =
-        dao.getAll().filter { personName in it.actors || personName in it.director }
+        dao.getFilmography(personName)
 
     /**
      * Manual stand-in for the audio-fingerprint auto-detection that isn't built yet: the user

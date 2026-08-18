@@ -114,6 +114,11 @@
     <string name="settings_haptics_description">Тактильный отклик на нажатия и переключатели</string>
     <string name="settings_library_section">Библиотека</string>
     <string name="settings_default_sort_order">Сортировка по умолчанию</string>
+    <string name="settings_reset_section">Сброс</string>
+    <string name="settings_reset_to_defaults">Сбросить настройки</string>
+    <string name="settings_reset_to_defaults_description">Вернёт все настройки к значениям по умолчанию</string>
+    <string name="settings_reset_to_defaults_action">Сбросить</string>
+    <string name="settings_reset_to_defaults_confirm">Источники SMB и медиатека не тронутся — сбросятся только настройки интерфейса и плеера. Продолжить?</string>
     <string name="onboarding_smb_address">Адрес сервера (хост)</string>
     <string name="onboarding_smb_address_help">Только IP или имя устройства в локальной сети, например 192.168.2.1 — без \\\\ и без имени папки</string>
     <string name="onboarding_display_name">Название источника</string>
@@ -144,6 +149,7 @@
     <string name="scan_progress_done">Готово</string>
     <string name="scan_progress_done_count">Готово! Найдено видео: %1$d</string>
     <string name="scan_progress_failed">Не удалось выполнить сканирование. Проверьте соединение с источником в настройках</string>
+    <string name="scan_progress_partial_error">Не всё удалось просканировать: %1$s</string>
     <string name="scan_progress_continue">Продолжить</string>
 
     <string name="settings_add_source">Добавить источник</string>

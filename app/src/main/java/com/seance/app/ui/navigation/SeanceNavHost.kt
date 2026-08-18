@@ -382,6 +382,7 @@ private fun SeanceNavGraph(app: SeanceApplication, navController: NavHostControl
                     onAddSource = { navController.navigate(Destination.AddSmbSource) },
                     onEditSource = { source -> navController.navigate(Destination.EditSmbSource(source.id)) },
                     onDeleteSource = { source -> settingsViewModel.deleteSource(source) },
+                    onResetToDefaults = { settingsViewModel.resetToDefaults() },
                     hasDevPassword = settingsViewModel::hasDevPassword,
                     onGenerateDevPassword = settingsViewModel::generateDevPassword,
                     onVerifyDevPassword = settingsViewModel::verifyDevPassword,

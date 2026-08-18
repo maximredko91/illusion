@@ -100,4 +100,9 @@ class SettingsRepository(private val context: Context) {
     suspend fun setHapticsEnabled(value: Boolean) {
         context.dataStore.edit { it[Keys.HAPTICS_ENABLED] = value }
     }
+
+    /** Clears every preference here (sort order, haptics, seek duration, sharpen, poster caching, rescan interval, charging requirement, downloads folder, UI mode) back to its default - does not touch SMB sources or the library index, only this DataStore. */
+    suspend fun resetToDefaults() {
+        context.dataStore.edit { it.clear() }
+    }
 }

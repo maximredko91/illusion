@@ -109,6 +109,12 @@ fun ScanProgressScreen(
                         stringResource(R.string.scan_progress_done_count, total),
                         modifier = Modifier.padding(top = 8.dp)
                     )
+                    workInfo?.outputData?.getString(LibraryScanWorker.KEY_PARTIAL_ERROR)?.let { partialError ->
+                        Text(
+                            stringResource(R.string.scan_progress_partial_error, partialError),
+                            modifier = Modifier.padding(top = 4.dp)
+                        )
+                    }
                     val continueSource = remember { MutableInteractionSource() }
                     Button(
                         onClick = onComplete,
@@ -119,8 +125,9 @@ fun ScanProgressScreen(
                     }
                 }
                 ScanPhase.FAILED -> {
+                    val errorMessage = workInfo?.outputData?.getString(LibraryScanWorker.KEY_ERROR)
                     Text(
-                        stringResource(R.string.scan_progress_failed),
+                        errorMessage ?: stringResource(R.string.scan_progress_failed),
                         modifier = Modifier.padding(top = 8.dp)
                     )
                     val continueSource = remember { MutableInteractionSource() }
