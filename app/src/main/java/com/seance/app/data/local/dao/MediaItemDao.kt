@@ -4,6 +4,8 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.RawQuery
+import androidx.sqlite.db.SupportSQLiteQuery
 import com.seance.app.data.local.entity.MediaItemEntity
 import com.seance.app.domain.model.Category
 import kotlinx.coroutines.flow.Flow
@@ -72,6 +74,20 @@ interface MediaItemDao {
 
     @Query("SELECT * FROM media_items WHERE category = :category")
     suspend fun getByCategory(category: Category): List<MediaItemEntity>
+
+    /**
+     * Same rows [getByCategory] would return, further narrowed at the SQL level to only those
+     * sharing at least one genre with the caller's dynamic OR list (built by
+     * [com.seance.app.data.repository.LibraryRepository.getSimilar]) - candidates sharing zero
+     * genres never get materialized into a full [MediaItemEntity] at all, which is the expensive
+     * part (JSON-decoding every TEXT column), not the WHERE clause itself. The precise "shares >=
+     * N genres, ranked by rating" scoring still happens in Kotlin on this smaller candidate set -
+     * genres being a JSON-array TEXT column (not a normalized join table) makes expressing that
+     * exact threshold in SQL alone (e.g. via json_each) a bigger schema change than this narrowing
+     * pass costs, for a "similar titles" list that's inherently fuzzy anyway.
+     */
+    @RawQuery
+    suspend fun getByCategoryMatchingAnyGenre(query: SupportSQLiteQuery): List<MediaItemEntity>
 
     @Query("SELECT * FROM media_items")
     suspend fun getAll(): List<MediaItemEntity>

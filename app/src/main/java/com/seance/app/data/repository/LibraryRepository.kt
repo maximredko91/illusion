@@ -1,5 +1,6 @@
 package com.seance.app.data.repository
 
+import androidx.sqlite.db.SimpleSQLiteQuery
 import com.seance.app.data.local.dao.MediaItemDao
 import com.seance.app.data.local.entity.MediaItemEntity
 import com.seance.app.domain.model.Category
@@ -54,7 +55,15 @@ class LibraryRepository(private val dao: MediaItemDao) {
     suspend fun getSimilar(item: MediaItemEntity, limit: Int = 12): List<MediaItemEntity> {
         if (item.genres.isEmpty()) return emptyList()
         val minShared = minOf(2, item.genres.size)
-        return dao.getByCategory(item.category)
+        // Narrows to "shares at least one genre" at the SQL level before the precise
+        // shares->=minShared scoring below - see getByCategoryMatchingAnyGenre's KDoc for why the
+        // exact threshold itself still lives in Kotlin.
+        val genreClauses = item.genres.joinToString(" OR ") { "genres LIKE ?" }
+        val args: Array<Any> = (listOf(item.category.name) + item.genres.map { "%\"$it\"%" }).toTypedArray()
+        val candidates = dao.getByCategoryMatchingAnyGenre(
+            SimpleSQLiteQuery("SELECT * FROM media_items WHERE category = ? AND ($genreClauses)", args)
+        )
+        return candidates
             .asSequence()
             .filter { it.stableId != item.stableId }
             .filter { item.seriesStableId == null || it.seriesStableId != item.seriesStableId }
