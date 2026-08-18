@@ -46,7 +46,14 @@ private const val DOUBLE_TAP_SCALE = 2.5f
 fun ZoomableImageViewer(model: Any, contentDescription: String?, onDismiss: () -> Unit) {
     Dialog(
         onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false)
+        // decorFitsSystemWindows defaults to true, which gives this dialog its own separate,
+        // non-edge-to-edge window - the Activity's enableEdgeToEdge() only applies to the main
+        // window, not to a Dialog's. With the default, this dialog's own black background never
+        // reaches the true status bar area, so the transparent system status bar shows whatever's
+        // in the Activity window behind it (the Details screen's fanart) instead of this dialog's
+        // black backdrop. False here (paired with usePlatformDefaultWidth=false, per this
+        // property's own KDoc recommendation) makes the dialog genuinely edge-to-edge too.
+        properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)
     ) {
         var scale by remember { mutableFloatStateOf(MIN_SCALE) }
         var offset by remember { mutableStateOf(Offset.Zero) }

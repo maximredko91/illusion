@@ -41,6 +41,9 @@ class SettingsViewModel(
     fun hasDevPassword(): Boolean = devAccessStore.hasPassword
     fun generateDevPassword(): String = devAccessStore.generatePassword()
     fun verifyDevPassword(password: String): Boolean = devAccessStore.verify(password)
+    fun isDevAccessRemembered(): Boolean = devAccessStore.isRemembered
+    fun rememberDevAccess() { devAccessStore.isRemembered = true }
+    fun forgetDevAccess() { devAccessStore.isRemembered = false }
     val sources: StateFlow<List<SmbSourceEntity>> = smbSourceRepository.observeSources()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 

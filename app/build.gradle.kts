@@ -24,6 +24,12 @@ val ffmpegExtensionAar = localProperties.getProperty("seance.ffmpegExtension.aar
 // ffmpeg extension path above. Empty string if unset; TmdbClient treats that as "feature disabled."
 val tmdbApiKey = localProperties.getProperty("seance.tmdb.apiKey") ?: ""
 
+// Fixed developer password for the "add media" gate (data/security/DevAccessStore.kt) - kept out
+// of version control the same way as the keys above, so it survives an app uninstall/data-clear
+// (the in-app-generated password does not, since it lives in this install's EncryptedSharedPreferences).
+// Empty string if unset; DevAccessStore falls back to its normal generate-and-show-once behavior.
+val devAccessPassword = localProperties.getProperty("seance.devAccess.password") ?: ""
+
 android {
     namespace = "com.seance.app"
     compileSdk {
@@ -37,11 +43,12 @@ android {
         // Bump versionCode with every build installed for testing, and versionName's alphaN
         // suffix when it's a meaningfully new build - lets Settings show which exact build is on
         // a device instead of guessing from install timestamps.
-        versionCode = 55
-        versionName = "0.1.0-alpha54"
+        versionCode = 56
+        versionName = "0.1.0-alpha55"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("String", "TMDB_API_KEY", "\"$tmdbApiKey\"")
+        buildConfigField("String", "DEV_ACCESS_PASSWORD", "\"$devAccessPassword\"")
     }
 
     buildTypes {

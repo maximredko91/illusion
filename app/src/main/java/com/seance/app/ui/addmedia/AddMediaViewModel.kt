@@ -21,11 +21,13 @@ import com.seance.app.data.tmdb.TmdbSearchResult
 import com.seance.app.work.UploadWorker
 import com.seance.app.work.WorkScheduler
 import java.util.UUID
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 enum class MediaKind { MOVIE, TV_EPISODE }
 
@@ -38,10 +40,15 @@ data class AddMediaUiState(
     val tmdbKeyInput: String = "",
     val sources: List<SmbSourceEntity> = emptyList(),
     val selectedSourceId: Long? = null,
+    val isLoadingFreeSpace: Boolean = false,
+    val freeSpaceBytes: Long? = null,
+    val freeSpaceError: String? = null,
     val kind: MediaKind = MediaKind.MOVIE,
     val pickedFileUri: Uri? = null,
     val pickedFileName: String? = null,
     val pickedFileSize: Long = 0L,
+    val pickedSubtitleUri: Uri? = null,
+    val pickedSubtitleName: String? = null,
     val showTitleInput: String = "",
     val seasonNumber: String = "1",
     val episodeNumber: String = "1",
@@ -120,7 +127,31 @@ class AddMediaViewModel(
     init {
         viewModelScope.launch {
             val sources = sourceRepository.getEnabledSources()
-            _state.update { it.copy(sources = sources, selectedSourceId = sources.firstOrNull()?.id) }
+            val selected = sources.firstOrNull()?.id
+            _state.update { it.copy(sources = sources, selectedSourceId = selected) }
+            if (selected != null) refreshFreeSpace(selected)
+        }
+    }
+
+    private fun refreshFreeSpace(sourceId: Long) {
+        viewModelScope.launch {
+            _state.update { it.copy(isLoadingFreeSpace = true, freeSpaceError = null) }
+            val outcome = runCatching {
+                withContext(Dispatchers.IO) {
+                    val info = sourceRepository.connectionInfoById(sourceId) ?: error("Источник SMB недоступен")
+                    smbClient.connect(info).use { it.freeSpaceBytes() }
+                }
+            }
+            // Stale response from a source the user already switched away from - drop it rather
+            // than overwriting the (possibly already-loaded) figure for the now-selected source.
+            if (_state.value.selectedSourceId != sourceId) return@launch
+            _state.update {
+                it.copy(
+                    isLoadingFreeSpace = false,
+                    freeSpaceBytes = outcome.getOrNull(),
+                    freeSpaceError = outcome.exceptionOrNull()?.message
+                )
+            }
         }
     }
 
@@ -136,7 +167,10 @@ class AddMediaViewModel(
         _state.update { it.copy(isTmdbConfigured = tmdbClient.isConfigured, showTmdbKeyEditor = false, tmdbKeyInput = "") }
     }
 
-    fun selectSource(sourceId: Long) = _state.update { it.copy(selectedSourceId = sourceId) }
+    fun selectSource(sourceId: Long) {
+        _state.update { it.copy(selectedSourceId = sourceId, freeSpaceBytes = null, freeSpaceError = null) }
+        refreshFreeSpace(sourceId)
+    }
 
     fun selectKind(kind: MediaKind) = _state.update { it.copy(kind = kind) }
 
@@ -161,6 +195,14 @@ class AddMediaViewModel(
             )
         }
     }
+
+    fun pickSubtitle(context: Context, uri: Uri) {
+        context.contentResolver.takePersistableUriPermissionSafely(uri)
+        val (name, _) = queryNameAndSize(context.contentResolver, uri)
+        _state.update { it.copy(pickedSubtitleUri = uri, pickedSubtitleName = name) }
+    }
+
+    fun clearSubtitle() = _state.update { it.copy(pickedSubtitleUri = null, pickedSubtitleName = null) }
 
     fun goToSearch() {
         val current = _state.value
@@ -330,6 +372,7 @@ class AddMediaViewModel(
         viewModelScope.launch {
             _state.update { it.copy(isPreparing = true, prepareError = null) }
             val outcome = runCatching {
+                withContext(Dispatchers.IO) {
                 val info = sourceRepository.connectionInfoById(sourceId)
                     ?: error("Источник SMB недоступен")
                 smbClient.connect(info).use { connection ->
@@ -368,7 +411,21 @@ class AddMediaViewModel(
                         writeImageIfAbsent(connection, showFolder, "poster.jpg", fetched.posterPath)
                         writeImageIfAbsent(connection, showFolder, "fanart.jpg", fetched.backdropPath)
                     }
+
+                    // Named as "<video base name>.<ext>" (e.g. "Interstellar (2014).srt") so
+                    // LibraryScanner's sibling-subtitle match (same folder, name starts with the
+                    // video's base name) picks it up on the next rescan - same as any subtitle
+                    // dropped next to a video by hand.
+                    current.pickedSubtitleUri?.let { subtitleUri ->
+                        val extension = current.pickedSubtitleName?.substringAfterLast('.', "srt")?.takeIf { it.isNotBlank() } ?: "srt"
+                        val subtitlePath = "${videoPath.substringBeforeLast('.')}.$extension"
+                        context.contentResolver.openInputStream(subtitleUri)?.use { input ->
+                            connection.openOutputStream(subtitlePath).use { out -> input.copyTo(out) }
+                        }
+                    }
+
                     videoPath
+                }
                 }
             }
 
@@ -398,8 +455,10 @@ class AddMediaViewModel(
     fun onUploadProgress(uploaded: Long, total: Long) =
         _state.update { it.copy(uploadedBytes = uploaded, uploadTotalBytes = total) }
 
-    fun onUploadFinished(success: Boolean, error: String?) =
+    fun onUploadFinished(success: Boolean, error: String?) {
         _state.update { it.copy(step = if (success) AddMediaStep.DONE else it.step, uploadError = error) }
+        if (success) _state.value.selectedSourceId?.let(::refreshFreeSpace)
+    }
 
     private suspend fun writeImageIfAbsent(
         connection: com.seance.app.data.smb.SmbConnection,

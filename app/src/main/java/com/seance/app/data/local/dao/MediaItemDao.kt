@@ -31,15 +31,21 @@ interface MediaItemDao {
     @Query("SELECT * FROM media_items ORDER BY dateAdded DESC LIMIT :limit")
     fun observeRecentlyAdded(limit: Int = 20): Flow<List<MediaItemEntity>>
 
+    // Title/originalTitle matches are ranked first (rankMatch = 0), everything else (plot, actors,
+    // seriesStableId - kept broad on purpose so a search still finds a title by a remembered plot
+    // detail or actor name) sorts after, alphabetically within each group. Without this, a query
+    // that happens to appear mid-word in some unrelated item's plot (e.g. "престиж" inside
+    // "престижные казино") ranked identically to an actual title match.
     @Query(
         """
-        SELECT * FROM media_items
+        SELECT *, CASE WHEN title LIKE '%' || :query || '%' OR originalTitle LIKE '%' || :query || '%' THEN 0 ELSE 1 END AS rankMatch
+        FROM media_items
         WHERE title LIKE '%' || :query || '%'
            OR originalTitle LIKE '%' || :query || '%'
            OR plot LIKE '%' || :query || '%'
            OR actors LIKE '%' || :query || '%'
            OR seriesStableId LIKE '%' || :query || '%'
-        ORDER BY title
+        ORDER BY rankMatch, title
         """
     )
     fun search(query: String): Flow<List<MediaItemEntity>>

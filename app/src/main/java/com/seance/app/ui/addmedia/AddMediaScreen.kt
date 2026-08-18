@@ -65,8 +65,11 @@ import com.seance.app.data.security.DevAccessStore
 import com.seance.app.data.smb.SmbClient
 import com.seance.app.data.tmdb.TmdbClient
 import com.seance.app.data.tmdb.TmdbSearchResult
+import com.seance.app.ui.settings.formatBytes
 import com.seance.app.work.UploadWorker
 import com.seance.app.work.WorkScheduler
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -107,6 +110,9 @@ fun AddMediaScreen(
     val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) viewModel.pickFile(context, uri)
     }
+    val subtitlePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) viewModel.pickSubtitle(context, uri)
+    }
 
     var showFolderPicker by remember { mutableStateOf(false) }
     if (showFolderPicker) {
@@ -117,6 +123,7 @@ fun AddMediaScreen(
                 smbClient = smbClient,
                 sourceId = sourceId,
                 initialPath = "",
+                suggestedFolderName = state.destinationFolder.substringAfterLast('\\').takeIf { it.isNotBlank() },
                 onPick = { path -> viewModel.setDestinationFolder(path); showFolderPicker = false },
                 onDismiss = { showFolderPicker = false }
             )
@@ -183,6 +190,8 @@ fun AddMediaScreen(
                 onFolderChange = viewModel::setDestinationFolder,
                 onFileNameChange = viewModel::setDestinationFileName,
                 onBrowseFolder = { showFolderPicker = true },
+                onPickSubtitle = { subtitlePicker.launch(arrayOf("*/*")) },
+                onRemoveSubtitle = viewModel::clearSubtitle,
                 onConfirm = { viewModel.confirmAndUpload(context) },
                 modifier = Modifier.padding(innerPadding)
             )
@@ -255,6 +264,7 @@ private fun SetupStep(
                 }
             }
         }
+        FreeSpaceIndicator(state)
 
         SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
             SegmentedButton(
@@ -307,6 +317,31 @@ private fun SetupStep(
         ) {
             Text(stringResource(R.string.addmedia_next))
         }
+    }
+}
+
+/** Free space on the selected SMB source's volume - lets the developer see up front whether the NAS has room before picking/uploading a large file. */
+@Composable
+private fun FreeSpaceIndicator(state: AddMediaUiState, modifier: Modifier = Modifier) {
+    when {
+        state.isLoadingFreeSpace -> Text(
+            stringResource(R.string.addmedia_free_space_loading),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = modifier
+        )
+        state.freeSpaceBytes != null -> Text(
+            stringResource(R.string.addmedia_free_space, formatBytes(state.freeSpaceBytes)),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = modifier
+        )
+        state.freeSpaceError != null -> Text(
+            stringResource(R.string.addmedia_free_space_error),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.error,
+            modifier = modifier
+        )
     }
 }
 
@@ -373,6 +408,8 @@ private fun ConfirmStep(
     onFolderChange: (String) -> Unit,
     onFileNameChange: (String) -> Unit,
     onBrowseFolder: () -> Unit,
+    onPickSubtitle: () -> Unit,
+    onRemoveSubtitle: () -> Unit,
     onConfirm: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -401,6 +438,31 @@ private fun ConfirmStep(
             OutlinedButton(onClick = onBrowseFolder) { Text(stringResource(R.string.addmedia_browse)) }
         }
         OutlinedTextField(value = state.destinationFileName, onValueChange = onFileNameChange, label = { Text(stringResource(R.string.addmedia_destination_file)) }, modifier = Modifier.fillMaxWidth())
+
+        if (state.pickedSubtitleName != null) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    stringResource(R.string.addmedia_picked_subtitle, state.pickedSubtitleName),
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.weight(1f)
+                )
+                TextButton(onClick = onRemoveSubtitle) { Text(stringResource(R.string.addmedia_remove_subtitle)) }
+            }
+        } else {
+            OutlinedButton(onClick = onPickSubtitle, modifier = Modifier.fillMaxWidth()) {
+                Text(stringResource(R.string.addmedia_pick_subtitle))
+            }
+        }
+
+        FreeSpaceIndicator(state)
+        val freeSpace = state.freeSpaceBytes
+        if (freeSpace != null && state.pickedFileSize > freeSpace) {
+            Text(
+                stringResource(R.string.addmedia_free_space_insufficient),
+                color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodySmall
+            )
+        }
 
         if (state.prepareError != null) Text(state.prepareError, color = MaterialTheme.colorScheme.error)
 
@@ -454,6 +516,7 @@ private fun SmbFolderPickerDialog(
     smbClient: SmbClient,
     sourceId: Long,
     initialPath: String,
+    suggestedFolderName: String? = null,
     onPick: (String) -> Unit,
     onDismiss: () -> Unit
 ) {
@@ -461,22 +524,34 @@ private fun SmbFolderPickerDialog(
     var folders by remember { mutableStateOf<List<String>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
     var loadError by remember { mutableStateOf<String?>(null) }
-    var newFolderName by remember { mutableStateOf("") }
+    var newFolderName by remember { mutableStateOf(suggestedFolderName.orEmpty()) }
+    // Paths created client-side via the "+" button that don't exist on the NAS yet - mkdirs only
+    // runs at real upload time (confirmAndUpload), so listing these over SMB would always 404 and
+    // previously tripped the not-found fallback straight back to the share root.
+    val virtualPaths = remember { mutableStateOf(setOf<String>()) }
 
     LaunchedEffect(currentPath) {
         isLoading = true
         loadError = null
+        if (currentPath in virtualPaths.value) {
+            android.util.Log.d("AddMediaScreen", "folder picker: '$currentPath' is a not-yet-created folder, skipping list")
+            folders = emptyList()
+            isLoading = false
+            return@LaunchedEffect
+        }
         android.util.Log.d("AddMediaScreen", "folder picker: listing sourceId=$sourceId path='$currentPath'")
         val outcome = runCatching {
-            val info = sourceRepository.connectionInfoById(sourceId) ?: error("Источник SMB недоступен")
-            android.util.Log.d("AddMediaScreen", "folder picker: connectionInfo rootPath='${info.rootPath}' share='${info.share}'")
-            smbClient.connect(info).use { connection ->
-                val listing = connection.listDirectory(currentPath)
-                android.util.Log.d(
-                    "AddMediaScreen",
-                    "folder picker: got ${listing.files.size} files, ${listing.directoryPaths.size} dirs: ${listing.directoryPaths}"
-                )
-                listing.directoryPaths.map { it.substringAfterLast('\\') }.sorted()
+            withContext(Dispatchers.IO) {
+                val info = sourceRepository.connectionInfoById(sourceId) ?: error("Источник SMB недоступен")
+                android.util.Log.d("AddMediaScreen", "folder picker: connectionInfo rootPath='${info.rootPath}' share='${info.share}'")
+                smbClient.connect(info).use { connection ->
+                    val listing = connection.listDirectory(currentPath)
+                    android.util.Log.d(
+                        "AddMediaScreen",
+                        "folder picker: got ${listing.files.size} files, ${listing.directoryPaths.size} dirs: ${listing.directoryPaths}"
+                    )
+                    listing.directoryPaths.map { it.substringAfterLast('\\') }.sorted()
+                }
             }
         }
         outcome.exceptionOrNull()?.let { android.util.Log.e("AddMediaScreen", "folder picker: list failed", it) }
@@ -535,7 +610,9 @@ private fun SmbFolderPickerDialog(
                     )
                     TextButton(
                         onClick = {
-                            currentPath = if (currentPath.isBlank()) newFolderName.trim() else "$currentPath\\${newFolderName.trim()}"
+                            val newPath = if (currentPath.isBlank()) newFolderName.trim() else "$currentPath\\${newFolderName.trim()}"
+                            virtualPaths.value = virtualPaths.value + newPath
+                            currentPath = newPath
                             newFolderName = ""
                         },
                         enabled = newFolderName.isNotBlank()

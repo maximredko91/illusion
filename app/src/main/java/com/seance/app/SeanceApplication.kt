@@ -75,7 +75,7 @@ class SeanceApplication : Application(), Configuration.Provider, SingletonImageL
     // Developer-only "add media" scraper (see data/security/DevAccessStore's KDoc for the access
     // gate, ui/addmedia for the flow) - the only place this app calls out to the internet for
     // metadata, and the only place it ever writes to an SMB share instead of reading from one.
-    val devAccessStore: DevAccessStore by lazy { DevAccessStore(this) }
+    val devAccessStore: DevAccessStore by lazy { DevAccessStore(this, BuildConfig.DEV_ACCESS_PASSWORD) }
     val tmdbClient: TmdbClient by lazy {
         TmdbClient { devAccessStore.tmdbApiKey ?: BuildConfig.TMDB_API_KEY }
     }

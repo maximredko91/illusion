@@ -188,7 +188,7 @@
     <string name="player_aspect_ratio_blocked_reload">Перезайти в плеер</string>
 
     <string name="details_play">Смотреть</string>
-    <string name="details_continue_watching">Продолжить просмотр</string>
+    <string name="details_continue_watching">Продолжить</string>
     <string name="details_trailer">Трейлер</string>
     <string name="details_image_viewer_close">Закрыть просмотр изображения</string>
     <string name="details_favorite_add">Добавить в избранное</string>
@@ -200,6 +200,7 @@
     <string name="details_not_found">Не удалось найти этот элемент библиотеки</string>
     <string name="details_no_description">Без описания</string>
     <string name="details_audio_tracks">Озвучка: %1$s</string>
+    <string name="details_audio_tracks_label">"Озвучка: "</string>
     <string name="details_forced_subtitles">Есть форсированные субтитры</string>
     <string name="details_back">Назад</string>
     <string name="details_season">Сезон %1$d</string>
@@ -218,13 +219,24 @@
     <string name="settings_dev_password_label">Пароль</string>
     <string name="settings_dev_password_wrong">Неверный пароль</string>
     <string name="settings_dev_access_confirm">Войти</string>
+    <string name="settings_dev_access_forget">Забыть на этом устройстве</string>
 
     <string name="addmedia_title">Добавить медиа</string>
+    <string name="settings_add_media">Добавление медиа</string>
+    <string name="settings_add_media_description">Скачать метаданные с TMDB и загрузить файл на NAS</string>
+    <string name="settings_add_media_open">Открыть</string>
     <string name="addmedia_source">Источник SMB</string>
     <string name="addmedia_kind_movie">Фильм</string>
     <string name="addmedia_kind_episode">Серия сериала</string>
     <string name="addmedia_pick_file">Выбрать файл</string>
     <string name="addmedia_picked_file">Выбран: %1$s</string>
+    <string name="addmedia_pick_subtitle">Добавить субтитры</string>
+    <string name="addmedia_picked_subtitle">Субтитры: %1$s</string>
+    <string name="addmedia_remove_subtitle">Убрать</string>
+    <string name="addmedia_free_space">Свободно на NAS: %1$s</string>
+    <string name="addmedia_free_space_loading">Проверка свободного места…</string>
+    <string name="addmedia_free_space_error">Не удалось узнать свободное место на NAS</string>
+    <string name="addmedia_free_space_insufficient">Недостаточно места на NAS для этого файла</string>
     <string name="addmedia_show_title">Название сериала</string>
     <string name="addmedia_season">Сезон</string>
     <string name="addmedia_episode">Эпизод</string>

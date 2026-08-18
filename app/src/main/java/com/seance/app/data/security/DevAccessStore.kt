@@ -12,8 +12,16 @@ import kotlin.random.Random
  * reach of anyone else using this same install. First-ever unlock attempt (no password set yet)
  * generates and shows a random password instead of asking the developer to invent/remember one;
  * from then on only its SHA-256 hash is kept, never the password itself.
+ *
+ * [buildTimePassword], if set via `local.properties`' `seance.devAccess.password` (see
+ * `app/build.gradle.kts`), is an alternative fixed password that survives an app
+ * uninstall/data-clear - unlike the in-app-generated one, which lives in this install's
+ * [EncryptedSharedPreferences] and resets with it. Deliberately plaintext-compiled into the APK
+ * (like [com.seance.app.data.tmdb.TmdbClient]'s local.properties fallback) rather than encrypted
+ * there, since any on-device decryption key would have to ship in the same APK and so wouldn't
+ * raise the real bar against a decompiled APK - see the KDoc above.
  */
-class DevAccessStore(context: Context) {
+class DevAccessStore(context: Context, private val buildTimePassword: String? = null) {
     private val masterKey = MasterKey.Builder(context)
         .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
         .build()
@@ -26,7 +34,17 @@ class DevAccessStore(context: Context) {
         EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
     )
 
-    val hasPassword: Boolean get() = prefs.contains(KEY_HASH)
+    val hasPassword: Boolean get() = prefs.contains(KEY_HASH) || !buildTimePassword.isNullOrBlank()
+
+    /**
+     * True once the developer has verified the password on this device at least once - lets the
+     * "add media" entry point skip re-prompting for it every time. Backed by the same
+     * [EncryptedSharedPreferences] as the password hash itself (Keystore-backed AES256-GCM), not a
+     * plaintext flag - clearing app data or uninstalling resets it, same as the password hash.
+     */
+    var isRemembered: Boolean
+        get() = prefs.getBoolean(KEY_REMEMBERED, false)
+        set(value) = prefs.edit().putBoolean(KEY_REMEMBERED, value).apply()
 
     /** Generates and stores a new random password, returning it in plaintext exactly once so the caller can show it to the developer. */
     fun generatePassword(): String {
@@ -37,7 +55,8 @@ class DevAccessStore(context: Context) {
         return password
     }
 
-    fun verify(password: String): Boolean = prefs.getString(KEY_HASH, null) == hash(password)
+    fun verify(password: String): Boolean =
+        prefs.getString(KEY_HASH, null) == hash(password) || (!buildTimePassword.isNullOrBlank() && password == buildTimePassword)
 
     /**
      * The TMDB API key, entered in-app (AddMediaScreen) rather than rebuilt in via
@@ -59,6 +78,7 @@ class DevAccessStore(context: Context) {
 
     companion object {
         private const val KEY_HASH = "password_hash"
+        private const val KEY_REMEMBERED = "remembered"
         private const val KEY_TMDB_API_KEY = "tmdb_api_key"
         private const val PASSWORD_LENGTH = 10
         private const val PASSWORD_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789"

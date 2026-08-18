@@ -28,9 +28,10 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -55,16 +56,23 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonDefaults
+import androidx.compose.material3.OutlinedIconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Snackbar
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -75,11 +83,19 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalView
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -224,17 +240,49 @@ private fun DetailsContent(
     val cutoutHorizontalDp = with(density) {
         maxOf(cutoutInsets.getLeft(density, layoutDirection), cutoutInsets.getRight(density, layoutDirection)).toDp()
     }
+    // Modifier.statusBarsPadding() measured a correct nonzero inset here (confirmed via logging)
+    // but still rendered with zero effective padding - the fanart backdrop bled straight under the
+    // status bar regardless. WindowInsets.statusBars (Compose's ambient snapshot) was also observed
+    // to transiently report 0 on its own, on this device, with no Dialog involved - a genuine
+    // Compose/OS insets-redispatch race, not something this screen's own code controls. Cross-check
+    // against the real, current View-system insets (ViewCompat.getRootWindowInsets, queried fresh -
+    // not cached - every recomposition) and latch onto the largest value either source has ever
+    // reported: the real status bar height doesn't shrink mid-session in practice, so a regression
+    // to a smaller/zero value is always the race, never a legitimate change.
+    val view = LocalView.current
+    var statusBarsTopDp by remember { mutableStateOf(0.dp) }
+    val ambientStatusBarsTopDp = with(density) { WindowInsets.statusBars.getTop(density).toDp() }
+    val viewStatusBarsTopDp = ViewCompat.getRootWindowInsets(view)
+        ?.getInsets(WindowInsetsCompat.Type.statusBars())
+        ?.top
+        ?.let { with(density) { it.toDp() } }
+        ?: 0.dp
+    // Forces a second read ~200ms after first composition, in case the very first frame lands
+    // before the real inset value is dispatched at all and nothing else happens to trigger a
+    // recomposition afterward to pick up the corrected value. The bare read below (result
+    // otherwise unused) is what makes this composable actually recompose when the tick changes.
+    var recheckTick by remember { mutableIntStateOf(0) }
+    LaunchedEffect(Unit) {
+        kotlinx.coroutines.delay(200)
+        recheckTick++
+    }
+    recheckTick
+
+    val liveStatusBarsTopDp = maxOf(ambientStatusBarsTopDp, viewStatusBarsTopDp)
+    if (liveStatusBarsTopDp > statusBarsTopDp) statusBarsTopDp = liveStatusBarsTopDp
 
     Column(
         modifier = Modifier
             .fillMaxSize()
+            // Reserves the status bar's height from the scrollable VIEWPORT itself, not just as an
+            // initial content offset - this padding must come before .verticalScroll() in the
+            // chain. Padding placed after .verticalScroll() only offsets the content's starting
+            // position; that gap scrolls away with the rest of the content, and everything further
+            // down (description, cast, ...) ends up passing behind the status bar during a scroll.
+            // With the viewport itself inset instead, nothing can ever render there regardless of
+            // scroll position.
+            .padding(top = statusBarsTopDp)
             .verticalScroll(rememberScrollState())
-            // Push everything - including the fanart backdrop, not just the back button - below
-            // the status bar, instead of letting the fanart bleed under it. Simpler and more
-            // robust than darkening the top of the image for icon contrast: a bright backdrop
-            // (e.g. a poster with a white background) can't wash out status-bar icons if nothing
-            // ever renders behind them.
-            .statusBarsPadding()
             .padding(horizontal = cutoutHorizontalDp)
     ) {
         Box {
@@ -372,62 +420,99 @@ private fun DetailsContent(
                     }
                 }
             }
-            Column(modifier = Modifier.padding(start = 12.dp, top = 8.dp).fillMaxWidth()) {
-                Text(displayTitle, style = MaterialTheme.typography.headlineSmall)
-                item.originalTitle?.takeIf { it != item.title }?.let {
-                    Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
+            Column(
+                modifier = Modifier.padding(start = 12.dp, top = 8.dp).fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                val originalTitle = item.originalTitle?.takeIf { it.isNotBlank() && it != item.title }
+                Text(
+                    buildAnnotatedString {
+                        append(displayTitle)
+                        if (originalTitle != null) {
+                            withStyle(
+                                SpanStyle(
+                                    fontWeight = FontWeight.Normal,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            ) { append("\n($originalTitle)") }
+                        }
+                    },
+                    style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold)
+                )
                 Text(
                     listOfNotNull(
                         item.year?.toString(),
                         item.country,
                         item.runtimeMinutes?.let { "$it мин" }
                     ).joinToString(" · "),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.primary
                 )
-                if (item.genres.isNotEmpty() || item.studio != null) {
-                    Text(
-                        listOfNotNull(item.genres.takeIf { it.isNotEmpty() }?.joinToString(", "), item.studio)
-                            .joinToString(" · "),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                if (item.genres.isNotEmpty()) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        modifier = Modifier.horizontalScroll(rememberScrollState())
+                    ) {
+                        item.genres.forEach { genre ->
+                            Text(
+                                genre,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                modifier = Modifier
+                                    .background(MaterialTheme.colorScheme.secondaryContainer, RoundedCornerShape(50))
+                                    .padding(horizontal = 10.dp, vertical = 4.dp)
+                            )
+                        }
+                    }
                 }
-                item.tagline?.takeIf { it.isNotBlank() }?.let {
-                    Text(
-                        it,
-                        style = MaterialTheme.typography.bodySmall.copy(fontStyle = FontStyle.Italic),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(top = 4.dp)
-                    )
+                item.studio?.takeIf { it.isNotBlank() }?.let {
+                    Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
         }
 
+        // Full width, not squeezed into the column next to the poster - a long tagline there could
+        // grow much taller than the poster itself, leaving a large empty gap underneath it once the
+        // Row's height stretched to fit the text. Here it just wraps naturally under everything.
+        item.tagline?.takeIf { it.isNotBlank() }?.let {
+            Text(
+                it,
+                style = MaterialTheme.typography.bodySmall.copy(fontStyle = FontStyle.Italic),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 4.dp)
+            )
+        }
+
         Row(
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier
-                .horizontalScroll(rememberScrollState())
+                .fillMaxWidth()
                 .padding(horizontal = 16.dp, vertical = 8.dp)
         ) {
             val playSource = remember { MutableInteractionSource() }
             Button(
                 onClick = { onPlay(item.stableId) },
                 interactionSource = playSource,
-                modifier = Modifier.focusHighlight(playSource)
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
+                modifier = Modifier.weight(1f).focusHighlight(playSource)
             ) {
                 Icon(Icons.Default.PlayArrow, contentDescription = null)
                 Text(
                     stringResource(if (hasStartedWatching) R.string.details_continue_watching else R.string.details_play),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.padding(start = 8.dp)
                 )
             }
             if (item.trailerPath != null) {
                 val trailerSource = remember { MutableInteractionSource() }
-                IconButton(
+                OutlinedIconButton(
                     onClick = { onPlayTrailer(item.stableId) },
                     interactionSource = trailerSource,
+                    colors = IconButtonDefaults.outlinedIconButtonColors(contentColor = MaterialTheme.colorScheme.primary),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary),
                     modifier = Modifier.focusHighlight(trailerSource)
                 ) {
                     Icon(Icons.Default.Theaters, contentDescription = stringResource(R.string.details_trailer))
@@ -470,7 +555,12 @@ private fun DetailsContent(
 
         audioTracks?.takeIf { it.isNotEmpty() }?.let { tracks ->
             Text(
-                stringResource(R.string.details_audio_tracks, tracks.joinToString("; ")),
+                buildAnnotatedString {
+                    withStyle(SpanStyle(fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)) {
+                        append(stringResource(R.string.details_audio_tracks_label))
+                    }
+                    append(tracks.joinToString("; "))
+                },
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)

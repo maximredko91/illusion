@@ -8,7 +8,6 @@ import androidx.work.workDataOf
 import com.seance.app.data.repository.SmbSourceRepository
 import com.seance.app.data.smb.SmbClient
 import com.seance.app.data.smb.SmbConnectionInfo
-import java.io.IOException
 import java.io.InputStream
 import java.util.concurrent.CancellationException
 import kotlinx.coroutines.delay
@@ -42,12 +41,14 @@ class UploadWorker(
                 ?: return Result.failure(workDataOf(KEY_ERROR to "Не удалось открыть выбранный файл"))
             opened.use { input -> copyWithReconnect(info, destinationPath, input, totalBytes) }
             Result.success(workDataOf(KEY_UPLOADED to totalBytes, KEY_TOTAL to totalBytes))
-        } catch (e: IOException) {
-            runCatching { smbClient.connect(info).use { it.deleteFile(destinationPath) } }
-            Result.failure(workDataOf(KEY_ERROR to (e.message ?: "Ошибка загрузки")))
         } catch (e: CancellationException) {
             runCatching { smbClient.connect(info).use { it.deleteFile(destinationPath) } }
             Result.failure()
+        } catch (e: Exception) {
+            // Covers IOException and smbj's SMBRuntimeException alike (see copyWithReconnect) -
+            // both mean the upload is unrecoverable after exhausting retries.
+            runCatching { smbClient.connect(info).use { it.deleteFile(destinationPath) } }
+            Result.failure(workDataOf(KEY_ERROR to (e.message ?: e::class.simpleName ?: "Ошибка загрузки")))
         }
     }
 
@@ -72,16 +73,28 @@ class UploadWorker(
                 var written = false
                 while (!written) {
                     try {
+                        // Reconnecting itself can time out too (the NAS/network hiccup that broke
+                        // the write in the first place often hasn't cleared yet) - kept inside this
+                        // same catch so a failed reconnect also counts as one attempt and loops back
+                        // for another, instead of escaping the retry loop and killing the upload.
                         writer.write(buffer, position, 0, read)
                         written = true
-                    } catch (e: IOException) {
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        // smbj wraps some failures (e.g. writing through a connection that just
+                        // died) as SMBRuntimeException, a RuntimeException rather than an
+                        // IOException - caught broadly here so those still retry instead of
+                        // crashing the worker outright.
                         consecutiveFailures++
                         if (consecutiveFailures > MAX_CONSECUTIVE_FAILURES) throw e
                         runCatching { writer.close() }
                         runCatching { connection.close() }
                         delay(RECONNECT_BACKOFF_MS)
-                        connection = smbClient.connect(info)
-                        writer = connection.openRandomAccessFileForWrite(destinationPath, createNew = false)
+                        runCatching {
+                            connection = smbClient.connect(info)
+                            writer = connection.openRandomAccessFileForWrite(destinationPath, createNew = false)
+                        }
                     }
                 }
                 consecutiveFailures = 0

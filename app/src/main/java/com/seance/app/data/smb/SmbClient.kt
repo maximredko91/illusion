@@ -103,6 +103,9 @@ class SmbConnection internal constructor(
         return SmbRandomAccessFile(file)
     }
 
+    /** Actual free space on the share's volume, in bytes - used by the developer-only media-add flow to warn before a large upload. */
+    fun freeSpaceBytes(): Long = diskShare.shareInformation.freeSpace
+
     fun fileExists(path: String): Boolean = diskShare.fileExists(path)
 
     fun folderExists(path: String): Boolean = diskShare.folderExists(path)

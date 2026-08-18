@@ -46,6 +46,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.seance.app.R
 import com.seance.app.data.local.entity.MediaItemEntity
@@ -232,7 +233,7 @@ private fun CartoonCategoryToggle(
                 interactionSource = segmentSource,
                 modifier = Modifier.focusHighlight(segmentSource)
             ) {
-                Text(categoryTitle(option))
+                Text(categoryTitle(option), maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }
     }

@@ -366,6 +366,9 @@ private fun SeanceNavGraph(app: SeanceApplication, navController: NavHostControl
                     hasDevPassword = settingsViewModel::hasDevPassword,
                     onGenerateDevPassword = settingsViewModel::generateDevPassword,
                     onVerifyDevPassword = settingsViewModel::verifyDevPassword,
+                    isDevAccessRemembered = settingsViewModel::isDevAccessRemembered,
+                    onRememberDevAccess = settingsViewModel::rememberDevAccess,
+                    onForgetDevAccess = settingsViewModel::forgetDevAccess,
                     onDevAccessGranted = { navController.navigate(Destination.AddMedia) }
                 )
             }
