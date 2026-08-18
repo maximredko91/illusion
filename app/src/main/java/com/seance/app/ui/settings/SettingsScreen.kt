@@ -512,6 +512,26 @@ fun SettingsScreen(
                 }
             }
 
+            SettingsGroupLabel(stringResource(R.string.settings_feedback))
+            SettingsGroup(modifier = Modifier.padding(bottom = 24.dp)) {
+                ListItem(
+                    headlineContent = { Text(stringResource(R.string.settings_feedback)) },
+                    supportingContent = { Text(stringResource(R.string.settings_feedback_description)) },
+                    trailingContent = {
+                        val feedbackSource = remember { MutableInteractionSource() }
+                        OutlinedButton(
+                            onClick = { context.startActivity(android.content.Intent.createChooser(com.seance.app.data.crash.CrashReporter.feedbackIntent(), null)) },
+                            interactionSource = feedbackSource,
+                            modifier = Modifier.focusHighlight(feedbackSource)
+                        ) {
+                            Text(stringResource(R.string.settings_feedback_action))
+                        }
+                    },
+                    colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+
             var showResetConfirm by remember { mutableStateOf(false) }
             SettingsGroupLabel(stringResource(R.string.settings_reset_section))
             SettingsGroup(modifier = Modifier.padding(bottom = 24.dp)) {

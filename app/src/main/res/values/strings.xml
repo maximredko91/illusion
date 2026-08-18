@@ -37,6 +37,12 @@
     <string name="settings_poster_preload_progress">Загружено %1$d из %2$d</string>
     <string name="settings_poster_preload_done">Все постеры закешированы</string>
     <string name="action_cancel">Отмена</string>
+    <string name="crash_report_title">Приложение недавно закрылось с ошибкой</string>
+    <string name="crash_report_message">Можно отправить отчёт разработчику, чтобы помочь найти причину.</string>
+    <string name="crash_report_send">Отправить</string>
+    <string name="settings_feedback">Обратная связь</string>
+    <string name="settings_feedback_description">Сообщить об ошибке или предложить улучшение</string>
+    <string name="settings_feedback_action">Написать</string>
     <string name="settings_downloads">Загрузки</string>
     <string name="settings_downloads_folder">Место загрузок</string>
     <string name="settings_downloads_open_folder">Открыть папку</string>

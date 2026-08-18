@@ -7,6 +7,7 @@ import coil3.PlatformContext
 import coil3.SingletonImageLoader
 import coil3.request.crossfade
 import com.seance.app.data.backup.BackupManager
+import com.seance.app.data.crash.CrashReporter
 import com.seance.app.data.image.PosterCacheSettings
 import com.seance.app.data.image.PosterCachePolicyInterceptor
 import com.seance.app.data.image.SmbImageConnectionPool
@@ -101,6 +102,7 @@ class SeanceApplication : Application(), Configuration.Provider, SingletonImageL
 
     override fun onCreate() {
         super.onCreate()
+        CrashReporter.install(this)
         applicationScope.launch {
             settingsRepository.posterCachingEnabled.collect { PosterCacheSettings.cachingEnabled = it }
         }
