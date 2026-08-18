@@ -270,7 +270,7 @@ private fun SortMenu(sortOrder: SortOrder, onSortOrderChange: (SortOrder) -> Uni
 }
 
 @Composable
-private fun sortLabel(order: SortOrder): String = when (order) {
+internal fun sortLabel(order: SortOrder): String = when (order) {
     SortOrder.DATE_ADDED -> stringResource(R.string.sort_date_added)
     SortOrder.YEAR -> stringResource(R.string.sort_year)
     SortOrder.TITLE -> stringResource(R.string.sort_title)

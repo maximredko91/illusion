@@ -50,6 +50,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.hapticfeedback.HapticFeedback
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -116,6 +118,18 @@ fun SeanceNavHost(
     // hasn't answered the onboarding prompt yet; it only matters for the brief pre-onboarding
     // frame and for pre-existing installs from before this feature (see SettingsRepository.uiMode).
     val uiMode by app.settingsRepository.uiMode.collectAsState(initial = UiMode.PHONE)
+    // Wraps the real LocalHapticFeedback so every existing call site (6 files, .toggle()/
+    // .reject()/.segmentTick()/.tick()) respects the Settings switch without being touched
+    // individually - overriding the same CompositionLocal androidx itself provides.
+    val hapticsEnabled by app.settingsRepository.hapticsEnabled.collectAsState(initial = true)
+    val realHapticFeedback = LocalHapticFeedback.current
+    val gatedHapticFeedback = remember(hapticsEnabled, realHapticFeedback) {
+        object : HapticFeedback {
+            override fun performHapticFeedback(hapticFeedbackType: HapticFeedbackType) {
+                if (hapticsEnabled) realHapticFeedback.performHapticFeedback(hapticFeedbackType)
+            }
+        }
+    }
     val shimmerTransition = rememberInfiniteTransition(label = "shimmer")
     // Deliberately NOT unwrapped with `by` here - reading .value in this composable's own body
     // would make this whole scope (everything CompositionLocalProvider wraps, all the way down
@@ -136,7 +150,8 @@ fun SeanceNavHost(
     CompositionLocalProvider(
         LocalSharedTransitionScope provides this,
         LocalUiMode provides (uiMode ?: UiMode.PHONE),
-        LocalShimmerProgress provides shimmerProgressState
+        LocalShimmerProgress provides shimmerProgressState,
+        LocalHapticFeedback provides gatedHapticFeedback
     ) {
         val navController = rememberNavController()
         // Destinations with no Scaffold of their own (Details, Person, ...) render straight onto
@@ -340,6 +355,10 @@ private fun SeanceNavGraph(app: SeanceApplication, navController: NavHostControl
                     onOpenCache = { navController.navigate(Destination.Cache) },
                     uiMode = settingsViewModel.uiMode,
                     onUiModeChange = { mode -> settingsViewModel.setUiMode(mode) },
+                    defaultSortOrder = settingsViewModel.defaultSortOrder,
+                    onDefaultSortOrderChange = settingsViewModel::setDefaultSortOrder,
+                    hapticsEnabled = settingsViewModel.hapticsEnabled,
+                    onHapticsEnabledChange = settingsViewModel::setHapticsEnabled,
                     onToggleChargingRequirement = { enabled ->
                         settingsViewModel.setRequireChargingForHeavyTasks(context, enabled)
                     },
@@ -483,7 +502,7 @@ private fun TabsHost(app: SeanceApplication, navController: NavHostController) {
             } else {
                 val libraryViewModel: LibraryViewModel = viewModel(
                     key = category.name,
-                    factory = LibraryViewModel.factory(app.libraryRepository, category)
+                    factory = LibraryViewModel.factory(app.libraryRepository, app.settingsRepository, category)
                 )
                 val items by libraryViewModel.items.collectAsState()
                 val isLoading by libraryViewModel.isLoading.collectAsState()

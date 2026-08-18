@@ -16,6 +16,7 @@ import com.seance.app.data.repository.SmbSourceRepository
 import com.seance.app.data.repository.ThumbnailRepository
 import com.seance.app.data.security.DevAccessStore
 import com.seance.app.data.settings.SettingsRepository
+import com.seance.app.domain.model.SortOrder
 import com.seance.app.domain.model.UiMode
 import com.seance.app.work.WorkScheduler
 import kotlinx.coroutines.Dispatchers
@@ -53,6 +54,16 @@ class SettingsViewModel(
     val posterCachingEnabled: Flow<Boolean> = settingsRepository.posterCachingEnabled
     val downloadsFolderUri: Flow<String?> = settingsRepository.downloadsFolderUri
     val uiMode: Flow<UiMode?> = settingsRepository.uiMode
+    val defaultSortOrder: Flow<SortOrder> = settingsRepository.defaultSortOrder
+    val hapticsEnabled: Flow<Boolean> = settingsRepository.hapticsEnabled
+
+    fun setDefaultSortOrder(order: SortOrder) {
+        viewModelScope.launch { settingsRepository.setDefaultSortOrder(order) }
+    }
+
+    fun setHapticsEnabled(enabled: Boolean) {
+        viewModelScope.launch { settingsRepository.setHapticsEnabled(enabled) }
+    }
 
     private val _cacheSizeBytes = MutableStateFlow<Long?>(null)
     val cacheSizeBytes: StateFlow<Long?> = _cacheSizeBytes.asStateFlow()

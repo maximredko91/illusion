@@ -6,6 +6,7 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.seance.app.data.local.entity.MediaItemEntity
 import com.seance.app.data.repository.LibraryRepository
+import com.seance.app.data.settings.SettingsRepository
 import com.seance.app.domain.model.Category
 import com.seance.app.domain.model.SortOrder
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -14,17 +15,29 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 
 class LibraryViewModel(
     private val libraryRepository: LibraryRepository,
+    private val settingsRepository: SettingsRepository,
     private val category: Category
 ) : ViewModel() {
     private val _sortOrder = MutableStateFlow(SortOrder.DATE_ADDED)
     val sortOrder: StateFlow<SortOrder> = _sortOrder.asStateFlow()
+
+    // Settings' "default sort order" only seeds the initial value here - once the user picks a
+    // different order via this screen's own SortMenu for this session, that user choice takes
+    // over via setSortOrder() below like before; this doesn't turn into an ongoing subscription.
+    init {
+        viewModelScope.launch {
+            _sortOrder.value = settingsRepository.defaultSortOrder.first()
+        }
+    }
 
     private val _genreFilter = MutableStateFlow<String?>(null)
     val genreFilter: StateFlow<String?> = _genreFilter.asStateFlow()
@@ -81,8 +94,8 @@ class LibraryViewModel(
     }
 
     companion object {
-        fun factory(libraryRepository: LibraryRepository, category: Category) = viewModelFactory {
-            initializer { LibraryViewModel(libraryRepository, category) }
+        fun factory(libraryRepository: LibraryRepository, settingsRepository: SettingsRepository, category: Category) = viewModelFactory {
+            initializer { LibraryViewModel(libraryRepository, settingsRepository, category) }
         }
     }
 }

@@ -110,6 +110,10 @@
     <string name="settings_ui_mode_section">Интерфейс</string>
     <string name="settings_ui_mode_phone">Телефон или планшет</string>
     <string name="settings_ui_mode_tv">Телевизор (пульт)</string>
+    <string name="settings_haptics">Вибрация</string>
+    <string name="settings_haptics_description">Тактильный отклик на нажатия и переключатели</string>
+    <string name="settings_library_section">Библиотека</string>
+    <string name="settings_default_sort_order">Сортировка по умолчанию</string>
     <string name="onboarding_smb_address">Адрес сервера (хост)</string>
     <string name="onboarding_smb_address_help">Только IP или имя устройства в локальной сети, например 192.168.2.1 — без \\\\ и без имени папки</string>
     <string name="onboarding_display_name">Название источника</string>

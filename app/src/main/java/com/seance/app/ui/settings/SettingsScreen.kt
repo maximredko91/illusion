@@ -21,6 +21,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
+import com.seance.app.domain.model.SortOrder
 import com.seance.app.domain.model.UiMode
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
@@ -59,7 +60,9 @@ import com.seance.app.data.download.DownloadStorage
 import com.seance.app.data.local.entity.SmbSourceEntity
 import com.seance.app.ui.common.focusHighlight
 import com.seance.app.ui.common.reject
+import com.seance.app.ui.common.segmentTick
 import com.seance.app.ui.common.toggle
+import com.seance.app.ui.library.sortLabel
 import kotlinx.coroutines.flow.Flow
 
 private val RESCAN_OPTIONS = listOf(0, 6, 12, 24, 48)
@@ -77,6 +80,10 @@ fun SettingsScreen(
     onOpenCache: () -> Unit,
     uiMode: Flow<UiMode?>,
     onUiModeChange: (UiMode) -> Unit,
+    defaultSortOrder: Flow<SortOrder>,
+    onDefaultSortOrderChange: (SortOrder) -> Unit,
+    hapticsEnabled: Flow<Boolean>,
+    onHapticsEnabledChange: (Boolean) -> Unit,
     onToggleChargingRequirement: (Boolean) -> Unit,
     onRescanIntervalChange: (Int) -> Unit,
     onRescanNow: () -> Unit,
@@ -105,6 +112,8 @@ fun SettingsScreen(
     modifier: Modifier = Modifier
 ) {
     val currentUiMode by uiMode.collectAsState(initial = null)
+    val currentDefaultSortOrder by defaultSortOrder.collectAsState(initial = SortOrder.DATE_ADDED)
+    val hapticsOn by hapticsEnabled.collectAsState(initial = true)
     val chargingOnly by requireChargingForHeavyTasks.collectAsState(initial = true)
     val rescanHours by rescanIntervalHours.collectAsState(initial = 24)
     val seekSeconds by seekDurationSeconds.collectAsState(initial = 10)
@@ -263,6 +272,35 @@ fun SettingsScreen(
                         .fillMaxWidth()
                         .focusHighlight(tvRowSource)
                         .clickable(interactionSource = tvRowSource, indication = LocalIndication.current) { onUiModeChange(UiMode.TV) }
+                )
+                SettingsDivider()
+                ListItem(
+                    headlineContent = { Text(stringResource(R.string.settings_haptics)) },
+                    supportingContent = { Text(stringResource(R.string.settings_haptics_description)) },
+                    trailingContent = {
+                        Switch(
+                            checked = hapticsOn,
+                            onCheckedChange = { enabled ->
+                                // Fires regardless of direction (even turning off) - this Switch's
+                                // own toggle click is itself gated by LocalHapticFeedback, so it's
+                                // the last tactile confirmation the user gets either way.
+                                haptics.toggle(enabled)
+                                onHapticsEnabledChange(enabled)
+                            }
+                        )
+                    },
+                    colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+
+            SettingsGroupLabel(stringResource(R.string.settings_library_section))
+            SettingsGroup(modifier = Modifier.padding(bottom = 24.dp)) {
+                ListItem(
+                    headlineContent = { Text(stringResource(R.string.settings_default_sort_order)) },
+                    trailingContent = { DefaultSortOrderMenu(currentDefaultSortOrder, onDefaultSortOrderChange) },
+                    colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                    modifier = Modifier.fillMaxWidth()
                 )
             }
 
@@ -569,6 +607,33 @@ internal fun SettingsDivider() {
         modifier = Modifier.padding(horizontal = 16.dp),
         color = MaterialTheme.colorScheme.outlineVariant
     )
+}
+
+@Composable
+private fun DefaultSortOrderMenu(current: SortOrder, onChange: (SortOrder) -> Unit) {
+    var expanded by remember { mutableStateOf(false) }
+    val haptics = LocalHapticFeedback.current
+    Box {
+        val triggerSource = remember { MutableInteractionSource() }
+        OutlinedButton(onClick = { expanded = true }, interactionSource = triggerSource, modifier = Modifier.focusHighlight(triggerSource)) {
+            Text(sortLabel(current))
+        }
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            SortOrder.entries.forEach { order ->
+                val itemSource = remember { MutableInteractionSource() }
+                DropdownMenuItem(
+                    text = { Text(sortLabel(order)) },
+                    onClick = {
+                        haptics.segmentTick()
+                        onChange(order)
+                        expanded = false
+                    },
+                    interactionSource = itemSource,
+                    modifier = Modifier.focusHighlight(itemSource)
+                )
+            }
+        }
+    }
 }
 
 @Composable

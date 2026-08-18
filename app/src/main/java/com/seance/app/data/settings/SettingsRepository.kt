@@ -23,6 +23,7 @@ class SettingsRepository(private val context: Context) {
         val POSTER_CACHING_ENABLED = booleanPreferencesKey("poster_caching_enabled")
         val DOWNLOADS_FOLDER_URI = stringPreferencesKey("downloads_folder_uri")
         val UI_MODE = stringPreferencesKey("ui_mode")
+        val HAPTICS_ENABLED = booleanPreferencesKey("haptics_enabled")
     }
 
     val requireChargingForHeavyTasks: Flow<Boolean> = context.dataStore.data.map {
@@ -91,5 +92,12 @@ class SettingsRepository(private val context: Context) {
 
     suspend fun setUiMode(mode: UiMode) {
         context.dataStore.edit { it[Keys.UI_MODE] = mode.name }
+    }
+
+    /** Global switch for haptic feedback (SeanceNavHost overrides LocalHapticFeedback app-wide with this, so every existing call site respects it without individual changes). */
+    val hapticsEnabled: Flow<Boolean> = context.dataStore.data.map { it[Keys.HAPTICS_ENABLED] ?: true }
+
+    suspend fun setHapticsEnabled(value: Boolean) {
+        context.dataStore.edit { it[Keys.HAPTICS_ENABLED] = value }
     }
 }
