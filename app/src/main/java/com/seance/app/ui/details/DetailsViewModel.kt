@@ -15,6 +15,7 @@ import com.seance.app.data.repository.DownloadRepository
 import com.seance.app.data.repository.LibraryRepository
 import com.seance.app.data.repository.WatchProgressRepository
 import com.seance.app.work.WorkScheduler
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -24,6 +25,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 data class DetailsUiState(
     val item: MediaItemEntity? = null,
@@ -73,6 +75,13 @@ class DetailsViewModel(
                 _state.value = DetailsUiState(isLoading = false)
                 return@launch
             }
+            // Publish the item alone first, before the similar/collection/episodes queries below -
+            // those were previously all awaited before the first state update, which kept `item`
+            // null (and DetailsContent, so the poster's shared element, unmounted) for several
+            // frames into the nav transition. Compose attaching the shared element mid-flight, once
+            // that first update finally landed, read as the poster's entry animation running
+            // smoothly and then visibly hitching partway through as its bounds got recalculated.
+            _state.value = DetailsUiState(item = item, isLoading = false)
             val similar = libraryRepository.getSimilar(item)
             val collection = item.collectionName
                 ?.let { libraryRepository.observeByCollection(it).first() }
@@ -81,13 +90,7 @@ class DetailsViewModel(
             val episodes = item.seriesStableId
                 ?.let { libraryRepository.observeEpisodes(it).first() }
                 ?: emptyList()
-            _state.value = DetailsUiState(
-                item = item,
-                similar = similar,
-                collection = collection,
-                episodes = episodes,
-                isLoading = false
-            )
+            _state.update { it.copy(similar = similar, collection = collection, episodes = episodes) }
             loadAudioTracks(item)
             loadClickablePersons(item)
         }
@@ -96,11 +99,16 @@ class DetailsViewModel(
     /** Which actors/directors have more than one title in the library - only these are worth opening a filmography for. A full-library scan, so it runs after the screen is already showing rather than gating [DetailsUiState.isLoading]. */
     private suspend fun loadClickablePersons(item: MediaItemEntity) {
         // One getAll() scan shared across every person on this item, rather than a separate
-        // getFilmography() library scan per name.
-        val allItems = libraryRepository.getAll()
-        val clickablePersons = (item.director + item.actors).distinct()
-            .filter { name -> allItems.count { name in it.actors || name in it.director } > 1 }
-            .toSet()
+        // getFilmography() library scan per name. The scan+count below is real CPU work over the
+        // whole library (thousands of items) - left on the caller's dispatcher (viewModelScope
+        // defaults to Main.immediate) it ran right as the Details nav transition was still
+        // animating and dropped frames, reading as the shared-element poster animation stuttering.
+        val clickablePersons = withContext(Dispatchers.Default) {
+            val allItems = libraryRepository.getAll()
+            (item.director + item.actors).distinct()
+                .filter { name -> allItems.count { name in it.actors || name in it.director } > 1 }
+                .toSet()
+        }
         _state.update { it.copy(clickablePersons = clickablePersons) }
     }
 
