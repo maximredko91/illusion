@@ -302,8 +302,12 @@ private fun SeanceNavGraph(app: SeanceApplication, navController: NavHostControl
                         downloadRepository = app.downloadRepository,
                         audioTrackRepository = app.audioTrackRepository,
                         audioTrackProber = app.audioTrackProber,
-                        onPlay = { stableId -> navController.navigate(Destination.Player(stableId)) },
-                        onPlayTrailer = { stableId -> navController.navigate(Destination.Player(stableId, trailer = true)) },
+                        onPlay = { stableId ->
+                            navController.navigate(Destination.Player(stableId)) { launchSingleTop = true }
+                        },
+                        onPlayTrailer = { stableId ->
+                            navController.navigate(Destination.Player(stableId, trailer = true)) { launchSingleTop = true }
+                        },
                         onOpenPerson = { name -> navController.navigate(Destination.Person(name)) },
                         onOpenItem = { stableId -> navController.navigate(Destination.Details(stableId)) },
                         onBack = { navController.popBackStack() }

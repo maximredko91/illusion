@@ -226,6 +226,7 @@ fun PlayerScreen(
             GestureLayer(
                 enabled = !isLocked,
                 seekDurationMs = uiState.seekDurationMs,
+                currentPositionMs = uiState.currentPositionMs,
                 onSingleTap = { controlsVisible = !controlsVisible },
                 onDoubleTapSeek = viewModel::seekBy,
                 onSeekByCommit = viewModel::seekBy,
@@ -405,6 +406,7 @@ private fun Context.findActivity(): Activity? {
 private fun GestureLayer(
     enabled: Boolean,
     seekDurationMs: Long,
+    currentPositionMs: Long,
     onSingleTap: () -> Unit,
     onDoubleTapSeek: (Long) -> Unit,
     onSeekByCommit: (Long) -> Unit,
@@ -447,13 +449,38 @@ private fun GestureLayer(
         }
     }
 
+    var seekToastText by remember { mutableStateOf<String?>(null) }
+    var seekToastAlignment by remember { mutableStateOf(Alignment.Center) }
+    var seekToastHideJob: Job? by remember { mutableStateOf<Job?>(null) }
+
+    fun showSeekToast(text: String, alignment: Alignment, autoHideMs: Long?) {
+        seekToastText = text
+        seekToastAlignment = alignment
+        seekToastHideJob?.cancel()
+        seekToastHideJob = if (autoHideMs != null) {
+            scope.launch {
+                delay(autoHideMs)
+                seekToastText = null
+            }
+        } else {
+            null
+        }
+    }
+
     Box(
         modifier = modifier
             .pointerInput(Unit) {
                 detectTapGestures(
                     onTap = { onSingleTap() },
                     onDoubleTap = { offset ->
-                        onDoubleTapSeek(if (offset.x < size.width / 2f) -seekDurationMs else seekDurationMs)
+                        val forward = offset.x >= size.width / 2f
+                        onDoubleTapSeek(if (forward) seekDurationMs else -seekDurationMs)
+                        val seconds = seekDurationMs / 1000
+                        showSeekToast(
+                            text = "${if (forward) "+" else "-"}$seconds сек",
+                            alignment = if (forward) Alignment.CenterEnd else Alignment.CenterStart,
+                            autoHideMs = 600
+                        )
                     }
                 )
             }
@@ -511,13 +538,24 @@ private fun GestureLayer(
                                 brightnessFraction = newBrightness
                                 pulseBrightness()
                             }
-                            DragMode.SEEK, DragMode.NONE -> Unit
+                            DragMode.SEEK -> {
+                                val deltaMs = (accumulatedDx / size.width * 120_000f).toLong()
+                                val targetMs = (currentPositionMs + deltaMs).coerceAtLeast(0)
+                                val sign = if (deltaMs >= 0) "+" else "-"
+                                showSeekToast(
+                                    text = "${formatTime(targetMs)}  $sign${formatTime(abs(deltaMs))}",
+                                    alignment = Alignment.Center,
+                                    autoHideMs = null
+                                )
+                            }
+                            DragMode.NONE -> Unit
                         }
                     },
                     onDragEnd = {
                         if (mode == DragMode.SEEK) {
                             val deltaMs = (accumulatedDx / size.width * 120_000f).toLong()
                             onSeekByCommit(deltaMs)
+                            showSeekToast(seekToastText.orEmpty(), Alignment.Center, autoHideMs = 400)
                         }
                         mode = DragMode.NONE
                     }
@@ -540,6 +578,14 @@ private fun GestureLayer(
                 modifier = Modifier
                     .align(Alignment.CenterEnd)
                     .padding(end = 24.dp)
+            )
+        }
+        seekToastText?.let { text ->
+            LabelToast(
+                text,
+                modifier = Modifier
+                    .align(seekToastAlignment)
+                    .padding(horizontal = 96.dp)
             )
         }
     }
