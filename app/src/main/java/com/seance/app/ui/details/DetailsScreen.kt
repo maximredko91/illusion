@@ -115,6 +115,7 @@ import com.seance.app.data.repository.LibraryRepository
 import com.seance.app.data.repository.WatchProgressRepository
 import com.seance.app.ui.common.LocalNavAnimatedVisibilityScope
 import com.seance.app.ui.common.LocalSharedTransitionScope
+import com.seance.app.ui.common.PosterBoundsTransform
 import com.seance.app.ui.common.PosterCard
 import com.seance.app.ui.common.RatingBadge
 import com.seance.app.ui.common.ThumbnailImage
@@ -393,7 +394,8 @@ private fun DetailsContent(
                     with(sharedTransitionScope) {
                         posterModifier = posterModifier.sharedElement(
                             rememberSharedContentState(key = posterTransitionKey(item.stableId)),
-                            animatedVisibilityScope = animatedVisibilityScope
+                            animatedVisibilityScope = animatedVisibilityScope,
+                            boundsTransform = PosterBoundsTransform
                         )
                     }
                 }

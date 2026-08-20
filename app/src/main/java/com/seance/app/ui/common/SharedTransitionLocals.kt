@@ -1,8 +1,11 @@
 package com.seance.app.ui.common
 
 import androidx.compose.animation.AnimatedVisibilityScope
+import androidx.compose.animation.BoundsTransform
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.runtime.State
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.mutableFloatStateOf
@@ -38,3 +41,14 @@ val LocalShimmerProgress = compositionLocalOf<State<Float>> { mutableFloatStateO
 
 /** Stable shared-element key for a poster/fanart transitioning between a grid card and its details hero image. */
 fun posterTransitionKey(stableId: String) = "poster-$stableId"
+
+/**
+ * sharedElement()'s default boundsTransform is an independent spring - it settles on its own
+ * schedule, out of step with the surrounding NavHost slide/fade (a fixed 350ms tween, see
+ * SeanceNavGraph's NAV_TRANSITION_MS). The two fighting was what actually read as the poster
+ * transition moving smoothly and then visibly pausing partway through: the tween finishes at
+ * 350ms and stops, while the spring is still catching up (or vice versa). Using the same tween
+ * here keeps the poster's bounds moving in lockstep with the rest of the transition.
+ */
+@OptIn(ExperimentalSharedTransitionApi::class)
+val PosterBoundsTransform = BoundsTransform { _, _ -> tween(durationMillis = 350, easing = FastOutSlowInEasing) }

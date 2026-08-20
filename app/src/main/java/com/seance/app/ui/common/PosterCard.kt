@@ -76,7 +76,8 @@ fun PosterCard(
                 with(sharedTransitionScope) {
                     posterBoxModifier = posterBoxModifier.sharedElement(
                         rememberSharedContentState(key = posterTransitionKey(item.stableId)),
-                        animatedVisibilityScope = animatedVisibilityScope
+                        animatedVisibilityScope = animatedVisibilityScope,
+                        boundsTransform = PosterBoundsTransform
                     )
                 }
             }
