@@ -241,7 +241,13 @@ fun PlayerScreen(
             }
         }
 
-        if (uiState.isLoading && uiState.error == null) {
+        // Centered on the CenterTransportControls play/pause button below when controls are
+        // visible, since that Box's center (excluding the top/bottom bars' height) isn't the
+        // same point as the screen's true center - the gap between the two is small in portrait
+        // but very noticeable in landscape, where the bars eat a much bigger share of the
+        // available height. Only falls back to true screen center when there's no play button
+        // shown to line up with.
+        if (uiState.isLoading && uiState.error == null && (isInPip || !controlsVisible || isLocked)) {
             CircularProgressIndicator(
                 modifier = Modifier.align(Alignment.Center),
                 color = Color.White
@@ -283,6 +289,9 @@ fun PlayerScreen(
                         onOpenSettings = { showSpeedDialog = true }
                     )
                     Box(modifier = Modifier.fillMaxSize().weight(1f), contentAlignment = Alignment.Center) {
+                        if (uiState.isLoading && uiState.error == null && !isLocked) {
+                            CircularProgressIndicator(color = Color.White)
+                        }
                         CenterTransportControls(
                             isPlaying = uiState.isPlaying,
                             onTogglePlayPause = viewModel::togglePlayPause
