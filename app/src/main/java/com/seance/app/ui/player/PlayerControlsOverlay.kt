@@ -38,6 +38,7 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -203,7 +204,13 @@ fun BottomGradientBar(
         }
 
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(formatTime(currentPositionMs), color = Color.White, modifier = Modifier.width(56.dp))
+            Text(
+                formatTime(currentPositionMs),
+                color = Color.White,
+                maxLines = 1,
+                textAlign = TextAlign.End,
+                modifier = Modifier.width(64.dp)
+            )
             Slider(
                 value = sliderPosition,
                 onValueChange = { sliderPosition = it; isDragging = true },
@@ -216,7 +223,12 @@ fun BottomGradientBar(
                 ),
                 modifier = Modifier.weight(1f)
             )
-            Text(formatTime(durationMs), color = Color.White, modifier = Modifier.width(56.dp))
+            Text(
+                formatTime(durationMs),
+                color = Color.White,
+                maxLines = 1,
+                modifier = Modifier.width(64.dp)
+            )
         }
     }
 }
