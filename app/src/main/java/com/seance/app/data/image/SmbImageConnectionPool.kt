@@ -5,6 +5,7 @@ import com.seance.app.data.smb.SmbClient
 import com.seance.app.data.smb.SmbConnection
 import com.seance.app.data.smb.SmbConnectionInfo
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
@@ -23,14 +24,39 @@ class SmbImageConnectionPool(
     private val connectionInfos = mutableMapOf<Long, SmbConnectionInfo>()
 
     private suspend fun poolFor(sourceId: Long): Channel<SmbConnection> = mutex.withLock {
-        pools.getOrPut(sourceId) {
-            val info = connectionInfos.getOrPut(sourceId) {
-                sourceRepository.connectionInfoById(sourceId) ?: error("Unknown or unconfigured SMB source $sourceId")
-            }
-            Channel<SmbConnection>(POOL_SIZE_PER_SOURCE).apply {
-                repeat(POOL_SIZE_PER_SOURCE) { trySend(smbClient.connect(info)) }
+        pools[sourceId]?.let { return@withLock it }
+
+        val info = connectionInfos.getOrPut(sourceId) {
+            sourceRepository.connectionInfoById(sourceId) ?: error("Unknown or unconfigured SMB source $sourceId")
+        }
+        val channel = Channel<SmbConnection>(POOL_SIZE_PER_SOURCE)
+        var opened = 0
+        repeat(POOL_SIZE_PER_SOURCE) {
+            connectWithRetry(info)?.let { connection ->
+                channel.trySend(connection)
+                opened++
             }
         }
+        // A NAS that briefly can't keep up with a burst of new SMB sessions (observed on-device
+        // against this app's router-based NAS, even with a healthy connection) can fail some of
+        // the connects above - as long as at least one made it through, a smaller-than-requested
+        // pool still serves every request, just with less parallelism. Only truly out-of-reach
+        // sources should surface as a hard failure.
+        check(opened > 0) { "Could not open any SMB connection for source $sourceId" }
+        pools[sourceId] = channel
+        channel
+    }
+
+    /** Retries with a short backoff between tries - an immediate retry lands in the same burst that caused the first failure. */
+    private suspend fun connectWithRetry(info: SmbConnectionInfo): SmbConnection? {
+        repeat(CONNECT_ATTEMPTS) { attempt ->
+            try {
+                return smbClient.connect(info)
+            } catch (e: Exception) {
+                if (attempt < CONNECT_ATTEMPTS - 1) delay(CONNECT_RETRY_BACKOFF_MS)
+            }
+        }
+        return null
     }
 
     /**
@@ -40,7 +66,22 @@ class SmbImageConnectionPool(
      * source broken until the app restarts.
      */
     suspend fun <T> withConnection(sourceId: Long, block: suspend (SmbConnection) -> T): T {
-        val pool = poolFor(sourceId)
+        val pool = try {
+            poolFor(sourceId)
+        } catch (e: Exception) {
+            // The whole burst of pool connections failed (NAS-side transient overload, seen
+            // on-device) - rather than failing this one request outright, serve it off a single
+            // standalone connection instead of the pool. Same retry budget as the pool build
+            // itself: this is often the very first request racing the pool's own cold-start
+            // burst, so it deserves the same chances to ride out the NAS's transient hiccup.
+            val connection = connectWithRetry(connectionInfos.getValue(sourceId))
+                ?: error("Could not open any SMB connection for source $sourceId")
+            return try {
+                block(connection)
+            } finally {
+                runCatching { connection.close() }
+            }
+        }
         var connection = pool.receive()
         try {
             return try {
@@ -61,5 +102,7 @@ class SmbImageConnectionPool(
         // pop-in as each fetch finishes. 6 lets a full row or more load in parallel while still
         // bounding how many concurrent SMB reads one screen can put on the NAS.
         private const val POOL_SIZE_PER_SOURCE = 6
+        private const val CONNECT_ATTEMPTS = 3
+        private const val CONNECT_RETRY_BACKOFF_MS = 250L
     }
 }

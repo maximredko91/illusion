@@ -50,7 +50,16 @@ object WorkScheduler {
             .setConstraints(constraints)
             .build()
 
-        WorkManager.getInstance(context).enqueueUniqueWork(
+        val workManager = WorkManager.getInstance(context)
+        // The periodic auto-rescan (rescheduled on every app launch, see Splash) uses a separate
+        // unique work name, so REPLACE below only dedupes against a previous manual scan - it
+        // does nothing to stop the periodic one from running at the same time. Two LibraryScanner
+        // passes over the same SMB source concurrently was observed on-device to produce
+        // incomplete/incorrect rescans (both racing the same Room writes and the same limited SMB
+        // session budget) - cancel the periodic run explicitly so a manual "rescan now" always has
+        // the source to itself. It's harmless to cancel: the next app launch reschedules it.
+        workManager.cancelUniqueWork(PERIODIC_SCAN_WORK_NAME)
+        workManager.enqueueUniqueWork(
             ONE_TIME_SCAN_WORK_NAME,
             ExistingWorkPolicy.REPLACE,
             request

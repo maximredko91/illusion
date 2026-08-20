@@ -14,19 +14,26 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -41,6 +48,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
@@ -228,7 +236,7 @@ fun PlayerScreen(
         if (!isInPip) {
             resizeModeLabel?.let { label ->
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    GestureIndicator(label = label, fraction = null, modifier = Modifier.align(Alignment.Center))
+                    LabelToast(label, modifier = Modifier.align(Alignment.Center))
                 }
             }
         }
@@ -409,14 +417,23 @@ private fun GestureLayer(
     var showBrightness by remember { mutableStateOf(false) }
     var volumeFraction by remember { mutableFloatStateOf(0f) }
     var brightnessFraction by remember { mutableFloatStateOf(0.5f) }
-    var indicatorHideJob: Job? by remember { mutableStateOf<Job?>(null) }
+    var volumeHideJob: Job? by remember { mutableStateOf<Job?>(null) }
+    var brightnessHideJob: Job? by remember { mutableStateOf<Job?>(null) }
 
-    fun pulseIndicator(onVolume: Boolean) {
-        if (onVolume) showVolume = true else showBrightness = true
-        indicatorHideJob?.cancel()
-        indicatorHideJob = scope.launch {
+    fun pulseVolume() {
+        showVolume = true
+        volumeHideJob?.cancel()
+        volumeHideJob = scope.launch {
             delay(800)
             showVolume = false
+        }
+    }
+
+    fun pulseBrightness() {
+        showBrightness = true
+        brightnessHideJob?.cancel()
+        brightnessHideJob = scope.launch {
+            delay(800)
             showBrightness = false
         }
     }
@@ -476,14 +493,14 @@ private fun GestureLayer(
                                 val newVolume = (dragStartVolume + fraction * maxVolume).roundToInt().coerceIn(0, maxVolume)
                                 audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, newVolume, 0)
                                 volumeFraction = if (maxVolume > 0) newVolume.toFloat() / maxVolume else 0f
-                                pulseIndicator(onVolume = true)
+                                pulseVolume()
                             }
                             DragMode.BRIGHTNESS -> {
                                 val fraction = -accumulatedDy / size.height
                                 val newBrightness = (dragStartBrightness + fraction).coerceIn(0.02f, 1f)
                                 activity?.let { setBrightness(it, newBrightness) }
                                 brightnessFraction = newBrightness
-                                pulseIndicator(onVolume = false)
+                                pulseBrightness()
                             }
                             DragMode.SEEK, DragMode.NONE -> Unit
                         }
@@ -498,25 +515,74 @@ private fun GestureLayer(
                 )
             }
     ) {
-        if (showVolume) {
-            GestureIndicator(label = "Громкость", fraction = volumeFraction, modifier = Modifier.align(Alignment.Center))
-        }
         if (showBrightness) {
-            GestureIndicator(label = "Яркость", fraction = brightnessFraction, modifier = Modifier.align(Alignment.Center))
+            GestureIndicator(
+                label = "Яркость",
+                fraction = brightnessFraction,
+                modifier = Modifier
+                    .align(Alignment.CenterStart)
+                    .padding(start = 24.dp)
+            )
+        }
+        if (showVolume) {
+            GestureIndicator(
+                label = "Громкость",
+                fraction = volumeFraction,
+                modifier = Modifier
+                    .align(Alignment.CenterEnd)
+                    .padding(end = 24.dp)
+            )
         }
     }
 }
 
 @Composable
-private fun GestureIndicator(label: String, fraction: Float?, modifier: Modifier = Modifier) {
+private fun LabelToast(label: String, modifier: Modifier = Modifier) {
     Column(
         modifier = modifier
+            .clip(RoundedCornerShape(12.dp))
             .background(Color.Black.copy(alpha = 0.6f))
             .padding(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        val text = if (fraction != null) "$label ${(fraction * 100).roundToInt()}%" else label
-        Text(text, color = Color.White)
+        Text(label, color = Color.White)
+    }
+}
+
+/** A vertical capsule HUD for volume/brightness, positioned at a screen edge so the two never overlap. */
+@Composable
+private fun GestureIndicator(label: String, fraction: Float, modifier: Modifier = Modifier) {
+    Column(
+        modifier = modifier,
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        Text(
+            text = label,
+            color = Color.White.copy(alpha = 0.85f),
+            style = MaterialTheme.typography.labelSmall
+        )
+        Box(
+            modifier = Modifier
+                .width(28.dp)
+                .height(96.dp)
+                .clip(RoundedCornerShape(14.dp))
+                .background(Color.Black.copy(alpha = 0.3f)),
+            contentAlignment = Alignment.BottomCenter
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .fillMaxHeight(fraction.coerceIn(0f, 1f))
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(Color.White.copy(alpha = 0.75f))
+            )
+        }
+        Text(
+            text = "${(fraction * 100).roundToInt()}%",
+            color = Color.White.copy(alpha = 0.85f),
+            style = MaterialTheme.typography.labelSmall
+        )
     }
 }
 
