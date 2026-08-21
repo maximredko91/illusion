@@ -1,6 +1,7 @@
 package com.seance.app.ui.player
 
 import android.content.Context
+import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
@@ -28,20 +29,27 @@ import com.seance.app.data.download.DownloadStorage
 import com.seance.app.data.local.entity.DownloadEntity
 import com.seance.app.data.local.entity.DownloadStatus
 import com.seance.app.data.local.entity.MediaItemEntity
+import com.seance.app.data.player.ExternalPlayer
 import com.seance.app.data.player.SmbDataSourceFactory
 import com.seance.app.data.player.SmbMediaUri
 import com.seance.app.data.repository.DownloadRepository
 import com.seance.app.data.repository.LibraryRepository
+import com.seance.app.data.repository.SmbSourceRepository
 import com.seance.app.data.repository.ThumbnailRepository
 import com.seance.app.data.repository.WatchProgressRepository
 import com.seance.app.data.settings.SettingsRepository
+import com.seance.app.data.smb.SmbCredentialStore
+import com.seance.app.domain.model.PlayerMode
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -95,6 +103,8 @@ class PlayerViewModel(
     private val settingsRepository: SettingsRepository,
     dataSourceFactory: SmbDataSourceFactory,
     private val downloadRepository: DownloadRepository,
+    private val smbSourceRepository: SmbSourceRepository,
+    private val credentialStore: SmbCredentialStore,
     context: Context
 ) : ViewModel() {
 
@@ -119,6 +129,12 @@ class PlayerViewModel(
 
     private val _state = MutableStateFlow(PlayerUiState())
     val state: StateFlow<PlayerUiState> = _state.asStateFlow()
+
+    // One-shot event, not a state field - the player-mode setting is checked once per load(), and
+    // the screen just hands the intent to the OS and navigates back; there's nothing about "an
+    // external player was launched" that should survive a recomposition or get re-fired by one.
+    private val _launchExternalPlayer = Channel<Intent>(Channel.BUFFERED)
+    val launchExternalPlayer: Flow<Intent> = _launchExternalPlayer.receiveAsFlow()
 
     private var currentItem: MediaItemEntity? = null
     private var currentTrailerItem: MediaItemEntity? = null
@@ -205,6 +221,22 @@ class PlayerViewModel(
             }
             currentItem = item
             currentTrailerItem = null
+
+            // Was a manual "open in external player" button inside the player's own settings
+            // sheet (one-off, had to be tapped every single time) - moved to a persistent Settings
+            // choice per user feedback, checked once here instead. Trailers always play internally
+            // regardless (short clips, not worth the round-trip to another app), which is why this
+            // sits after the `playTrailer` branch above rather than before it.
+            if (settingsRepository.playerMode.first() == PlayerMode.EXTERNAL) {
+                val intent = resolveExternalPlayerIntent(item)
+                if (intent != null) {
+                    _launchExternalPlayer.send(intent)
+                    return@launch
+                }
+                // No compatible app / the item's SMB source no longer exists - fall through to
+                // internal playback rather than leaving the user stuck on a blank screen.
+            }
+
             val resume = watchProgressRepository.getProgress(stableId)
             val startPositionMs = resume?.takeIf { !it.watched }?.positionMs ?: 0L
 
@@ -286,6 +318,17 @@ class PlayerViewModel(
         val download = downloadRepository.getForItem(stableId) ?: return null
         if (download.status != DownloadStatus.COMPLETED) return null
         return download.takeIf { DownloadStorage.exists(appContext, Uri.parse(it.contentUri)) }
+    }
+
+    /** Intent to hand [item] off to an external video player app - null if there's no compatible app or its SMB source no longer exists. */
+    private suspend fun resolveExternalPlayerIntent(item: MediaItemEntity): Intent? {
+        val download = completedDownload(item.stableId)
+        if (download != null) {
+            return ExternalPlayer.forDownload(download.contentUri, item.title)
+        }
+        val source = smbSourceRepository.getById(item.sourceId) ?: return null
+        val password = credentialStore.getPassword(source.id)
+        return ExternalPlayer.forSmbSource(source, password, item.filePath, item.title)
     }
 
     private suspend fun loadThumbnailFrames(stableId: String) {
@@ -555,6 +598,8 @@ class PlayerViewModel(
             settingsRepository: SettingsRepository,
             dataSourceFactory: SmbDataSourceFactory,
             downloadRepository: DownloadRepository,
+            smbSourceRepository: SmbSourceRepository,
+            credentialStore: SmbCredentialStore,
             context: Context
         ) = viewModelFactory {
             initializer {
@@ -565,6 +610,8 @@ class PlayerViewModel(
                     settingsRepository,
                     dataSourceFactory,
                     downloadRepository,
+                    smbSourceRepository,
+                    credentialStore,
                     context.applicationContext
                 )
             }

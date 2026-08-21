@@ -49,11 +49,10 @@ fun PosterCard(
     item: MediaItemEntity,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
-    showRatingBadge: Boolean = false
+    showRatingBadge: Boolean = false,
+    posterAspectRatio: Float = 2f / 3f
 ) {
     val haptics = LocalHapticFeedback.current
-    val sharedTransitionScope = LocalSharedTransitionScope.current
-    val animatedVisibilityScope = LocalNavAnimatedVisibilityScope.current
     val interactionSource = remember { MutableInteractionSource() }
 
     Card(
@@ -69,18 +68,15 @@ fun PosterCard(
             }
     ) {
         Column {
-            var posterBoxModifier = Modifier
-                .fillMaxWidth()
-                .aspectRatio(2f / 3f)
-            if (sharedTransitionScope != null && animatedVisibilityScope != null) {
-                with(sharedTransitionScope) {
-                    posterBoxModifier = posterBoxModifier.sharedElement(
-                        rememberSharedContentState(key = posterTransitionKey(item.stableId)),
-                        animatedVisibilityScope = animatedVisibilityScope,
-                        boundsTransform = PosterBoundsTransform
-                    )
-                }
-            }
+            // Shared-element bounds-morph into/out of Details deliberately removed (per user
+            // feedback: it read as the poster "flying in" oddly rather than a clean transition) -
+            // Details now just fades in/out (see NAV_TRANSITION handling in SeanceNavHost), no
+            // bounds animation on the poster itself.
+            //
+            // The poster always keeps its full aspect ratio (never cropped to force an exact row
+            // count on screen - tried and rejected per user feedback: a fixed pixel height forced
+            // Crop to cut off parts of the image, e.g. faces).
+            val posterBoxModifier = Modifier.fillMaxWidth().aspectRatio(posterAspectRatio)
             Box(modifier = posterBoxModifier) {
                 val model = item.posterModel
                 if (model != null) {

@@ -2,15 +2,20 @@ package com.seance.app
 
 import android.app.PictureInPictureParams
 import android.content.res.Configuration
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -18,6 +23,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.core.content.ContextCompat
 import com.seance.app.data.crash.CrashReporter
 import com.seance.app.ui.navigation.SeanceNavHost
 import com.seance.app.ui.player.PipController
@@ -29,12 +35,14 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         val app = application as SeanceApplication
         setContent {
-            SeanceTheme {
+            val accentColor by app.settingsRepository.accentColor.collectAsState(initial = com.seance.app.domain.model.AccentColor.DEFAULT)
+            SeanceTheme(accentColor = accentColor) {
                 SeanceNavHost(
                     app = app,
                     modifier = Modifier.fillMaxSize()
                 )
                 CrashReportPrompt()
+                NotificationPermissionRequest()
             }
         }
     }
@@ -52,6 +60,20 @@ class MainActivity : ComponentActivity() {
     override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean, newConfig: Configuration) {
         super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
         PipController.isInPipMode = isInPictureInPictureMode
+    }
+}
+
+/** One-shot request for POST_NOTIFICATIONS (API 33+) so a background library rescan's result notification (see ScanNotifications) can actually show - a denial just means that notification silently doesn't appear, nothing else in the app depends on it. */
+@Composable
+private fun NotificationPermissionRequest() {
+    val context = LocalContext.current
+    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {}
+    LaunchedEffect(Unit) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(context, android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED
+        ) {
+            launcher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+        }
     }
 }
 

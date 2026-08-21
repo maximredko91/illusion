@@ -6,6 +6,8 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import com.seance.app.domain.model.AccentColor
+import com.seance.app.domain.model.PlayerMode
 import com.seance.app.domain.model.SortOrder
 import com.seance.app.domain.model.UiMode
 import kotlinx.coroutines.flow.Flow
@@ -24,6 +26,8 @@ class SettingsRepository(private val context: Context) {
         val DOWNLOADS_FOLDER_URI = stringPreferencesKey("downloads_folder_uri")
         val UI_MODE = stringPreferencesKey("ui_mode")
         val HAPTICS_ENABLED = booleanPreferencesKey("haptics_enabled")
+        val ACCENT_COLOR = stringPreferencesKey("accent_color")
+        val PLAYER_MODE = stringPreferencesKey("player_mode")
     }
 
     val requireChargingForHeavyTasks: Flow<Boolean> = context.dataStore.data.map {
@@ -31,7 +35,7 @@ class SettingsRepository(private val context: Context) {
     }
 
     val rescanIntervalHours: Flow<Int> = context.dataStore.data.map {
-        it[Keys.RESCAN_INTERVAL_HOURS] ?: 24
+        it[Keys.RESCAN_INTERVAL_HOURS] ?: 48
     }
 
     val defaultSortOrder: Flow<SortOrder> = context.dataStore.data.map {
@@ -101,7 +105,27 @@ class SettingsRepository(private val context: Context) {
         context.dataStore.edit { it[Keys.HAPTICS_ENABLED] = value }
     }
 
-    /** Clears every preference here (sort order, haptics, seek duration, sharpen, poster caching, rescan interval, charging requirement, downloads folder, UI mode) back to its default - does not touch SMB sources or the library index, only this DataStore. */
+    /** DEFAULT keeps Material You wallpaper-based dynamic color (or the original hardcoded purple scheme below API 31) - any other value overrides the theme with a fixed accent instead. */
+    val accentColor: Flow<AccentColor> = context.dataStore.data.map {
+        it[Keys.ACCENT_COLOR]?.let { name -> runCatching { AccentColor.valueOf(name) }.getOrNull() }
+            ?: AccentColor.DEFAULT
+    }
+
+    suspend fun setAccentColor(color: AccentColor) {
+        context.dataStore.edit { it[Keys.ACCENT_COLOR] = color.name }
+    }
+
+    /** Which player handles playback - was a one-off "open in external player" action button inside the player itself, moved here as a persistent default per user feedback (choose once, not every time). */
+    val playerMode: Flow<PlayerMode> = context.dataStore.data.map {
+        it[Keys.PLAYER_MODE]?.let { name -> runCatching { PlayerMode.valueOf(name) }.getOrNull() }
+            ?: PlayerMode.INTERNAL
+    }
+
+    suspend fun setPlayerMode(mode: PlayerMode) {
+        context.dataStore.edit { it[Keys.PLAYER_MODE] = mode.name }
+    }
+
+    /** Clears every preference here (sort order, haptics, seek duration, sharpen, poster caching, rescan interval, charging requirement, downloads folder, UI mode, player mode) back to its default - does not touch SMB sources or the library index, only this DataStore. */
     suspend fun resetToDefaults() {
         context.dataStore.edit { it.clear() }
     }

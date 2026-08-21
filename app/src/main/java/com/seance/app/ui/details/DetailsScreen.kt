@@ -3,6 +3,10 @@ package com.seance.app.ui.details
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -12,6 +16,7 @@ import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusGroup
+import androidx.compose.ui.draw.scale
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -113,13 +118,9 @@ import com.seance.app.data.repository.AudioTrackRepository
 import com.seance.app.data.repository.DownloadRepository
 import com.seance.app.data.repository.LibraryRepository
 import com.seance.app.data.repository.WatchProgressRepository
-import com.seance.app.ui.common.LocalNavAnimatedVisibilityScope
-import com.seance.app.ui.common.LocalSharedTransitionScope
-import com.seance.app.ui.common.PosterBoundsTransform
 import com.seance.app.ui.common.PosterCard
 import com.seance.app.ui.common.RatingBadge
 import com.seance.app.ui.common.ThumbnailImage
-import com.seance.app.ui.common.posterTransitionKey
 import com.seance.app.ui.common.shimmer
 import com.seance.app.ui.common.ZoomableImageViewer
 import com.seance.app.ui.common.focusHighlight
@@ -379,26 +380,71 @@ private fun DetailsContent(
                     tint = Color.White
                 )
             }
+
+            // Moved here from the play-button row below (per user feedback) - top-right on the
+            // fanart mirrors the back button's placement on the left, and reads as a standard
+            // "favorite this" corner action the way most media apps place it, rather than
+            // competing for space with Play/Trailer/Download in one row.
+            val haptics = LocalHapticFeedback.current
+            val favoriteSource = remember { MutableInteractionSource() }
+            val favoriteScale = remember { Animatable(1f) }
+            val favoriteScope = rememberCoroutineScope()
+            val favoriteTint by animateColorAsState(
+                targetValue = if (isFavorite) Color(0xFFE53935) else Color.White,
+                label = "favoriteTint"
+            )
+            IconButton(
+                onClick = {
+                    haptics.toggle(!isFavorite)
+                    onToggleFavorite()
+                    // A little bounce every tap - in either direction (add or remove) - gives the
+                    // action some tactile weight beyond just the icon/color swap underneath it.
+                    favoriteScope.launch {
+                        favoriteScale.snapTo(0.7f)
+                        favoriteScale.animateTo(1f, animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow))
+                    }
+                },
+                interactionSource = favoriteSource,
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(4.dp)
+                    .background(Color.Black.copy(alpha = 0.5f), CircleShape)
+                    .focusHighlight(favoriteSource, color = Color.White)
+            ) {
+                Crossfade(targetState = isFavorite, label = "favoriteIcon") { favorite ->
+                    Icon(
+                        imageVector = if (favorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                        contentDescription = stringResource(
+                            if (favorite) R.string.details_favorite_remove else R.string.details_favorite_add
+                        ),
+                        tint = favoriteTint,
+                        modifier = Modifier.scale(favoriteScale.value)
+                    )
+                }
+            }
         }
 
         Row(modifier = Modifier.padding(horizontal = 16.dp)) {
             val poster = item.posterModel
             if (poster != null) {
-                val sharedTransitionScope = LocalSharedTransitionScope.current
-                val animatedVisibilityScope = LocalNavAnimatedVisibilityScope.current
+                // Shared-element bounds-morph from the grid poster removed (per user feedback -
+                // see the matching note in PosterCard.kt) - Details now just fades in/out instead.
+                // Used to pull the poster up by a fixed 42dp so it overlapped the fanart above it
+                // (a "hero card" look) - dropped per user feedback: the fanart's own height here
+                // is a fixed 220dp regardless of screen size, so that overlap had no situation
+                // where it was actually needed for space, it just permanently covered part of the
+                // fanart image. The poster now sits flush against the fanart's bottom edge.
+                //
+                // Stretching the poster to match the metadata column's height (via
+                // Modifier.height(IntrinsicSize.Min) on the Row + fillMaxHeight here) was tried to
+                // close the empty space a long original title left underneath the poster - dropped,
+                // it fed back on itself: a taller poster claims more width to keep its aspect ratio,
+                // which leaves the title column narrower, which wraps the title onto even more
+                // lines, which grows the column taller still. The title itself is now capped at 4
+                // lines below instead, which keeps the column from running away in the first place.
                 var posterModifier = Modifier
                     .width(132.dp)
                     .aspectRatio(2f / 3f)
-                    .offset(y = (-42).dp)
-                if (sharedTransitionScope != null && animatedVisibilityScope != null) {
-                    with(sharedTransitionScope) {
-                        posterModifier = posterModifier.sharedElement(
-                            rememberSharedContentState(key = posterTransitionKey(item.stableId)),
-                            animatedVisibilityScope = animatedVisibilityScope,
-                            boundsTransform = PosterBoundsTransform
-                        )
-                    }
-                }
                 val posterSource = remember { MutableInteractionSource() }
                 posterModifier = posterModifier
                     .focusHighlight(posterSource)
@@ -424,23 +470,46 @@ private fun DetailsContent(
             }
             Column(
                 modifier = Modifier.padding(start = 12.dp, top = 8.dp).fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(6.dp)
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 val originalTitle = item.originalTitle?.takeIf { it.isNotBlank() && it != item.title }
-                Text(
-                    buildAnnotatedString {
-                        append(displayTitle)
-                        if (originalTitle != null) {
-                            withStyle(
-                                SpanStyle(
-                                    fontWeight = FontWeight.Normal,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            ) { append("\n($originalTitle)") }
-                        }
-                    },
-                    style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold)
-                )
+                // Title and original title share their own tight-spaced Column, separate from the
+                // outer 8dp rhythm used between the bigger blocks below (year/genres/...) - two
+                // separate Text composables sitting right next to each other under that wider
+                // spacing read as two unrelated lines, not one title with its original name under
+                // it.
+                Column(verticalArrangement = Arrangement.spacedBy(0.dp)) {
+                    // Two separate Text composables, not one combined AnnotatedString with a shared
+                    // maxLines - a single shared line budget meant a long original title (e.g. "The
+                    // Lord of the Rings: The Return of the King") could eat into the budget enough
+                    // that the ellipsis landed on the *main* title's own line, making it look like
+                    // the movie's real name got cut off, when only the parenthetical original title
+                    // needed trimming.
+                    Text(
+                        displayTitle,
+                        style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold)
+                    )
+                    if (originalTitle != null) {
+                        // Capped at 2 lines by default so a long original title can't tower past the
+                        // poster's own height and leave a lot of blank space under it - but capping
+                        // it outright would make the full title unreachable for someone who actually
+                        // wants to read it (e.g. to search for it), so a tap expands it in place.
+                        var originalTitleExpanded by remember(item.stableId) { mutableStateOf(false) }
+                        val originalTitleSource = remember { MutableInteractionSource() }
+                        Text(
+                            "($originalTitle)",
+                            style = MaterialTheme.typography.headlineSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = if (originalTitleExpanded) Int.MAX_VALUE else 2,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier
+                                .focusHighlight(originalTitleSource)
+                                .clickable(interactionSource = originalTitleSource, indication = LocalIndication.current) {
+                                    originalTitleExpanded = !originalTitleExpanded
+                                }
+                        )
+                    }
+                }
                 Text(
                     listOfNotNull(
                         item.year?.toString(),
@@ -452,9 +521,14 @@ private fun DetailsContent(
                     color = MaterialTheme.colorScheme.primary
                 )
                 if (item.genres.isNotEmpty()) {
-                    Row(
+                    // FlowRow, not a horizontally-scrolling Row (tried first, dropped per user
+                    // feedback - same reasoning as the accent-color swatches in Settings: genre
+                    // chips should all be visible at once, wrapping to a second line, not scrolled
+                    // through).
+                    androidx.compose.foundation.layout.FlowRow(
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
-                        modifier = Modifier.horizontalScroll(rememberScrollState())
+                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                        modifier = Modifier.padding(top = 2.dp)
                     ) {
                         item.genres.forEach { genre ->
                             Text(
@@ -468,22 +542,52 @@ private fun DetailsContent(
                         }
                     }
                 }
-                item.studio?.takeIf { it.isNotBlank() }?.let {
-                    Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
             }
         }
 
-        // Full width, not squeezed into the column next to the poster - a long tagline there could
-        // grow much taller than the poster itself, leaving a large empty gap underneath it once the
-        // Row's height stretched to fit the text. Here it just wraps naturally under everything.
-        item.tagline?.takeIf { it.isNotBlank() }?.let {
-            Text(
-                it,
-                style = MaterialTheme.typography.bodySmall.copy(fontStyle = FontStyle.Italic),
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 4.dp)
-            )
+        // Tagline and studio moved out of the narrow column next to the poster (where studio used
+        // to sit) into one shared full-width block below everything - per user feedback, having
+        // one crammed into that cramped column and the other as a bare line further down didn't
+        // read as a deliberate part of the design. Grouped together in their own lightly-tinted
+        // card here instead, both get the room to breathe a plain inline `Text` next to a poster
+        // never had.
+        val tagline = item.tagline?.takeIf { it.isNotBlank() }
+        val studio = item.studio?.takeIf { it.isNotBlank() }
+        if (tagline != null || studio != null) {
+            Column(
+                modifier = Modifier
+                    .padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 8.dp)
+                    .fillMaxWidth()
+                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f), RoundedCornerShape(12.dp))
+                    .padding(12.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                tagline?.let {
+                    Column {
+                        Text(
+                            stringResource(R.string.details_tagline_label),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            it,
+                            style = MaterialTheme.typography.titleSmall.copy(fontStyle = FontStyle.Italic),
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.padding(top = 2.dp)
+                        )
+                    }
+                }
+                studio?.let {
+                    Column {
+                        Text(
+                            stringResource(R.string.details_studio_label),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(it, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = 2.dp))
+                    }
+                }
+            }
         }
 
         Row(
@@ -509,33 +613,26 @@ private fun DetailsContent(
                 )
             }
             if (item.trailerPath != null) {
+                // Was icon-only (a bare Icons.Default.Theaters circle) - per user feedback, nothing
+                // about that icon alone actually reads as "trailer" to someone who hasn't already
+                // learned what it means here. A short label fixes that; it fits without pushing
+                // anything off-screen since the play button next to it already flexes down via
+                // Modifier.weight(1f).
                 val trailerSource = remember { MutableInteractionSource() }
-                OutlinedIconButton(
+                OutlinedButton(
                     onClick = { onPlayTrailer(item.stableId) },
                     interactionSource = trailerSource,
-                    colors = IconButtonDefaults.outlinedIconButtonColors(contentColor = MaterialTheme.colorScheme.primary),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.primary),
                     border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary),
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
                     modifier = Modifier.focusHighlight(trailerSource)
                 ) {
-                    Icon(Icons.Default.Theaters, contentDescription = stringResource(R.string.details_trailer))
-                }
-            }
-            val haptics = LocalHapticFeedback.current
-            val favoriteSource = remember { MutableInteractionSource() }
-            IconButton(
-                onClick = {
-                    haptics.toggle(!isFavorite)
-                    onToggleFavorite()
-                },
-                interactionSource = favoriteSource,
-                modifier = Modifier.focusHighlight(favoriteSource)
-            ) {
-                Crossfade(targetState = isFavorite, label = "favoriteIcon") { favorite ->
-                    Icon(
-                        imageVector = if (favorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                        contentDescription = stringResource(
-                            if (favorite) R.string.details_favorite_remove else R.string.details_favorite_add
-                        )
+                    Icon(Icons.Default.Theaters, contentDescription = null)
+                    Text(
+                        stringResource(R.string.details_trailer),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(start = 6.dp)
                     )
                 }
             }
@@ -702,7 +799,7 @@ private fun PersonRow(label: String, names: List<String>, clickablePersons: Set<
             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
             modifier = Modifier.focusGroup()
         ) {
-            items(names) { name ->
+            items(names, key = { it }) { name ->
                 // Only worth a filmography screen when the person has more than one title here -
                 // otherwise it's just this one item again, so the chip stays inert (greyed out).
                 val clickable = name in clickablePersons

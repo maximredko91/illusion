@@ -12,10 +12,13 @@ import com.seance.app.data.backup.BackupManager
 import com.seance.app.data.backup.BackupSource
 import com.seance.app.data.local.entity.SmbSourceEntity
 import com.seance.app.data.repository.DownloadRepository
+import com.seance.app.data.repository.LibraryRepository
 import com.seance.app.data.repository.SmbSourceRepository
 import com.seance.app.data.repository.ThumbnailRepository
+import com.seance.app.data.repository.WatchProgressRepository
 import com.seance.app.data.security.DevAccessStore
 import com.seance.app.data.settings.SettingsRepository
+import com.seance.app.domain.model.PlayerMode
 import com.seance.app.domain.model.SortOrder
 import com.seance.app.domain.model.UiMode
 import com.seance.app.work.WorkScheduler
@@ -37,7 +40,9 @@ class SettingsViewModel(
     private val thumbnailRepository: ThumbnailRepository,
     private val downloadRepository: DownloadRepository,
     private val backupManager: BackupManager,
-    private val devAccessStore: DevAccessStore
+    private val devAccessStore: DevAccessStore,
+    private val libraryRepository: LibraryRepository,
+    private val watchProgressRepository: WatchProgressRepository
 ) : ViewModel() {
     fun hasDevPassword(): Boolean = devAccessStore.hasPassword
     fun generateDevPassword(): String = devAccessStore.generatePassword()
@@ -56,6 +61,16 @@ class SettingsViewModel(
     val uiMode: Flow<UiMode?> = settingsRepository.uiMode
     val defaultSortOrder: Flow<SortOrder> = settingsRepository.defaultSortOrder
     val hapticsEnabled: Flow<Boolean> = settingsRepository.hapticsEnabled
+    val accentColor: Flow<com.seance.app.domain.model.AccentColor> = settingsRepository.accentColor
+    val playerMode: Flow<PlayerMode> = settingsRepository.playerMode
+
+    fun setAccentColor(color: com.seance.app.domain.model.AccentColor) {
+        viewModelScope.launch { settingsRepository.setAccentColor(color) }
+    }
+
+    fun setPlayerMode(mode: PlayerMode) {
+        viewModelScope.launch { settingsRepository.setPlayerMode(mode) }
+    }
 
     fun setDefaultSortOrder(order: SortOrder) {
         viewModelScope.launch { settingsRepository.setDefaultSortOrder(order) }
@@ -67,6 +82,30 @@ class SettingsViewModel(
 
     fun resetToDefaults() {
         viewModelScope.launch { settingsRepository.resetToDefaults() }
+    }
+
+    /**
+     * True factory reset - unlike [resetToDefaults] (settings/preferences only), this wipes every
+     * piece of app data: SMB sources + their stored credentials, the whole library index,
+     * favorites/watch history, downloaded files, cached thumbnails/posters, the dev-access
+     * password, and finally the settings themselves. Also cancels the periodic background rescan
+     * (nothing left for it to scan against until a source is re-added).
+     */
+    fun factoryReset(context: Context) {
+        viewModelScope.launch {
+            downloadRepository.removeAll()
+            libraryRepository.clearAll()
+            watchProgressRepository.clearHistory()
+            watchProgressRepository.clearFavorites()
+            thumbnailRepository.clearAll()
+            smbSourceRepository.deleteAllSources()
+            devAccessStore.clearAll()
+            settingsRepository.resetToDefaults()
+            withContext(Dispatchers.IO) { context.cacheDir.deleteRecursively() }
+            WorkScheduler.cancelPeriodicScan(context)
+            refreshCacheSize(context)
+            refreshDownloadsSize()
+        }
     }
 
     private val _cacheSizeBytes = MutableStateFlow<Long?>(null)
@@ -270,9 +309,22 @@ class SettingsViewModel(
             thumbnailRepository: ThumbnailRepository,
             downloadRepository: DownloadRepository,
             backupManager: BackupManager,
-            devAccessStore: DevAccessStore
+            devAccessStore: DevAccessStore,
+            libraryRepository: LibraryRepository,
+            watchProgressRepository: WatchProgressRepository
         ) = viewModelFactory {
-            initializer { SettingsViewModel(smbSourceRepository, settingsRepository, thumbnailRepository, downloadRepository, backupManager, devAccessStore) }
+            initializer {
+                SettingsViewModel(
+                    smbSourceRepository,
+                    settingsRepository,
+                    thumbnailRepository,
+                    downloadRepository,
+                    backupManager,
+                    devAccessStore,
+                    libraryRepository,
+                    watchProgressRepository
+                )
+            }
         }
     }
 }

@@ -49,5 +49,7 @@ class WatchProgressRepository(
 
     suspend fun restoreFavorites(entries: List<FavoriteEntity>) = entries.forEach { favoriteDao.add(it) }
 
+    suspend fun clearFavorites() = favoriteDao.deleteAll()
+
     suspend fun restoreProgress(entries: List<WatchProgressEntity>) = entries.forEach { progressDao.upsert(it) }
 }

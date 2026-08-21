@@ -30,12 +30,18 @@ class LibraryViewModel(
     private val _sortOrder = MutableStateFlow(SortOrder.DATE_ADDED)
     val sortOrder: StateFlow<SortOrder> = _sortOrder.asStateFlow()
 
-    // Settings' "default sort order" only seeds the initial value here - once the user picks a
-    // different order via this screen's own SortMenu for this session, that user choice takes
-    // over via setSortOrder() below like before; this doesn't turn into an ongoing subscription.
+    // Tracks whether the user has picked a sort order via this screen's own SortMenu this
+    // session - until they do, this ViewModel keeps following live changes to Settings' "default
+    // sort order" instead of only reading it once in init{} (a one-shot read meant the setting
+    // only visibly applied after an app restart, since this ViewModel outlives the Settings
+    // screen for as long as its tab stays selected).
+    private var userOverrodeSortOrder = false
+
     init {
         viewModelScope.launch {
-            _sortOrder.value = settingsRepository.defaultSortOrder.first()
+            settingsRepository.defaultSortOrder.collect { default ->
+                if (!userOverrodeSortOrder) _sortOrder.value = default
+            }
         }
     }
 
@@ -82,6 +88,7 @@ class LibraryViewModel(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     fun setSortOrder(order: SortOrder) {
+        userOverrodeSortOrder = true
         _sortOrder.value = order
     }
 

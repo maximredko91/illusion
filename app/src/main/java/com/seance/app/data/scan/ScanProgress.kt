@@ -1,7 +1,9 @@
 package com.seance.app.data.scan
 
+import android.content.Context
 import androidx.work.Data
 import androidx.work.workDataOf
+import com.seance.app.R
 
 data class ScanProgress(
     val sourceIndex: Int,
@@ -10,6 +12,10 @@ data class ScanProgress(
     val filesScanned: Int,
     val filesTotal: Int
 ) {
+    /** One-line summary for the foreground-service progress notification - mirrors what ScanProgressScreen shows for the same phase. */
+    fun toNotificationText(context: Context): String =
+        context.getString(R.string.scan_progress_source, sourceIndex + 1, sourceCount, currentSourceName)
+
     fun toData(): Data = workDataOf(
         KEY_SOURCE_INDEX to sourceIndex,
         KEY_SOURCE_COUNT to sourceCount,

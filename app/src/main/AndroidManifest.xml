@@ -15,6 +15,10 @@
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <!-- LibraryScanWorker runs as a foreground service (via WorkManager's setForeground) while a
+         background rescan is in progress, so the OS doesn't defer/kill it under Doze - required
+         alongside the generic FOREGROUND_SERVICE permission once a specific type is declared. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
 
     <!-- The Xiaomi TV Box target has no touchscreen and may not declare the leanback feature -
          both must be optional or the Play Store (and some OEM stores) would filter the app out

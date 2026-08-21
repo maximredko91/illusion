@@ -3,6 +3,8 @@ package com.seance.app.ui.settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.LocalIndication
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -13,10 +15,16 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.clip
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material3.AlertDialog
@@ -75,6 +83,8 @@ fun SettingsScreen(
     rescanIntervalHours: Flow<Int>,
     seekDurationSeconds: Flow<Int>,
     onSeekDurationChange: (Int) -> Unit,
+    playerMode: Flow<com.seance.app.domain.model.PlayerMode>,
+    onPlayerModeChange: (com.seance.app.domain.model.PlayerMode) -> Unit,
     cacheSizeBytes: Long?,
     onRefreshCacheSize: () -> Unit,
     onOpenCache: () -> Unit,
@@ -84,6 +94,8 @@ fun SettingsScreen(
     onDefaultSortOrderChange: (SortOrder) -> Unit,
     hapticsEnabled: Flow<Boolean>,
     onHapticsEnabledChange: (Boolean) -> Unit,
+    accentColor: Flow<com.seance.app.domain.model.AccentColor>,
+    onAccentColorChange: (com.seance.app.domain.model.AccentColor) -> Unit,
     onToggleChargingRequirement: (Boolean) -> Unit,
     onRescanIntervalChange: (Int) -> Unit,
     onRescanNow: () -> Unit,
@@ -103,6 +115,7 @@ fun SettingsScreen(
     onEditSource: (SmbSourceEntity) -> Unit,
     onDeleteSource: (SmbSourceEntity) -> Unit,
     onResetToDefaults: () -> Unit,
+    onFactoryReset: () -> Unit,
     hasDevPassword: () -> Boolean,
     onGenerateDevPassword: () -> String,
     onVerifyDevPassword: (String) -> Boolean,
@@ -110,16 +123,25 @@ fun SettingsScreen(
     onRememberDevAccess: () -> Unit,
     onForgetDevAccess: () -> Unit,
     onDevAccessGranted: () -> Unit,
+    onBack: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val currentUiMode by uiMode.collectAsState(initial = null)
     val currentDefaultSortOrder by defaultSortOrder.collectAsState(initial = SortOrder.DATE_ADDED)
+    val currentPlayerMode by playerMode.collectAsState(initial = com.seance.app.domain.model.PlayerMode.INTERNAL)
     val hapticsOn by hapticsEnabled.collectAsState(initial = true)
+    val currentAccentColor by accentColor.collectAsState(initial = com.seance.app.domain.model.AccentColor.DEFAULT)
     val chargingOnly by requireChargingForHeavyTasks.collectAsState(initial = true)
-    val rescanHours by rescanIntervalHours.collectAsState(initial = 24)
+    val rescanHours by rescanIntervalHours.collectAsState(initial = 48)
     val seekSeconds by seekDurationSeconds.collectAsState(initial = 10)
     val downloadsFolder by downloadsFolderUri.collectAsState(initial = null)
+    // Deleting a source used to fire straight from the trash icon with no confirmation - the most
+    // destructive action on this whole screen (orphans everything that source scanned into the
+    // library) had less friction than clearing a poster cache. Mirrors the confirm-dialog pattern
+    // already used for cache clearing / history removal elsewhere in the app.
+    var pendingDeleteSource by remember { mutableStateOf<SmbSourceEntity?>(null) }
     val context = LocalContext.current
+    val noFileAppMessage = stringResource(R.string.settings_downloads_no_file_app)
     val folderPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
         if (uri != null) onPickDownloadsFolder(uri)
     }
@@ -188,7 +210,14 @@ fun SettingsScreen(
         modifier = modifier,
         topBar = {
             TopAppBar(
+                windowInsets = com.seance.app.ui.common.rememberLatchedStatusBarsInsets(),
                 title = { Text(stringResource(R.string.settings_title)) },
+                navigationIcon = {
+                    val backSource = remember { MutableInteractionSource() }
+                    IconButton(onClick = onBack, interactionSource = backSource, modifier = Modifier.focusHighlight(backSource)) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.details_back))
+                    }
+                },
                 actions = {
                     val addSourceSource = remember { MutableInteractionSource() }
                     IconButton(onClick = onAddSource, interactionSource = addSourceSource, modifier = Modifier.focusHighlight(addSourceSource)) {
@@ -220,7 +249,7 @@ fun SettingsScreen(
                                 IconButton(
                                     onClick = {
                                         haptics.reject()
-                                        onDeleteSource(source)
+                                        pendingDeleteSource = source
                                     },
                                     interactionSource = deleteSource,
                                     modifier = Modifier.focusHighlight(deleteSource)
@@ -295,6 +324,30 @@ fun SettingsScreen(
                 )
             }
 
+            SettingsGroupLabel(stringResource(R.string.settings_accent_color))
+            SettingsGroup(modifier = Modifier.padding(bottom = 24.dp)) {
+                // FlowRow, not a plain Row - 7 swatches at 40dp + spacing (~352dp) can exceed a
+                // narrow phone's available width once the Card's own padding is subtracted, and a
+                // plain Row doesn't wrap. Wrapping to a second line reaches every swatch without
+                // needing a horizontal scroll (tried first, dropped per user feedback - swatches
+                // should all be visible at once, not scrolled through).
+                androidx.compose.foundation.layout.FlowRow(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    com.seance.app.domain.model.AccentColor.entries.forEach { color ->
+                        AccentColorSwatch(
+                            color = color,
+                            selected = color == currentAccentColor,
+                            onClick = { onAccentColorChange(color) }
+                        )
+                    }
+                }
+            }
+
             SettingsGroupLabel(stringResource(R.string.settings_library_section))
             SettingsGroup(modifier = Modifier.padding(bottom = 24.dp)) {
                 ListItem(
@@ -357,6 +410,16 @@ fun SettingsScreen(
                     colors = ListItemDefaults.colors(containerColor = Color.Transparent),
                     modifier = Modifier.fillMaxWidth()
                 )
+                // Was a one-off "open in external player" button inside the player's own settings
+                // sheet (had to be tapped every single playback) - moved here as a persistent
+                // default per user feedback: choose the player once, not every time.
+                ListItem(
+                    headlineContent = { Text(stringResource(R.string.settings_player_mode)) },
+                    supportingContent = { Text(stringResource(R.string.settings_player_mode_description)) },
+                    trailingContent = { PlayerModeMenu(currentPlayerMode, onPlayerModeChange) },
+                    colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                    modifier = Modifier.fillMaxWidth()
+                )
             }
 
             SettingsGroupLabel(stringResource(R.string.settings_cache))
@@ -390,7 +453,15 @@ fun SettingsScreen(
                         Row {
                             val openFolderSource = remember { MutableInteractionSource() }
                             IconButton(
-                                onClick = { context.startActivity(DownloadStorage.openFolderIntent(context, downloadsFolder)) },
+                                onClick = {
+                                    val intent = DownloadStorage.openFolderIntent(context, downloadsFolder)
+                                    if (intent != null) {
+                                        runCatching { context.startActivity(intent) }
+                                            .onFailure { android.widget.Toast.makeText(context, noFileAppMessage, android.widget.Toast.LENGTH_SHORT).show() }
+                                    } else {
+                                        android.widget.Toast.makeText(context, noFileAppMessage, android.widget.Toast.LENGTH_SHORT).show()
+                                    }
+                                },
                                 interactionSource = openFolderSource,
                                 modifier = Modifier.focusHighlight(openFolderSource)
                             ) {
@@ -552,6 +623,24 @@ fun SettingsScreen(
                     modifier = Modifier.fillMaxWidth()
                 )
             }
+            pendingDeleteSource?.let { source ->
+                AlertDialog(
+                    onDismissRequest = { pendingDeleteSource = null },
+                    title = { Text(stringResource(R.string.settings_delete_source_confirm_title)) },
+                    text = { Text(stringResource(R.string.settings_delete_source_confirm_message, source.displayName)) },
+                    confirmButton = {
+                        TextButton(onClick = {
+                            haptics.reject()
+                            onDeleteSource(source)
+                            pendingDeleteSource = null
+                        }) { Text(stringResource(R.string.settings_delete_source)) }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { pendingDeleteSource = null }) { Text(stringResource(R.string.action_cancel)) }
+                    }
+                )
+            }
+
             if (showResetConfirm) {
                 AlertDialog(
                     onDismissRequest = { showResetConfirm = false },
@@ -566,6 +655,44 @@ fun SettingsScreen(
                     },
                     dismissButton = {
                         TextButton(onClick = { showResetConfirm = false }) { Text(stringResource(R.string.action_cancel)) }
+                    }
+                )
+            }
+
+            var showFactoryResetConfirm by remember { mutableStateOf(false) }
+            SettingsGroup(modifier = Modifier.padding(bottom = 24.dp)) {
+                ListItem(
+                    headlineContent = { Text(stringResource(R.string.settings_factory_reset)) },
+                    supportingContent = { Text(stringResource(R.string.settings_factory_reset_description)) },
+                    trailingContent = {
+                        val factoryResetSource = remember { MutableInteractionSource() }
+                        OutlinedButton(
+                            onClick = { showFactoryResetConfirm = true },
+                            interactionSource = factoryResetSource,
+                            modifier = Modifier.focusHighlight(factoryResetSource),
+                            colors = androidx.compose.material3.ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)
+                        ) {
+                            Text(stringResource(R.string.settings_factory_reset_action))
+                        }
+                    },
+                    colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+            if (showFactoryResetConfirm) {
+                AlertDialog(
+                    onDismissRequest = { showFactoryResetConfirm = false },
+                    title = { Text(stringResource(R.string.settings_factory_reset)) },
+                    text = { Text(stringResource(R.string.settings_factory_reset_confirm)) },
+                    confirmButton = {
+                        TextButton(onClick = {
+                            haptics.reject()
+                            onFactoryReset()
+                            showFactoryResetConfirm = false
+                        }) { Text(stringResource(R.string.settings_factory_reset_action)) }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showFactoryResetConfirm = false }) { Text(stringResource(R.string.action_cancel)) }
                     }
                 )
             }
@@ -668,6 +795,44 @@ internal fun SettingsDivider() {
     )
 }
 
+/** One swatch in the accent-color picker - the swatch shows [AccentColor.lightPrimary] regardless of the active theme (dark or light), since it's a color *choice*, not a themed surface. */
+@Composable
+private fun AccentColorSwatch(
+    color: com.seance.app.domain.model.AccentColor,
+    selected: Boolean,
+    onClick: () -> Unit
+) {
+    val haptics = LocalHapticFeedback.current
+    val interactionSource = remember { MutableInteractionSource() }
+    Box(
+        modifier = Modifier
+            .size(40.dp)
+            .focusHighlight(interactionSource)
+            .clip(androidx.compose.foundation.shape.CircleShape)
+            .background(color.lightPrimary)
+            .then(
+                if (selected) {
+                    Modifier.border(3.dp, MaterialTheme.colorScheme.onSurface, androidx.compose.foundation.shape.CircleShape)
+                } else {
+                    Modifier
+                }
+            )
+            .clickable(interactionSource = interactionSource, indication = LocalIndication.current) {
+                haptics.segmentTick()
+                onClick()
+            },
+        contentAlignment = Alignment.Center
+    ) {
+        if (selected) {
+            Icon(
+                Icons.Default.Check,
+                contentDescription = null,
+                tint = androidx.compose.ui.graphics.Color.White
+            )
+        }
+    }
+}
+
 @Composable
 private fun DefaultSortOrderMenu(current: SortOrder, onChange: (SortOrder) -> Unit) {
     var expanded by remember { mutableStateOf(false) }
@@ -723,6 +888,39 @@ private fun RescanIntervalMenu(hours: Int, onChange: (Int) -> Unit) {
 @Composable
 private fun rescanLabel(hours: Int): String =
     if (hours <= 0) stringResource(R.string.settings_rescan_off) else stringResource(R.string.settings_rescan_hours, hours)
+
+@Composable
+private fun PlayerModeMenu(current: com.seance.app.domain.model.PlayerMode, onChange: (com.seance.app.domain.model.PlayerMode) -> Unit) {
+    var expanded by remember { mutableStateOf(false) }
+    val haptics = LocalHapticFeedback.current
+    Box {
+        val triggerSource = remember { MutableInteractionSource() }
+        OutlinedButton(onClick = { expanded = true }, interactionSource = triggerSource, modifier = Modifier.focusHighlight(triggerSource)) {
+            Text(playerModeLabel(current))
+        }
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            com.seance.app.domain.model.PlayerMode.entries.forEach { mode ->
+                val itemSource = remember { MutableInteractionSource() }
+                DropdownMenuItem(
+                    text = { Text(playerModeLabel(mode)) },
+                    onClick = {
+                        haptics.segmentTick()
+                        onChange(mode)
+                        expanded = false
+                    },
+                    interactionSource = itemSource,
+                    modifier = Modifier.focusHighlight(itemSource)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun playerModeLabel(mode: com.seance.app.domain.model.PlayerMode): String = when (mode) {
+    com.seance.app.domain.model.PlayerMode.INTERNAL -> stringResource(R.string.settings_player_mode_internal)
+    com.seance.app.domain.model.PlayerMode.EXTERNAL -> stringResource(R.string.settings_player_mode_external)
+}
 
 private val SEEK_DURATION_OPTIONS = listOf(5, 10, 15, 20, 25, 30)
 

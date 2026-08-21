@@ -12,6 +12,7 @@ class LibraryRepository(private val dao: MediaItemDao) {
 
     suspend fun getAll(): List<MediaItemEntity> = dao.getAll()
     suspend fun getBySource(sourceId: Long): List<MediaItemEntity> = dao.getBySource(sourceId)
+    suspend fun clearAll() = dao.deleteAll()
     fun observeByCategory(category: Category, sort: SortOrder): Flow<List<MediaItemEntity>> =
         dao.observeByCategory(category, sort.name)
 

@@ -18,6 +18,9 @@ interface MediaItemDao {
     @Query("SELECT * FROM media_items WHERE stableId = :stableId")
     suspend fun getById(stableId: String): MediaItemEntity?
 
+    @Query("DELETE FROM media_items")
+    suspend fun deleteAll()
+
     // actors/director are stored as a JSON string array (Converters.fromStringList) - matching
     // against a quoted name (`"Name"`) avoids a false positive on a name that's merely a substring
     // of another (e.g. "Anna" inside "Anna-Maria"). Filters at the DB level instead of pulling

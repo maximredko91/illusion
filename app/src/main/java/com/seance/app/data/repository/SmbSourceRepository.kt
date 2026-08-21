@@ -6,6 +6,7 @@ import com.seance.app.data.smb.SmbClient
 import com.seance.app.data.smb.SmbConnectionInfo
 import com.seance.app.data.smb.SmbCredentialStore
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 
 class SmbSourceRepository(
     private val dao: SmbSourceDao,
@@ -32,6 +33,11 @@ class SmbSourceRepository(
     suspend fun deleteSource(source: SmbSourceEntity) {
         dao.delete(source)
         credentialStore.removePassword(source.id)
+    }
+
+    /** Factory reset - removes every source and its stored credential, one at a time so each credential is cleaned up too (a bulk DELETE on the sources table alone would leave orphaned SmbCredentialStore entries behind). */
+    suspend fun deleteAllSources() {
+        observeSources().first().forEach { deleteSource(it) }
     }
 
     suspend fun connectionInfoById(sourceId: Long): SmbConnectionInfo? {

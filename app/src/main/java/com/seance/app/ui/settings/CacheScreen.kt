@@ -60,6 +60,9 @@ fun CacheScreen(
     val cachingEnabled by posterCachingEnabled.collectAsState(initial = true)
     val haptics = LocalHapticFeedback.current
     var showDisableCachingConfirm by remember { mutableStateOf(false) }
+    // Clearing the cache used to fire immediately (onClearCache called straight from the button) -
+    // inconsistent with the toggle right below it, which confirms a much less destructive action.
+    var showClearCacheConfirm by remember { mutableStateOf(false) }
 
     val preloadWorkInfos by remember(context) {
         WorkManager.getInstance(context).getWorkInfosForUniqueWorkFlow(WorkScheduler.POSTER_PRELOAD_WORK_NAME)
@@ -99,10 +102,41 @@ fun CacheScreen(
         )
     }
 
+    if (showClearCacheConfirm) {
+        AlertDialog(
+            onDismissRequest = { showClearCacheConfirm = false },
+            title = { Text(stringResource(R.string.settings_cache_clear_confirm_title)) },
+            text = { Text(stringResource(R.string.settings_cache_clear_confirm_message)) },
+            confirmButton = {
+                val confirmSource = remember { MutableInteractionSource() }
+                TextButton(
+                    onClick = {
+                        haptics.reject()
+                        showClearCacheConfirm = false
+                        onClearCache()
+                    },
+                    interactionSource = confirmSource,
+                    modifier = Modifier.focusHighlight(confirmSource)
+                ) { Text(stringResource(R.string.settings_cache_clear)) }
+            },
+            dismissButton = {
+                val cancelSource = remember { MutableInteractionSource() }
+                TextButton(
+                    onClick = { showClearCacheConfirm = false },
+                    interactionSource = cancelSource,
+                    modifier = Modifier.focusHighlight(cancelSource)
+                ) {
+                    Text(stringResource(R.string.action_cancel))
+                }
+            }
+        )
+    }
+
     Scaffold(
         modifier = modifier,
         topBar = {
             TopAppBar(
+                windowInsets = com.seance.app.ui.common.rememberLatchedStatusBarsInsets(),
                 title = { Text(stringResource(R.string.settings_cache)) },
                 navigationIcon = {
                     val backSource = remember { MutableInteractionSource() }
@@ -133,7 +167,7 @@ fun CacheScreen(
                     trailingContent = {
                         val clearCacheSource = remember { MutableInteractionSource() }
                         OutlinedButton(
-                            onClick = onClearCache,
+                            onClick = { showClearCacheConfirm = true },
                             interactionSource = clearCacheSource,
                             modifier = Modifier.focusHighlight(clearCacheSource)
                         ) {

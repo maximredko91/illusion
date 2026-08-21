@@ -42,6 +42,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -93,6 +94,8 @@ fun PlayerScreen(
     settingsRepository: com.seance.app.data.settings.SettingsRepository,
     smbDataSourceFactory: SmbDataSourceFactory,
     downloadRepository: DownloadRepository,
+    smbSourceRepository: com.seance.app.data.repository.SmbSourceRepository,
+    credentialStore: com.seance.app.data.smb.SmbCredentialStore,
     onBack: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -105,11 +108,26 @@ fun PlayerScreen(
             settingsRepository,
             smbDataSourceFactory,
             downloadRepository,
+            smbSourceRepository,
+            credentialStore,
             context
         )
     )
     LaunchedEffect(stableId, isTrailer) { viewModel.load(stableId, playTrailer = isTrailer) }
     val uiState by viewModel.state.collectAsState()
+    val noExternalAppMessage = stringResource(R.string.player_open_external_no_app)
+
+    // Settings' "external player" choice (see SettingsRepository.playerMode) is applied once by
+    // PlayerViewModel.load() itself - this screen's only job when that fires is to hand the OS the
+    // intent and get out of the way, since there's no internal playback to show for this session.
+    LaunchedEffect(Unit) {
+        viewModel.launchExternalPlayer.collect { intent ->
+            runCatching { context.startActivity(intent) }.onFailure {
+                android.widget.Toast.makeText(context, noExternalAppMessage, android.widget.Toast.LENGTH_SHORT).show()
+            }
+            onBack()
+        }
+    }
 
     KeepImmersiveFullscreen()
     KeepScreenOn()
@@ -187,7 +205,17 @@ fun PlayerScreen(
         playerViewRef?.requestLayout()
     }
 
-    LaunchedEffect(controlsVisible, uiState.isPlaying) {
+    // Any interaction with the controls themselves (dragging the seek bar, tapping subtitle/
+    // audio/speed icons, ...) needs to restart this countdown - previously it only keyed on
+    // controlsVisible/isPlaying, neither of which change for most control interactions, so the
+    // controls could fade out mid-interaction (e.g. while still dragging the seek bar).
+    // interactionTick is bumped from each control's own callback below (see bumpInteraction) -
+    // a full-screen non-consuming pointerInput sibling was tried first and dropped, since it sat
+    // in front of GestureLayer in the same Box and silently broke its brightness/volume/seek
+    // swipe gestures even though it never called .consume() itself.
+    var interactionTick by remember { mutableIntStateOf(0) }
+    fun bumpInteraction() { interactionTick++ }
+    LaunchedEffect(controlsVisible, uiState.isPlaying, interactionTick) {
         if (controlsVisible && uiState.isPlaying) {
             delay(3500)
             controlsVisible = false
@@ -284,10 +312,10 @@ fun PlayerScreen(
                         title = uiState.title,
                         episodeLabel = uiState.episodeLabel,
                         onBack = onBack,
-                        onOpenSubtitles = { showSubtitleDialog = true },
-                        onOpenAudioTracks = { showAudioDialog = true },
-                        onCycleAspectRatio = { cycleResizeMode() },
-                        onOpenSettings = { showSpeedDialog = true }
+                        onOpenSubtitles = { bumpInteraction(); showSubtitleDialog = true },
+                        onOpenAudioTracks = { bumpInteraction(); showAudioDialog = true },
+                        onCycleAspectRatio = { bumpInteraction(); cycleResizeMode() },
+                        onOpenSettings = { bumpInteraction(); showSpeedDialog = true }
                     )
                     Box(modifier = Modifier.fillMaxSize().weight(1f), contentAlignment = Alignment.Center) {
                         if (uiState.isLoading && uiState.error == null && !isLocked) {
@@ -295,7 +323,7 @@ fun PlayerScreen(
                         }
                         CenterTransportControls(
                             isPlaying = uiState.isPlaying,
-                            onTogglePlayPause = viewModel::togglePlayPause
+                            onTogglePlayPause = { bumpInteraction(); viewModel.togglePlayPause() }
                         )
                     }
                     BottomGradientBar(
@@ -305,9 +333,9 @@ fun PlayerScreen(
                         thumbnailFrames = uiState.thumbnailFrames,
                         hasNextEpisode = uiState.hasNextEpisode,
                         isLocked = isLocked,
-                        onSeekTo = viewModel::seekTo,
-                        onNextEpisode = viewModel::playNext,
-                        onToggleLock = { isLocked = true; controlsVisible = false }
+                        onSeekTo = { position -> bumpInteraction(); viewModel.seekTo(position) },
+                        onNextEpisode = { bumpInteraction(); viewModel.playNext() },
+                        onToggleLock = { bumpInteraction(); isLocked = true; controlsVisible = false }
                     )
                 }
             }
@@ -562,23 +590,24 @@ private fun GestureLayer(
                 )
             }
     ) {
-        if (showBrightness) {
-            GestureIndicator(
-                label = "Яркость",
-                fraction = brightnessFraction,
-                modifier = Modifier
-                    .align(Alignment.CenterStart)
-                    .padding(start = 24.dp)
-            )
+        // Was a hard if/else snap (found by this session's audit) - every other transient overlay
+        // on this same screen (controls, skip-intro banner) already fades, so these two stood out
+        // as the last instant show/hide left in the player.
+        AnimatedVisibility(
+            visible = showBrightness,
+            enter = fadeIn(),
+            exit = fadeOut(),
+            modifier = Modifier.align(Alignment.CenterStart).padding(start = 24.dp)
+        ) {
+            GestureIndicator(label = "Яркость", fraction = brightnessFraction)
         }
-        if (showVolume) {
-            GestureIndicator(
-                label = "Громкость",
-                fraction = volumeFraction,
-                modifier = Modifier
-                    .align(Alignment.CenterEnd)
-                    .padding(end = 24.dp)
-            )
+        AnimatedVisibility(
+            visible = showVolume,
+            enter = fadeIn(),
+            exit = fadeOut(),
+            modifier = Modifier.align(Alignment.CenterEnd).padding(end = 24.dp)
+        ) {
+            GestureIndicator(label = "Громкость", fraction = volumeFraction)
         }
         seekToastText?.let { text ->
             LabelToast(

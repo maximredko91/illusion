@@ -71,6 +71,9 @@ class DevAccessStore(context: Context, private val buildTimePassword: String? = 
             prefs.edit().putString(KEY_TMDB_API_KEY, value?.takeIf { it.isNotBlank() }).apply()
         }
 
+    /** Full factory reset - clears the password hash, remembered-device flag, and TMDB key together, same EncryptedSharedPreferences an uninstall/data-clear would already wipe. */
+    fun clearAll() = prefs.edit().clear().apply()
+
     private fun hash(password: String): String =
         MessageDigest.getInstance("SHA-256")
             .digest(password.toByteArray(Charsets.UTF_8))

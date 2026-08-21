@@ -71,6 +71,7 @@ fun HistoryScreen(
         modifier = modifier,
         topBar = {
             TopAppBar(
+                windowInsets = com.seance.app.ui.common.rememberLatchedStatusBarsInsets(),
                 title = { Text(stringResource(R.string.history_title)) },
                 navigationIcon = {
                     val backSource = remember { MutableInteractionSource() }
@@ -122,7 +123,12 @@ fun HistoryScreen(
                             ThumbnailImage(model = poster, contentDescription = entry.item.title)
                         }
                         Column(modifier = Modifier.padding(start = 12.dp).weight(1f)) {
-                            Text(entry.item.title, style = MaterialTheme.typography.bodyLarge)
+                            Text(
+                                entry.item.title,
+                                style = MaterialTheme.typography.bodyLarge,
+                                maxLines = 2,
+                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                            )
                             Text(
                                 dateFormatter.format(
                                     Instant.ofEpochMilli(entry.progress.updatedAt).atZone(ZoneId.systemDefault())

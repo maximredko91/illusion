@@ -5,7 +5,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -24,7 +23,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.seance.app.R
 import com.seance.app.data.repository.LibraryRepository
 import com.seance.app.ui.common.PosterCard
-import com.seance.app.ui.common.posterCardMinWidth
+import com.seance.app.ui.common.posterGridColumns
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -42,10 +41,15 @@ fun PersonScreen(
 
     Scaffold(
         modifier = modifier,
-        topBar = { TopAppBar(title = { Text(stringResource(R.string.person_title, name)) }) }
+        topBar = {
+            TopAppBar(
+                windowInsets = com.seance.app.ui.common.rememberLatchedStatusBarsInsets(),
+                title = { Text(stringResource(R.string.person_title, name)) }
+            )
+        }
     ) { innerPadding ->
         LazyVerticalGrid(
-            columns = GridCells.Adaptive(minSize = posterCardMinWidth()),
+            columns = posterGridColumns(),
             modifier = Modifier.fillMaxSize().padding(innerPadding).focusGroup(),
             contentPadding = PaddingValues(8.dp)
         ) {

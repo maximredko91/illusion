@@ -1,5 +1,22 @@
 <resources>
     <string name="app_name">Сеанс</string>
+    <string name="exit_confirm_message">Нажмите ещё раз "назад" для выхода</string>
+    <string name="player_open_external">Открыть во внешнем плеере</string>
+    <string name="player_open_external_no_app">Не найдено приложение для открытия видео</string>
+
+    <string name="settings_player_mode">Плеер</string>
+    <string name="settings_player_mode_description">Каким плеером воспроизводить фильмы и сериалы</string>
+    <string name="settings_player_mode_internal">Внутренний</string>
+    <string name="settings_player_mode_external">Внешний</string>
+
+    <string name="details_tagline_label">Слоган</string>
+    <string name="details_studio_label">Студия</string>
+
+    <string name="settings_factory_reset">Полный сброс приложения</string>
+    <string name="settings_factory_reset_description">Удалит источники SMB, всю библиотеку, избранное, историю просмотра, загрузки, кэш и пароль добавления медиа — настройки тоже вернутся к значениям по умолчанию</string>
+    <string name="settings_factory_reset_action">Сбросить всё</string>
+    <string name="settings_factory_reset_confirm">Это необратимо удалит источники SMB, библиотеку, избранное, историю, загрузки и кэш. Продолжить?</string>
+    <string name="settings_downloads_no_file_app">Не найдено приложение для открытия папки</string>
 
     <string name="nav_home">Главная</string>
     <string name="nav_movies">Фильмы</string>
@@ -26,6 +43,8 @@
     <string name="settings_cache_size">Занято: %1$s</string>
     <string name="settings_cache_size_unknown">Вычисление размера…</string>
     <string name="settings_cache_clear">Очистить кэш</string>
+    <string name="settings_cache_clear_confirm_title">Очистить кэш?</string>
+    <string name="settings_cache_clear_confirm_message">Все временные файлы будут удалены. Постеры и фоны, если кеширование включено, подгрузятся заново с сервера при следующем открытии.</string>
     <string name="settings_charging_only">Тяжёлые фоновые задачи только при зарядке</string>
     <string name="settings_charging_only_description">Генерация превью-кадров для перемотки и фоновое пересканирование библиотеки — не будут запускаться от батареи</string>
     <string name="settings_poster_caching">Кеширование постеров</string>
@@ -91,6 +110,9 @@
     <string name="history_remove_confirm_message">«%1$s» будет удалено из истории просмотров.</string>
     <string name="history_remove_confirm_action">Удалить</string>
 
+    <string name="downloads_remove_confirm_title">Удалить загрузку?</string>
+    <string name="downloads_remove_confirm_message">«%1$s» будет удалено с устройства — файл нужно будет скачать заново.</string>
+
     <string name="downloads_title">Загрузки</string>
     <string name="downloads_empty">Нет загруженных видео</string>
     <string name="downloads_remove">Удалить загрузку</string>
@@ -118,6 +140,7 @@
     <string name="settings_ui_mode_tv">Телевизор (пульт)</string>
     <string name="settings_haptics">Вибрация</string>
     <string name="settings_haptics_description">Тактильный отклик на нажатия и переключатели</string>
+    <string name="settings_accent_color">Акцентный цвет</string>
     <string name="settings_library_section">Библиотека</string>
     <string name="settings_default_sort_order">Сортировка по умолчанию</string>
     <string name="settings_reset_section">Сброс</string>
@@ -158,9 +181,17 @@
     <string name="scan_progress_partial_error">Не всё удалось просканировать: %1$s</string>
     <string name="scan_progress_continue">Продолжить</string>
 
+    <string name="scan_notification_channel_name">Сканирование библиотеки</string>
+    <string name="scan_notification_result_success_title">Библиотека обновлена</string>
+    <string name="scan_notification_result_success_text">Найдено видео: %1$d</string>
+    <string name="scan_notification_result_partial_text">Найдено видео: %1$d. Не всё удалось просканировать: %2$s</string>
+    <string name="scan_notification_result_failed_title">Не удалось выполнить сканирование</string>
+
     <string name="settings_add_source">Добавить источник</string>
     <string name="settings_no_sources">Источники не добавлены</string>
     <string name="settings_delete_source">Удалить</string>
+    <string name="settings_delete_source_confirm_title">Удалить источник?</string>
+    <string name="settings_delete_source_confirm_message">«%1$s» будет удалён. Всё, что было отсканировано из этого источника, пропадёт из библиотеки.</string>
     <string name="add_source_title">Новый источник SMB</string>
     <string name="edit_source_title">Источник SMB</string>
     <string name="edit_source_not_found">Источник не найден</string>

@@ -52,28 +52,14 @@ fun HomeScreen(
         modifier = modifier,
         topBar = {
             TopAppBar(
+                windowInsets = com.seance.app.ui.common.rememberLatchedStatusBarsInsets(),
                 title = { Text(stringResource(R.string.app_name)) },
                 actions = {
-                    val searchSource = remember { MutableInteractionSource() }
-                    IconButton(onClick = onOpenSearch, interactionSource = searchSource, modifier = Modifier.focusHighlight(searchSource)) {
-                        Icon(Icons.Default.Search, contentDescription = stringResource(R.string.nav_search))
-                    }
-                    val favoritesSource = remember { MutableInteractionSource() }
-                    IconButton(onClick = onOpenFavorites, interactionSource = favoritesSource, modifier = Modifier.focusHighlight(favoritesSource)) {
-                        Icon(Icons.Default.Favorite, contentDescription = stringResource(R.string.favorites_title))
-                    }
-                    val historySource = remember { MutableInteractionSource() }
-                    IconButton(onClick = onOpenHistory, interactionSource = historySource, modifier = Modifier.focusHighlight(historySource)) {
-                        Icon(Icons.Default.History, contentDescription = stringResource(R.string.history_title))
-                    }
-                    val downloadsSource = remember { MutableInteractionSource() }
-                    IconButton(onClick = onOpenDownloads, interactionSource = downloadsSource, modifier = Modifier.focusHighlight(downloadsSource)) {
-                        Icon(Icons.Default.Download, contentDescription = stringResource(R.string.downloads_title))
-                    }
-                    val settingsSource = remember { MutableInteractionSource() }
-                    IconButton(onClick = onOpenSettings, interactionSource = settingsSource, modifier = Modifier.focusHighlight(settingsSource)) {
-                        Icon(Icons.Default.Settings, contentDescription = stringResource(R.string.settings_title))
-                    }
+                    com.seance.app.ui.common.TooltipIconButton(stringResource(R.string.nav_search), Icons.Default.Search, onOpenSearch)
+                    com.seance.app.ui.common.TooltipIconButton(stringResource(R.string.favorites_title), Icons.Default.Favorite, onOpenFavorites)
+                    com.seance.app.ui.common.TooltipIconButton(stringResource(R.string.history_title), Icons.Default.History, onOpenHistory)
+                    com.seance.app.ui.common.TooltipIconButton(stringResource(R.string.downloads_title), Icons.Default.Download, onOpenDownloads)
+                    com.seance.app.ui.common.TooltipIconButton(stringResource(R.string.settings_title), Icons.Default.Settings, onOpenSettings)
                 }
             )
         }

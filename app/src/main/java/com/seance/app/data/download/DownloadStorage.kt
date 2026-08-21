@@ -46,16 +46,40 @@ object DownloadStorage {
             null
         }
 
-    /** Best-effort "show me that folder" - not every OEM file manager honors ACTION_VIEW on a tree/document Uri, so this always falls back to the system Downloads listing. */
-    fun openFolderIntent(context: Context, treeUri: String?): Intent {
-        if (treeUri != null) {
-            val intent = Intent(Intent.ACTION_VIEW)
-                .setDataAndType(Uri.parse(treeUri), DocumentsContract.Document.MIME_TYPE_DIR)
-                .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
-            if (intent.resolveActivity(context.packageManager) != null) return intent
+    /**
+     * Best-effort "show me that folder". Points at the real download location - the custom
+     * SAF tree if the user picked one in Settings, otherwise `Downloads/Seans` specifically
+     * (not just the generic Downloads root, which is all `DownloadManager.ACTION_VIEW_DOWNLOADS`
+     * can show). Wrapped in [Intent.createChooser] so every installed file manager that declares
+     * itself able to view a document/directory Uri is offered, not just whichever one Android
+     * would resolve to first/has been set as the default - not every OEM file manager declares
+     * that intent filter at all, so this falls back to the system Downloads listing (also
+     * chooser-wrapped) if nothing can handle the document Uri. Returns null (rather than an
+     * Intent guaranteed to go nowhere) if literally nothing on this device can handle either one -
+     * some OEM skins (MIUI included) ship neither a document-Uri viewer nor a
+     * DownloadManager.ACTION_VIEW_DOWNLOADS handler, where `startActivity` on an unresolvable
+     * chooser silently does nothing instead of showing an empty dialog - the caller should show
+     * its own message instead of a dead tap.
+     */
+    fun openFolderIntent(context: Context, treeUri: String?): Intent? {
+        val targetUri = treeUri?.let(Uri::parse) ?: defaultDownloadsFolderUri()
+        val viewIntent = Intent(Intent.ACTION_VIEW)
+            .setDataAndType(targetUri, DocumentsContract.Document.MIME_TYPE_DIR)
+            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
+        if (context.packageManager.queryIntentActivities(viewIntent, 0).isNotEmpty()) {
+            return Intent.createChooser(viewIntent, null)
         }
-        return Intent(DownloadManager.ACTION_VIEW_DOWNLOADS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        val downloadsIntent = Intent(DownloadManager.ACTION_VIEW_DOWNLOADS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        if (context.packageManager.queryIntentActivities(downloadsIntent, 0).isNotEmpty()) {
+            return Intent.createChooser(downloadsIntent, null)
+        }
+        return null
     }
+
+    private fun defaultDownloadsFolderUri(): Uri = DocumentsContract.buildDocumentUri(
+        "com.android.externalstorage.documents",
+        "primary:${android.os.Environment.DIRECTORY_DOWNLOADS}/$RELATIVE_DIR"
+    )
 
     /**
      * Creates a new empty file named [fileName] under the configured folder and returns its Uri,

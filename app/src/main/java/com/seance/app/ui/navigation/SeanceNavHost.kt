@@ -1,5 +1,6 @@
 package com.seance.app.ui.navigation
 
+import android.content.res.Configuration
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionLayout
@@ -14,11 +15,13 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
@@ -35,6 +38,8 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationRail
 import androidx.compose.material3.NavigationRailItem
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -44,6 +49,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -52,9 +58,13 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.hapticfeedback.HapticFeedback
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.NavDestination.Companion.hasRoute
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -90,7 +100,9 @@ import com.seance.app.ui.settings.SettingsViewModel
 import com.seance.app.ui.smbsource.AddSmbSourceScreen
 import com.seance.app.ui.smbsource.EditSmbSourceScreen
 import com.seance.app.work.WorkScheduler
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 
 private data class BottomTab(
     val category: Category?,
@@ -184,21 +196,49 @@ private fun SeanceNavGraph(app: SeanceApplication, navController: NavHostControl
             // also what gets scrubbed live by the predictive-back gesture (NavHost drives these
             // same transitions frame-by-frame off the swipe progress), instead of the library's
             // default flat 700ms crossfade.
+            //
+            // Destination.Details is the exception: its poster/fanart already animates via a
+            // sharedElement bounds transform (see PosterCard/DetailsScreen), which is its own
+            // independent motion from wherever the poster card sat in the grid to where it lands
+            // in Details. Also sliding the *whole* Details screen sideways on top of that stacked
+            // two motions together - the poster visibly "flew in from offscreen" on top of its own
+            // bounds animation, which read as jank rather than one clean transform. A plain fade
+            // leaves the shared element's own motion as the only motion, matching how Material's
+            // container-transform pattern is meant to pair with a fade, not a second slide.
             enterTransition = {
-                slideInHorizontally(tween(NAV_TRANSITION_MS, easing = FastOutSlowInEasing)) { it / 3 } +
+                if (targetState.destination.hasRoute<Destination.Details>()) {
                     fadeIn(tween(NAV_TRANSITION_MS))
+                } else {
+                    slideInHorizontally(tween(NAV_TRANSITION_MS, easing = FastOutSlowInEasing)) { it / 3 } +
+                        fadeIn(tween(NAV_TRANSITION_MS))
+                }
             },
             exitTransition = {
-                slideOutHorizontally(tween(NAV_TRANSITION_MS, easing = FastOutSlowInEasing)) { -it / 6 } +
+                if (targetState.destination.hasRoute<Destination.Details>()) {
                     fadeOut(tween(NAV_TRANSITION_MS))
+                } else {
+                    slideOutHorizontally(tween(NAV_TRANSITION_MS, easing = FastOutSlowInEasing)) { -it / 6 } +
+                        fadeOut(tween(NAV_TRANSITION_MS))
+                }
             },
             popEnterTransition = {
-                slideInHorizontally(tween(NAV_TRANSITION_MS, easing = FastOutSlowInEasing)) { -it / 6 } +
+                // Popping back FROM Details (initialState, the screen being left) - the returning
+                // screen should fade in too, matching the shared element animating back down onto
+                // its poster card rather than sliding underneath that motion.
+                if (initialState.destination.hasRoute<Destination.Details>()) {
                     fadeIn(tween(NAV_TRANSITION_MS))
+                } else {
+                    slideInHorizontally(tween(NAV_TRANSITION_MS, easing = FastOutSlowInEasing)) { -it / 6 } +
+                        fadeIn(tween(NAV_TRANSITION_MS))
+                }
             },
             popExitTransition = {
-                slideOutHorizontally(tween(NAV_TRANSITION_MS, easing = FastOutSlowInEasing)) { it / 3 } +
+                if (initialState.destination.hasRoute<Destination.Details>()) {
                     fadeOut(tween(NAV_TRANSITION_MS))
+                } else {
+                    slideOutHorizontally(tween(NAV_TRANSITION_MS, easing = FastOutSlowInEasing)) { it / 3 } +
+                        fadeOut(tween(NAV_TRANSITION_MS))
+                }
             }
         ) {
             composable<Destination.Splash> {
@@ -335,13 +375,15 @@ private fun SeanceNavGraph(app: SeanceApplication, navController: NavHostControl
                     settingsRepository = app.settingsRepository,
                     smbDataSourceFactory = app.smbDataSourceFactory,
                     downloadRepository = app.downloadRepository,
+                    smbSourceRepository = app.smbSourceRepository,
+                    credentialStore = app.credentialStore,
                     onBack = { navController.popBackStack() }
                 )
             }
             composable<Destination.Settings> {
                 val context = LocalContext.current
                 val settingsViewModel: SettingsViewModel = viewModel(
-                    factory = SettingsViewModel.factory(app.smbSourceRepository, app.settingsRepository, app.thumbnailRepository, app.downloadRepository, app.backupManager, app.devAccessStore)
+                    factory = SettingsViewModel.factory(app.smbSourceRepository, app.settingsRepository, app.thumbnailRepository, app.downloadRepository, app.backupManager, app.devAccessStore, app.libraryRepository, app.watchProgressRepository)
                 )
                 val sources by settingsViewModel.sources.collectAsState()
                 val cacheSizeBytes by settingsViewModel.cacheSizeBytes.collectAsState()
@@ -354,6 +396,8 @@ private fun SeanceNavGraph(app: SeanceApplication, navController: NavHostControl
                     rescanIntervalHours = settingsViewModel.rescanIntervalHours,
                     seekDurationSeconds = settingsViewModel.seekDurationSeconds,
                     onSeekDurationChange = settingsViewModel::setSeekDurationSeconds,
+                    playerMode = settingsViewModel.playerMode,
+                    onPlayerModeChange = settingsViewModel::setPlayerMode,
                     cacheSizeBytes = cacheSizeBytes,
                     onRefreshCacheSize = { settingsViewModel.refreshCacheSize(context) },
                     onOpenCache = { navController.navigate(Destination.Cache) },
@@ -363,6 +407,8 @@ private fun SeanceNavGraph(app: SeanceApplication, navController: NavHostControl
                     onDefaultSortOrderChange = settingsViewModel::setDefaultSortOrder,
                     hapticsEnabled = settingsViewModel.hapticsEnabled,
                     onHapticsEnabledChange = settingsViewModel::setHapticsEnabled,
+                    accentColor = settingsViewModel.accentColor,
+                    onAccentColorChange = settingsViewModel::setAccentColor,
                     onToggleChargingRequirement = { enabled ->
                         settingsViewModel.setRequireChargingForHeavyTasks(context, enabled)
                     },
@@ -387,19 +433,21 @@ private fun SeanceNavGraph(app: SeanceApplication, navController: NavHostControl
                     onEditSource = { source -> navController.navigate(Destination.EditSmbSource(source.id)) },
                     onDeleteSource = { source -> settingsViewModel.deleteSource(source) },
                     onResetToDefaults = { settingsViewModel.resetToDefaults() },
+                    onFactoryReset = { settingsViewModel.factoryReset(context) },
                     hasDevPassword = settingsViewModel::hasDevPassword,
                     onGenerateDevPassword = settingsViewModel::generateDevPassword,
                     onVerifyDevPassword = settingsViewModel::verifyDevPassword,
                     isDevAccessRemembered = settingsViewModel::isDevAccessRemembered,
                     onRememberDevAccess = settingsViewModel::rememberDevAccess,
                     onForgetDevAccess = settingsViewModel::forgetDevAccess,
-                    onDevAccessGranted = { navController.navigate(Destination.AddMedia) }
+                    onDevAccessGranted = { navController.navigate(Destination.AddMedia) },
+                    onBack = { navController.popBackStack() }
                 )
             }
             composable<Destination.Cache> {
                 val context = LocalContext.current
                 val settingsViewModel: SettingsViewModel = viewModel(
-                    factory = SettingsViewModel.factory(app.smbSourceRepository, app.settingsRepository, app.thumbnailRepository, app.downloadRepository, app.backupManager, app.devAccessStore)
+                    factory = SettingsViewModel.factory(app.smbSourceRepository, app.settingsRepository, app.thumbnailRepository, app.downloadRepository, app.backupManager, app.devAccessStore, app.libraryRepository, app.watchProgressRepository)
                 )
                 val cacheSizeBytes by settingsViewModel.cacheSizeBytes.collectAsState()
                 CacheScreen(
@@ -456,6 +504,29 @@ private fun TabsHost(app: SeanceApplication, navController: NavHostController) {
     val uiMode = LocalUiMode.current
     val haptics = LocalHapticFeedback.current
 
+    // Destination.Tabs is the app's root screen (Splash pops itself off the back stack on
+    // arrival) - a back gesture/press here would otherwise exit the Activity outright with no
+    // confirmation, which is easy to trigger by accident with Android's edge swipe-back gesture.
+    // A snackbar + a second back press within the window below is the same pattern most apps use
+    // instead of a click-through confirm dialog, which would be far more intrusive for something
+    // this frequent.
+    val exitSnackbarHostState = remember { SnackbarHostState() }
+    val backScope = rememberCoroutineScope()
+    var awaitingExitConfirmation by remember { mutableStateOf(false) }
+    val activity = LocalContext.current as? android.app.Activity
+    BackHandler(enabled = true) {
+        if (awaitingExitConfirmation) {
+            activity?.finish()
+        } else {
+            awaitingExitConfirmation = true
+            backScope.launch { exitSnackbarHostState.showSnackbar(app.getString(R.string.exit_confirm_message)) }
+            backScope.launch {
+                delay(2000)
+                awaitingExitConfirmation = false
+            }
+        }
+    }
+
     var selectedCategory by rememberSaveable { mutableStateOf<Category?>(null) }
 
     val movieGridState = rememberLazyGridState()
@@ -481,91 +552,116 @@ private fun TabsHost(app: SeanceApplication, navController: NavHostController) {
         selectedCategory = tabCategory
     }
 
+    val tabContent: @Composable (Category?) -> Unit = { category ->
+        if (category == null) {
+            val homeViewModel: HomeViewModel = viewModel(
+                factory = HomeViewModel.factory(app.libraryRepository, app.watchProgressRepository)
+            )
+            val continueWatching by homeViewModel.continueWatching.collectAsState()
+            val recentlyAdded by homeViewModel.recentlyAdded.collectAsState()
+            HomeScreen(
+                continueWatching = continueWatching,
+                recentlyAdded = recentlyAdded,
+                onOpenSettings = { navController.navigate(Destination.Settings) },
+                onOpenFavorites = { navController.navigate(Destination.Favorites) },
+                onOpenHistory = { navController.navigate(Destination.History) },
+                onOpenDownloads = { navController.navigate(Destination.Downloads) },
+                onOpenSearch = { navController.navigate(Destination.Search) },
+                onOpenItem = { stableId -> navController.navigate(Destination.Details(stableId)) }
+            )
+        } else {
+            val libraryViewModel: LibraryViewModel = viewModel(
+                key = category.name,
+                factory = LibraryViewModel.factory(app.libraryRepository, app.settingsRepository, category)
+            )
+            val items by libraryViewModel.items.collectAsState()
+            val isLoading by libraryViewModel.isLoading.collectAsState()
+            val sortOrder by libraryViewModel.sortOrder.collectAsState()
+            val genreFilter by libraryViewModel.genreFilter.collectAsState()
+            val availableGenres by libraryViewModel.availableGenres.collectAsState()
+            val yearFilter by libraryViewModel.yearFilter.collectAsState()
+            val availableYears by libraryViewModel.availableYears.collectAsState()
+            LibraryScreen(
+                category = category,
+                items = items,
+                isLoading = isLoading,
+                sortOrder = sortOrder,
+                onSortOrderChange = libraryViewModel::setSortOrder,
+                genreFilter = genreFilter,
+                onGenreFilterChange = libraryViewModel::setGenreFilter,
+                availableGenres = availableGenres,
+                yearFilter = yearFilter,
+                onYearFilterChange = libraryViewModel::setYearFilter,
+                availableYears = availableYears,
+                gridState = gridStateFor(category),
+                onOpenItem = { stableId -> navController.navigate(Destination.Details(stableId)) },
+                onOpenSettings = { navController.navigate(Destination.Settings) },
+                onOpenFavorites = { navController.navigate(Destination.Favorites) },
+                onOpenHistory = { navController.navigate(Destination.History) },
+                onOpenDownloads = { navController.navigate(Destination.Downloads) },
+                onOpenSearch = { navController.navigate(Destination.Search) },
+                onCategoryChange = { newCategory -> selectedCategory = newCategory }
+            )
+        }
+    }
+
     val content: @Composable (PaddingValues) -> Unit = { innerPadding ->
         Crossfade(
             targetState = selectedCategory,
             animationSpec = tween(200),
             modifier = Modifier.padding(innerPadding),
             label = "tabs"
-        ) { category ->
-            if (category == null) {
-                val homeViewModel: HomeViewModel = viewModel(
-                    factory = HomeViewModel.factory(app.libraryRepository, app.watchProgressRepository)
-                )
-                val continueWatching by homeViewModel.continueWatching.collectAsState()
-                val recentlyAdded by homeViewModel.recentlyAdded.collectAsState()
-                HomeScreen(
-                    continueWatching = continueWatching,
-                    recentlyAdded = recentlyAdded,
-                    onOpenSettings = { navController.navigate(Destination.Settings) },
-                    onOpenFavorites = { navController.navigate(Destination.Favorites) },
-                    onOpenHistory = { navController.navigate(Destination.History) },
-                    onOpenDownloads = { navController.navigate(Destination.Downloads) },
-                    onOpenSearch = { navController.navigate(Destination.Search) },
-                    onOpenItem = { stableId -> navController.navigate(Destination.Details(stableId)) }
-                )
-            } else {
-                val libraryViewModel: LibraryViewModel = viewModel(
-                    key = category.name,
-                    factory = LibraryViewModel.factory(app.libraryRepository, app.settingsRepository, category)
-                )
-                val items by libraryViewModel.items.collectAsState()
-                val isLoading by libraryViewModel.isLoading.collectAsState()
-                val sortOrder by libraryViewModel.sortOrder.collectAsState()
-                val genreFilter by libraryViewModel.genreFilter.collectAsState()
-                val availableGenres by libraryViewModel.availableGenres.collectAsState()
-                val yearFilter by libraryViewModel.yearFilter.collectAsState()
-                val availableYears by libraryViewModel.availableYears.collectAsState()
-                LibraryScreen(
-                    category = category,
-                    items = items,
-                    isLoading = isLoading,
-                    sortOrder = sortOrder,
-                    onSortOrderChange = libraryViewModel::setSortOrder,
-                    genreFilter = genreFilter,
-                    onGenreFilterChange = libraryViewModel::setGenreFilter,
-                    availableGenres = availableGenres,
-                    yearFilter = yearFilter,
-                    onYearFilterChange = libraryViewModel::setYearFilter,
-                    availableYears = availableYears,
-                    gridState = gridStateFor(category),
-                    onOpenItem = { stableId -> navController.navigate(Destination.Details(stableId)) },
-                    onOpenSettings = { navController.navigate(Destination.Settings) },
-                    onOpenFavorites = { navController.navigate(Destination.Favorites) },
-                    onOpenHistory = { navController.navigate(Destination.History) },
-                    onOpenDownloads = { navController.navigate(Destination.Downloads) },
-                    onOpenSearch = { navController.navigate(Destination.Search) },
-                    onCategoryChange = { newCategory -> selectedCategory = newCategory }
-                )
-            }
+        ) { category -> tabContent(category) }
+    }
+
+    val railItems: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit = {
+        bottomTabs.forEach { tab ->
+            val selected = isTabSelected(tab.category)
+            val interactionSource = remember { MutableInteractionSource() }
+            NavigationRailItem(
+                selected = selected,
+                onClick = { selectTab(tab.category) },
+                icon = { Icon(tab.icon, contentDescription = stringResource(tab.labelRes)) },
+                label = { Text(stringResource(tab.labelRes)) },
+                interactionSource = interactionSource,
+                modifier = Modifier.focusHighlight(interactionSource)
+            )
         }
     }
 
-    // The TV Box target has no touchscreen, so the bottom NavigationBar used on phones is a D-pad
-    // dead end: it lives in a separate Scaffold slot below the scrollable screen content, and
-    // DPAD_DOWN from the last focusable item on screen never reaches it (verified on-device -
-    // Compose's scrollable modifier absorbs the key event once the direction matches the scroll
-    // axis, rather than handing it to directional focus search once there's nothing left to
-    // scroll). A left-edge NavigationRail is reachable via DPAD_LEFT from any point in the
-    // content column instead, which isn't the axis vertical carousels/lists scroll on.
-    if (uiMode == UiMode.TV) {
+    val isPhoneLandscape = uiMode != UiMode.TV &&
+        LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
+    // Rotating a phone between the two landscape orientations physically swaps which edge the
+    // front camera's display cutout sits on - docking the rail to a fixed side (or guessing from
+    // Surface.rotation, tried first and wrong on this device) put it right on top of the cutout
+    // for one of the two rotations. Read the real cutout inset instead (same source of truth
+    // DetailsScreen already uses to mirror its own safe-area padding) and dock the rail to
+    // whichever side does NOT have it.
+    val cutoutInsets = WindowInsets.displayCutout
+    val density = LocalDensity.current
+    val layoutDirection = LocalLayoutDirection.current
+    val railOnLeft = cutoutInsets.getLeft(density, layoutDirection) <= cutoutInsets.getRight(density, layoutDirection)
+
+    // The TV Box target has no touchscreen, so the bottom NavigationBar used on phones in
+    // portrait is a D-pad dead end: it lives in a separate Scaffold slot below the scrollable
+    // screen content, and DPAD_DOWN from the last focusable item on screen never reaches it
+    // (verified on-device - Compose's scrollable modifier absorbs the key event once the
+    // direction matches the scroll axis, rather than handing it to directional focus search once
+    // there's nothing left to scroll). A left-edge NavigationRail is reachable via DPAD_LEFT from
+    // any point in the content column instead, which isn't the axis vertical carousels/lists
+    // scroll on. Phone landscape uses the same side-rail layout (not because of D-pad, but because
+    // a bottom bar wastes too much of the little vertical room landscape already has) - side
+    // instead of bottom also matches the phone's own wider-than-tall shape in that orientation.
+    if (uiMode == UiMode.TV || isPhoneLandscape) {
         Row(modifier = Modifier.fillMaxSize()) {
-            NavigationRail {
-                bottomTabs.forEach { tab ->
-                    val selected = isTabSelected(tab.category)
-                    val interactionSource = remember { MutableInteractionSource() }
-                    NavigationRailItem(
-                        selected = selected,
-                        onClick = { selectTab(tab.category) },
-                        icon = { Icon(tab.icon, contentDescription = stringResource(tab.labelRes)) },
-                        label = { Text(stringResource(tab.labelRes)) },
-                        interactionSource = interactionSource,
-                        modifier = Modifier.focusHighlight(interactionSource)
-                    )
-                }
+            if (railOnLeft) {
+                NavigationRail(content = railItems)
             }
             Box(modifier = Modifier.weight(1f)) {
                 content(PaddingValues())
+            }
+            if (!railOnLeft) {
+                NavigationRail(content = railItems)
             }
         }
     } else {
@@ -574,8 +670,9 @@ private fun TabsHost(app: SeanceApplication, navController: NavHostController) {
             // SeanceNavHostContent - every screen in NavHost handles its own insets, this Scaffold
             // only needs to reserve space for its own bottom bar.
             contentWindowInsets = WindowInsets(0, 0, 0, 0),
+            snackbarHost = { SnackbarHost(exitSnackbarHostState) },
             bottomBar = {
-                NavigationBar {
+                NavigationBar(windowInsets = com.seance.app.ui.common.rememberLatchedNavigationBarsInsets()) {
                     bottomTabs.forEach { tab ->
                         val selected = isTabSelected(tab.category)
                         val interactionSource = remember { MutableInteractionSource() }

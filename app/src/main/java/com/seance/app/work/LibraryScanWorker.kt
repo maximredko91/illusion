@@ -2,8 +2,10 @@ package com.seance.app.work
 
 import android.content.Context
 import androidx.work.CoroutineWorker
+import androidx.work.ForegroundInfo
 import androidx.work.WorkerParameters
 import androidx.work.workDataOf
+import com.seance.app.R
 import com.seance.app.data.scan.LibraryScanner
 import com.seance.app.data.settings.SettingsRepository
 import kotlinx.coroutines.flow.first
@@ -15,14 +17,30 @@ class LibraryScanWorker(
     private val settingsRepository: SettingsRepository
 ) : CoroutineWorker(context, params) {
 
+    // Promoting to a foreground service (rather than staying a plain background CoroutineWorker)
+    // is what actually fixes scans "pausing"/getting interrupted mid-run - a periodic rescan with
+    // no screen observing it is exactly the kind of background work Doze/App Standby defer or
+    // kill outright, which read as the scan randomly stalling.
+    override suspend fun getForegroundInfo(): ForegroundInfo =
+        ScanNotifications.progressForegroundInfo(applicationContext, applicationContext.getString(R.string.scan_progress_starting))
+
     override suspend fun doWork(): Result {
-        val result = scanner.scanAll { progress -> setProgress(progress.toData()) }
+        setForeground(getForegroundInfo())
+        val result = scanner.scanAll { progress ->
+            setProgress(progress.toData())
+            setForeground(ScanNotifications.progressForegroundInfo(applicationContext, progress.toNotificationText(applicationContext)))
+        }
         // A source erroring out doesn't fail the whole scan (the others may have indexed fine),
         // except when EVERY source did - nothing got indexed and there's nothing useful to show,
         // so that's reported as an actual failure with the first source's classified reason
         // instead of the old always-success/generic-message behavior.
         if (result.totalIndexed == 0 && result.sourceErrors.isNotEmpty()) {
             val message = result.sourceErrors.joinToString("; ") { "${it.sourceName}: ${it.message}" }
+            ScanNotifications.notifyResult(
+                applicationContext,
+                applicationContext.getString(R.string.scan_notification_result_failed_title),
+                message
+            )
             return Result.failure(workDataOf(KEY_ERROR to message))
         }
         val requireCharging = settingsRepository.requireChargingForHeavyTasks.first()
@@ -33,6 +51,16 @@ class LibraryScanWorker(
         val partialErrorMessage = result.sourceErrors
             .takeIf { it.isNotEmpty() }
             ?.joinToString("; ") { "${it.sourceName}: ${it.message}" }
+        val resultText = if (partialErrorMessage != null) {
+            applicationContext.getString(R.string.scan_notification_result_partial_text, result.totalIndexed, partialErrorMessage)
+        } else {
+            applicationContext.getString(R.string.scan_notification_result_success_text, result.totalIndexed)
+        }
+        ScanNotifications.notifyResult(
+            applicationContext,
+            applicationContext.getString(R.string.scan_notification_result_success_title),
+            resultText
+        )
         return Result.success(
             workDataOf(
                 KEY_TOTAL_INDEXED to result.totalIndexed,

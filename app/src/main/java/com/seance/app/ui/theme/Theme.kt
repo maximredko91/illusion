@@ -9,6 +9,7 @@ import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.platform.LocalContext
+import com.seance.app.domain.model.AccentColor
 
 private val DarkColorScheme = darkColorScheme(
     primary = Purple80,
@@ -26,9 +27,21 @@ private val LightColorScheme = lightColorScheme(
 fun SeanceTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     dynamicColor: Boolean = true,
+    accentColor: AccentColor = AccentColor.DEFAULT,
     content: @Composable () -> Unit
 ) {
     val colorScheme = when {
+        // A user-picked accent overrides Material You/the default purple scheme outright - picking
+        // one from Settings is a deliberate override, so it should always win rather than only
+        // applying below API 31 or being silently ignored while dynamic color is active.
+        accentColor != AccentColor.DEFAULT -> {
+            if (darkTheme) {
+                darkColorScheme(primary = accentColor.darkPrimary, secondary = accentColor.darkSecondary, tertiary = accentColor.darkTertiary)
+            } else {
+                lightColorScheme(primary = accentColor.lightPrimary, secondary = accentColor.lightSecondary, tertiary = accentColor.lightTertiary)
+            }
+        }
+
         dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
             val context = LocalContext.current
             if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
