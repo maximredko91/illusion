@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -83,6 +84,14 @@ private enum class DragMode { NONE, SEEK, BRIGHTNESS, VOLUME }
 /** Brightness/volume drags only trigger within this fraction of the screen width from each edge -
  * the middle stays neutral so it doesn't fight with taps/drags meant for the center controls. */
 private const val EDGE_ZONE_FRACTION = 0.3f
+
+/** Brightness/volume drags reach their full 0-100% swing over this fraction of the screen height,
+ * not the full height - dividing by the whole screen height (tried first) meant covering the full
+ * range required dragging your thumb literally up to the physical top/bottom edge of the display,
+ * which is awkward to reach and easy to have swallowed by system gesture areas up there. Scaling
+ * against a shorter effective range makes the same 0-100% swing reachable from a comfortable
+ * middle stretch of the screen instead. */
+private const val VERTICAL_GESTURE_RANGE_FRACTION = 0.55f
 
 @Composable
 fun PlayerScreen(
@@ -344,6 +353,23 @@ fun PlayerScreen(
                 ErrorOverlay(message = message, onRetry = viewModel::retry)
             }
         }
+
+        // Stays mounted at all times (not gated behind `if (showSpeedDialog)` like the other
+        // dialogs below) so its slide-in/out animation actually has something to animate - see the
+        // KDoc on PlayerSettingsPanel itself.
+        PlayerSettingsPanel(
+            visible = showSpeedDialog && !isInPip,
+            currentSpeed = uiState.playbackSpeed,
+            videoFormatSummary = viewModel.currentVideoFormatSummary(),
+            sharpenEnabled = uiState.sharpenEnabled,
+            onSharpenEnabledChange = viewModel::setSharpenEnabled,
+            canMarkIntro = uiState.canMarkIntro,
+            introMarkedEndMs = uiState.introMarkedEndMs,
+            onMarkIntroEnd = { viewModel.markIntroEnd(); showSpeedDialog = false },
+            onClearIntroMarkers = { viewModel.clearIntroMarkers(); showSpeedDialog = false },
+            onSelect = { speed -> viewModel.setPlaybackSpeed(speed); showSpeedDialog = false },
+            onDismiss = { showSpeedDialog = false }
+        )
     }
 
     if (showAudioDialog && !isInPip) {
@@ -362,20 +388,6 @@ fun PlayerScreen(
             allowOff = true,
             onSelect = { option -> viewModel.selectSubtitleTrack(option); showSubtitleDialog = false },
             onDismiss = { showSubtitleDialog = false }
-        )
-    }
-    if (showSpeedDialog && !isInPip) {
-        PlaybackSpeedDialog(
-            currentSpeed = uiState.playbackSpeed,
-            videoFormatSummary = viewModel.currentVideoFormatSummary(),
-            sharpenEnabled = uiState.sharpenEnabled,
-            onSharpenEnabledChange = viewModel::setSharpenEnabled,
-            canMarkIntro = uiState.canMarkIntro,
-            introMarkedEndMs = uiState.introMarkedEndMs,
-            onMarkIntroEnd = { viewModel.markIntroEnd(); showSpeedDialog = false },
-            onClearIntroMarkers = { viewModel.clearIntroMarkers(); showSpeedDialog = false },
-            onSelect = { speed -> viewModel.setPlaybackSpeed(speed); showSpeedDialog = false },
-            onDismiss = { showSpeedDialog = false }
         )
     }
 }
@@ -481,6 +493,23 @@ private fun GestureLayer(
     var seekToastAlignment by remember { mutableStateOf(Alignment.Center) }
     var seekToastHideJob: Job? by remember { mutableStateOf<Job?>(null) }
 
+    // Landscape on some devices has a real display-cutout (front camera) on one side - the same
+    // mirror-both-sides approach DetailsScreen already uses for its own safe-area padding, so the
+    // brightness/volume pills stay visually centered regardless of which physical edge the cutout
+    // is actually on. Zero in portrait.
+    val cutoutInsets = WindowInsets.displayCutout
+    val gestureIndicatorDensity = androidx.compose.ui.platform.LocalDensity.current
+    val gestureIndicatorLayoutDirection = androidx.compose.ui.platform.LocalLayoutDirection.current
+    val cutoutHorizontalDp = with(gestureIndicatorDensity) {
+        maxOf(
+            cutoutInsets.getLeft(gestureIndicatorDensity, gestureIndicatorLayoutDirection),
+            cutoutInsets.getRight(gestureIndicatorDensity, gestureIndicatorLayoutDirection)
+        ).toDp()
+    }
+    // 24dp was flush enough against the raw screen edge to feel cramped there, doubly so once a
+    // cutout is added on top - 40dp base gives the pill some breathing room even with no cutout.
+    val gestureIndicatorEdgePadding = 40.dp + cutoutHorizontalDp
+
     fun showSeekToast(text: String, alignment: Alignment, autoHideMs: Long?) {
         seekToastText = text
         seekToastAlignment = alignment
@@ -553,14 +582,14 @@ private fun GestureLayer(
                         }
                         when (mode) {
                             DragMode.VOLUME -> {
-                                val fraction = -accumulatedDy / size.height
+                                val fraction = -accumulatedDy / (size.height * VERTICAL_GESTURE_RANGE_FRACTION)
                                 val newVolume = (dragStartVolume + fraction * maxVolume).roundToInt().coerceIn(0, maxVolume)
                                 audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, newVolume, 0)
                                 volumeFraction = if (maxVolume > 0) newVolume.toFloat() / maxVolume else 0f
                                 pulseVolume()
                             }
                             DragMode.BRIGHTNESS -> {
-                                val fraction = -accumulatedDy / size.height
+                                val fraction = -accumulatedDy / (size.height * VERTICAL_GESTURE_RANGE_FRACTION)
                                 val newBrightness = (dragStartBrightness + fraction).coerceIn(0.02f, 1f)
                                 activity?.let { setBrightness(it, newBrightness) }
                                 brightnessFraction = newBrightness
@@ -597,7 +626,7 @@ private fun GestureLayer(
             visible = showBrightness,
             enter = fadeIn(),
             exit = fadeOut(),
-            modifier = Modifier.align(Alignment.CenterStart).padding(start = 24.dp)
+            modifier = Modifier.align(Alignment.CenterStart).padding(start = gestureIndicatorEdgePadding)
         ) {
             GestureIndicator(label = "Яркость", fraction = brightnessFraction)
         }
@@ -605,7 +634,7 @@ private fun GestureLayer(
             visible = showVolume,
             enter = fadeIn(),
             exit = fadeOut(),
-            modifier = Modifier.align(Alignment.CenterEnd).padding(end = 24.dp)
+            modifier = Modifier.align(Alignment.CenterEnd).padding(end = gestureIndicatorEdgePadding)
         ) {
             GestureIndicator(label = "Громкость", fraction = volumeFraction)
         }

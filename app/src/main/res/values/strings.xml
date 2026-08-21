@@ -221,6 +221,9 @@
     <string name="player_audio_tracks_button">Аудиодорожка</string>
     <string name="player_cast_unavailable">Трансляция (недоступно)</string>
     <string name="player_settings">Настройки воспроизведения</string>
+    <string name="player_settings_section_speed">Скорость</string>
+    <string name="player_settings_section_image">Изображение</string>
+    <string name="player_settings_section_intro">Заставка</string>
     <string name="player_lock">Заблокировать управление</string>
     <string name="player_unlock">Разблокировать управление</string>
     <string name="player_aspect_ratio">Соотношение сторон</string>

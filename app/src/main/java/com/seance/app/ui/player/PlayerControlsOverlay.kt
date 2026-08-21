@@ -1,25 +1,39 @@
 package com.seance.app.ui.player
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Audiotrack
 import androidx.compose.material.icons.filled.Cast
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.AspectRatio
@@ -31,8 +45,12 @@ import androidx.compose.material.icons.filled.Subtitles
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
@@ -299,8 +317,18 @@ private fun TrackRow(label: String, selected: Boolean, onClick: () -> Unit) {
     }
 }
 
+/**
+ * Was a centered `AlertDialog` (a flat list: speed radio rows, then a sharpen toggle, then intro
+ * marking, then video info, one after another with no visual grouping) - reworked per user
+ * feedback into a translucent panel that slides in from the right instead, edge-to-edge with the
+ * player behind it still dimly visible through the scrim, and its content organized into labeled
+ * sections instead of one undifferentiated list. Stays mounted at all times (unlike the old
+ * conditionally-composed dialog) so [AnimatedVisibility] actually has something to animate in and
+ * out - [visible] toggles it instead of the caller adding/removing it from composition.
+ */
 @Composable
-fun PlaybackSpeedDialog(
+fun PlayerSettingsPanel(
+    visible: Boolean,
     currentSpeed: Float,
     videoFormatSummary: String,
     sharpenEnabled: Boolean,
@@ -317,6 +345,8 @@ fun PlaybackSpeedDialog(
     // 1.11.0 code path whose onVideoSizeChanged is a deliberate upstream no-op (TODO b/292111083) -
     // aspect-ratio cycling silently stops working for the rest of the session as a result. Warn
     // before flipping the switch rather than let the user discover it later via a dead button.
+    // Kept as a real AlertDialog (unlike the panel below) - a decision like this needs a decisive
+    // yes/no interruption, not something that slides away if you tap outside it.
     var showEnableWarning by remember { mutableStateOf(false) }
     if (showEnableWarning) {
         AlertDialog(
@@ -334,20 +364,63 @@ fun PlaybackSpeedDialog(
             }
         )
     }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.player_speed)) },
-        text = {
-            Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
-                speeds.forEach { speed ->
-                    TrackRow(label = "${speed}x", selected = speed == currentSpeed, onClick = { onSelect(speed) })
+
+    Box(modifier = Modifier.fillMaxSize()) {
+        AnimatedVisibility(
+            visible = visible,
+            enter = fadeIn(),
+            exit = fadeOut()
+        ) {
+            val scrimSource = remember { MutableInteractionSource() }
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.45f))
+                    .clickable(interactionSource = scrimSource, indication = null, onClick = onDismiss)
+            )
+        }
+        AnimatedVisibility(
+            visible = visible,
+            enter = slideInHorizontally(animationSpec = tween(280), initialOffsetX = { it }) + fadeIn(),
+            exit = slideOutHorizontally(animationSpec = tween(220), targetOffsetX = { it }) + fadeOut(),
+            modifier = Modifier.align(Alignment.CenterEnd)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxHeight()
+                    .width(300.dp)
+                    .background(Color(0xFF141218).copy(alpha = 0.82f))
+                    .windowInsetsPadding(WindowInsets.safeDrawing)
+                    .verticalScroll(rememberScrollState())
+                    .padding(20.dp)
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                    Text(stringResource(R.string.player_settings), color = Color.White, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+                    val closeSource = remember { MutableInteractionSource() }
+                    IconButton(onClick = onDismiss, interactionSource = closeSource, modifier = Modifier.focusHighlight(closeSource, color = Color.White)) {
+                        Icon(Icons.Default.Close, contentDescription = stringResource(R.string.player_close), tint = Color.White)
+                    }
                 }
-                androidx.compose.material3.HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text(stringResource(R.string.player_sharpen_toggle), modifier = Modifier.weight(1f))
+
+                PanelSectionLabel(stringResource(R.string.player_settings_section_speed))
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    speeds.forEach { speed ->
+                        FilterChip(
+                            selected = speed == currentSpeed,
+                            onClick = { onSelect(speed) },
+                            label = { Text("${speed}x") },
+                            colors = FilterChipDefaults.filterChipColors(
+                                labelColor = Color.White,
+                                selectedContainerColor = MaterialTheme.colorScheme.primary,
+                                selectedLabelColor = Color.White
+                            )
+                        )
+                    }
+                }
+
+                PanelSectionLabel(stringResource(R.string.player_settings_section_image))
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                    Text(stringResource(R.string.player_sharpen_toggle), color = Color.White, modifier = Modifier.weight(1f))
                     androidx.compose.material3.Switch(
                         checked = sharpenEnabled,
                         onCheckedChange = { enabled ->
@@ -355,12 +428,15 @@ fun PlaybackSpeedDialog(
                         }
                     )
                 }
+                Text(videoFormatSummary, color = Color.White.copy(alpha = 0.7f), style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 8.dp))
+
                 if (canMarkIntro) {
-                    androidx.compose.material3.HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                    PanelSectionLabel(stringResource(R.string.player_settings_section_intro))
                     if (introMarkedEndMs != null) {
                         Text(
                             stringResource(R.string.player_intro_marked_at, formatTime(introMarkedEndMs)),
-                            style = androidx.compose.material3.MaterialTheme.typography.bodySmall
+                            color = Color.White.copy(alpha = 0.7f),
+                            style = MaterialTheme.typography.bodySmall
                         )
                     }
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -375,17 +451,23 @@ fun PlaybackSpeedDialog(
                     }
                     Text(
                         stringResource(R.string.player_mark_intro_end_hint),
-                        style = androidx.compose.material3.MaterialTheme.typography.bodySmall
+                        color = Color.White.copy(alpha = 0.7f),
+                        style = MaterialTheme.typography.bodySmall
                     )
                 }
-                androidx.compose.material3.HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-                Text(stringResource(R.string.player_video_info_title), style = androidx.compose.material3.MaterialTheme.typography.labelLarge)
-                Text(videoFormatSummary, style = androidx.compose.material3.MaterialTheme.typography.bodySmall)
             }
-        },
-        confirmButton = {
-            TextButton(onClick = onDismiss) { Text(stringResource(R.string.player_close)) }
         }
+    }
+}
+
+@Composable
+private fun PanelSectionLabel(text: String) {
+    HorizontalDivider(color = Color.White.copy(alpha = 0.15f), modifier = Modifier.padding(top = 20.dp, bottom = 4.dp))
+    Text(
+        text,
+        color = Color.White.copy(alpha = 0.6f),
+        style = MaterialTheme.typography.labelMedium,
+        modifier = Modifier.padding(bottom = 8.dp)
     )
 }
 
