@@ -73,8 +73,19 @@ class LibraryViewModel(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val items: StateFlow<List<MediaItemEntity>> = combine(allItems, _genreFilter, _yearFilter) { items, genre, year ->
-        items.filter { item ->
+        val filtered = items.filter { item ->
             (genre == null || genre in item.genres) && (year == null || item.year == year)
+        }
+        // Filtering by a genre also brings along items where it's a minor/secondary tag (e.g. a
+        // "Драма" filter matching a movie whose genres are [Боевик, Триллер, Драма]) - those used
+        // to sort interleaved with items the genre actually defines. sortedByDescending is stable,
+        // so this only reorders by "is it this item's primary genre" and leaves the existing sort
+        // (rating/year/title/dateAdded, whichever _sortOrder is active) as the tiebreak within each
+        // of the two groups, rather than replacing it.
+        if (genre != null) {
+            filtered.sortedByDescending { it.genres.firstOrNull() == genre }
+        } else {
+            filtered
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
