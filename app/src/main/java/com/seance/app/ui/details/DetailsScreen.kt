@@ -294,19 +294,15 @@ private fun DetailsContent(
         Box {
             val fanart = item.fanartModel
             val fanartSource = remember { MutableInteractionSource() }
+            // Back/home/favorite all anchor to this box's corners - matches their own footprint
+            // (IconButton's default touch target) so the dead zone below lines up with where a
+            // near-miss on one of them actually lands.
+            val cornerButtonSize = 48.dp
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(220.dp)
                     .background(MaterialTheme.colorScheme.surfaceVariant)
-                    .let {
-                        if (fanart != null) {
-                            it.focusHighlight(fanartSource)
-                                .clickable(interactionSource = fanartSource, indication = LocalIndication.current) { zoomedImage = fanart }
-                        } else {
-                            it
-                        }
-                    }
             ) {
                 if (fanart != null) {
                     // AsyncImage (not rememberAsyncImagePainter+Image) so Coil sizes the decode to
@@ -364,6 +360,18 @@ private fun DetailsContent(
                             .width(24.dp)
                             .background(Brush.horizontalGradient(listOf(Color.Transparent, MaterialTheme.colorScheme.background)))
                     )
+                    // Zoom only triggers from this inset center region, not the full fanart - a
+                    // full-bleed clickable here meant a near-miss on the back/home/favorite buttons
+                    // (all anchored to this box's own corners) fell straight through to opening the
+                    // zoomed viewer instead, since a tap just outside a button's actual touch target
+                    // still landed on this Box underneath it. Purely a hit-test layer, no visuals.
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(cornerButtonSize)
+                            .focusHighlight(fanartSource)
+                            .clickable(interactionSource = fanartSource, indication = LocalIndication.current) { zoomedImage = fanart }
+                    )
                 }
             }
             val backSource = remember { MutableInteractionSource() }
@@ -394,8 +402,8 @@ private fun DetailsContent(
                 onClick = onGoHome,
                 interactionSource = homeSource,
                 modifier = Modifier
-                    .align(Alignment.TopStart)
-                    .padding(start = 56.dp, top = 4.dp)
+                    .align(Alignment.BottomStart)
+                    .padding(4.dp)
                     .background(Color.Black.copy(alpha = 0.5f), CircleShape)
                     .focusHighlight(homeSource, color = Color.White)
             ) {
