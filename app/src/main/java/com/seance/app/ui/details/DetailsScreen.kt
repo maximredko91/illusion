@@ -53,6 +53,7 @@ import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Theaters
 import androidx.compose.material3.AlertDialog
@@ -139,6 +140,7 @@ fun DetailsScreen(
     onOpenPerson: (String) -> Unit,
     onOpenItem: (String) -> Unit,
     onBack: () -> Unit,
+    onGoHome: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val viewModel: DetailsViewModel = viewModel(
@@ -188,7 +190,8 @@ fun DetailsScreen(
                 onPlayTrailer = onPlayTrailer,
                 onOpenPerson = onOpenPerson,
                 onOpenItem = onOpenItem,
-                onBack = onBack
+                onBack = onBack,
+                onGoHome = onGoHome
             )
             state.isLoading -> CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
             else -> Text(
@@ -226,7 +229,8 @@ private fun DetailsContent(
     onPlayTrailer: (String) -> Unit,
     onOpenPerson: (String) -> Unit,
     onOpenItem: (String) -> Unit,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    onGoHome: () -> Unit
 ) {
     var zoomedImage by remember { mutableStateOf<Any?>(null) }
 
@@ -377,6 +381,27 @@ private fun DetailsContent(
                 Icon(
                     Icons.AutoMirrored.Filled.ArrowBack,
                     contentDescription = stringResource(R.string.details_back),
+                    tint = Color.White
+                )
+            }
+
+            // Escape hatch for drilling several Similar/series hops deep (Movie -> part 2 -> part
+            // 3 -> ...) - onBack still steps back one card at a time (so returning to the card the
+            // user actually came from works normally), this jumps straight to the main screen
+            // instead of requiring one "Назад" per hop.
+            val homeSource = remember { MutableInteractionSource() }
+            IconButton(
+                onClick = onGoHome,
+                interactionSource = homeSource,
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(start = 56.dp, top = 4.dp)
+                    .background(Color.Black.copy(alpha = 0.5f), CircleShape)
+                    .focusHighlight(homeSource, color = Color.White)
+            ) {
+                Icon(
+                    Icons.Default.Home,
+                    contentDescription = stringResource(R.string.details_go_home),
                     tint = Color.White
                 )
             }

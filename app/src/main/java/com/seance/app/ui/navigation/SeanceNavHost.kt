@@ -350,7 +350,18 @@ private fun SeanceNavGraph(app: SeanceApplication, navController: NavHostControl
                         },
                         onOpenPerson = { name -> navController.navigate(Destination.Person(name)) },
                         onOpenItem = { stableId -> navController.navigate(Destination.Details(stableId)) },
-                        onBack = { navController.popBackStack() }
+                        onBack = { navController.popBackStack() },
+                        // Drilling through several Similar/series hops grows the back stack one
+                        // card at a time (by design - a normal "back" from a deep card should land
+                        // on the card the user actually came from, not skip straight home). This is
+                        // the escape hatch for "I've gone deep and just want out" without breaking
+                        // that per-card back behavior: clears everything above Tabs in one shot.
+                        onGoHome = {
+                            navController.navigate(Destination.Tabs) {
+                                popUpTo<Destination.Tabs> { inclusive = false }
+                                launchSingleTop = true
+                            }
+                        }
                     )
                 }
             }
