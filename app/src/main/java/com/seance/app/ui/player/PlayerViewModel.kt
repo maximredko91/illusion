@@ -525,6 +525,12 @@ class PlayerViewModel(
             .setMimeType(mimeType)
             .setLanguage(language)
             .setLabel(language ?: fileName)
+            // Without a selection flag, ExoPlayer's default track selector never auto-picks a text
+            // track on its own - subtitlesEnabled=true in the UI state only means the track TYPE
+            // isn't disabled, it doesn't mean any specific track actually gets selected/rendered.
+            // Sidecar subtitles found during scanning are exactly the case a viewer wants shown
+            // automatically (unlike embedded tracks in other languages they didn't ask for).
+            .setSelectionFlags(C.SELECTION_FLAG_DEFAULT)
             .build()
     }
 
