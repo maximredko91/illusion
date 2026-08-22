@@ -157,6 +157,22 @@ class PlayerViewModel(
     private var tickerJob: Job? = null
     private var lastSavedAtMs = 0L
 
+    // Bound (not started) so PlaybackService only ever promotes itself to a foreground service
+    // once the player it's holding actually starts playing - see PlaybackService's own KDoc for why
+    // that's safer than starting it up front on a still-loading stream.
+    private var playbackService: com.seance.app.data.player.PlaybackService? = null
+    private val playbackServiceConnection = object : android.content.ServiceConnection {
+        override fun onServiceConnected(name: android.content.ComponentName?, binder: android.os.IBinder?) {
+            val service = (binder as? com.seance.app.data.player.PlaybackService.LocalBinder)?.getService() ?: return
+            playbackService = service
+            service.attachPlayer(player)
+        }
+
+        override fun onServiceDisconnected(name: android.content.ComponentName?) {
+            playbackService = null
+        }
+    }
+
     private fun attachListeners(target: ExoPlayer) {
         target.addListener(object : Player.Listener {
             override fun onIsPlayingChanged(isPlaying: Boolean) {
@@ -192,6 +208,16 @@ class PlayerViewModel(
 
     init {
         attachListeners(player)
+        // Both start AND bind: a purely-bound (never started) service is denied FGS-start
+        // eligibility by Android 12+'s background-start restrictions - MediaSessionService's
+        // internal startForeground() call for the notification silently no-ops in that case (no
+        // crash, no log - it was only caught by dumpsys showing startForegroundCount=0). The
+        // session/notification becomes active within milliseconds of binding, well inside the ~5s
+        // startForegroundService() grace window, regardless of how long the stream itself takes to
+        // start buffering.
+        val serviceIntent = Intent(appContext, com.seance.app.data.player.PlaybackService::class.java)
+        androidx.core.content.ContextCompat.startForegroundService(appContext, serviceIntent)
+        appContext.bindService(serviceIntent, playbackServiceConnection, Context.BIND_AUTO_CREATE)
 
         viewModelScope.launch {
             // Calling setVideoEffects() at all - even with an empty list - permanently switches
@@ -392,6 +418,9 @@ class PlayerViewModel(
         val fresh = createPlayer()
         attachListeners(fresh)
         _player.value = fresh
+        // MediaSession's player can't be swapped in place - re-attaching rebuilds it around the
+        // fresh instance so the notification keeps working after a sharpen-triggered reload.
+        playbackService?.attachPlayer(fresh)
         if (_state.value.sharpenEnabled) fresh.setVideoEffects(listOf(SharpenEffect()))
 
         viewModelScope.launch {
@@ -779,6 +808,9 @@ class PlayerViewModel(
                 watchProgressRepository.updateProgress(item.stableId, position, duration, watched, System.currentTimeMillis())
             }
         }
+        playbackService?.detachPlayer()
+        runCatching { appContext.unbindService(playbackServiceConnection) }
+        appContext.stopService(Intent(appContext, com.seance.app.data.player.PlaybackService::class.java))
         player.release()
     }
 

@@ -19,6 +19,11 @@
          background rescan is in progress, so the OS doesn't defer/kill it under Doze - required
          alongside the generic FOREGROUND_SERVICE permission once a specific type is declared. -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <!-- PlaybackService (MediaSessionService) promotes itself to a foreground service while
+         something is playing, so the OS shows a real media notification in the shade/lock screen -
+         required alongside FOREGROUND_SERVICE once a specific type is declared, same as the scan
+         worker's FOREGROUND_SERVICE_DATA_SYNC above. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
 
     <!-- The Xiaomi TV Box target has no touchscreen and may not declare the leanback feature -
          both must be optional or the Play Store (and some OEM stores) would filter the app out
@@ -78,6 +83,15 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <service
+            android:name=".data.player.PlaybackService"
+            android:exported="false"
+            android:foregroundServiceType="mediaPlayback">
+            <intent-filter>
+                <action android:name="androidx.media3.session.MediaSessionService" />
+            </intent-filter>
+        </service>
     </application>
 
 </manifest>
