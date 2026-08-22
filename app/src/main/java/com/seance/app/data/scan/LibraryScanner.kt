@@ -316,7 +316,15 @@ class LibraryScanner(
             filePath = file.path,
             category = category,
             title = metadata?.title ?: baseName,
-            originalTitle = metadata?.originalTitle,
+            // Show-level value wins whenever one exists (opposite priority from genre/year/rating
+            // below, which are genuine "fill in what's missing" fallbacks) - an episode's own .nfo
+            // commonly sets <originaltitle> too, but to the EPISODE's own original name, not the
+            // show's. Details' card for a series displays this on the show-level card (via
+            // DetailsUiState.seriesTitle for the main title), so a per-episode value there always
+            // reads as wrong ("why is this random episode name here"), never as more correct.
+            // showMetadata is only ever non-null for TV_SHOWS/CARTOON_SERIES (see seriesStableId
+            // above), so movies are unaffected - metadata?.originalTitle still wins for them.
+            originalTitle = showMetadata?.originalTitle ?: metadata?.originalTitle,
             year = metadata?.year ?: showMetadata?.year,
             genres = metadata?.genres?.takeIf { it.isNotEmpty() } ?: showMetadata?.genres ?: emptyList(),
             rating = metadata?.rating ?: showMetadata?.rating,
