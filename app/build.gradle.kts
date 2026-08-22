@@ -115,10 +115,14 @@ dependencies {
     ffmpegExtensionAar?.let { implementation(files(it)) }
 
     testImplementation(libs.junit)
+    // NfoParser uses org.xmlpull.v1.XmlPullParserFactory.newInstance(), which needs a real
+    // provider on the JVM unit-test classpath (Android's built-in impl isn't available there).
+    testImplementation("net.sf.kxml:kxml2:2.3.0")
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(libs.androidx.junit)
+    androidTestImplementation("androidx.room:room-testing:${libs.versions.room.get()}")
     debugImplementation(libs.androidx.compose.ui.test.manifest)
     debugImplementation(libs.androidx.compose.ui.tooling)
 }
