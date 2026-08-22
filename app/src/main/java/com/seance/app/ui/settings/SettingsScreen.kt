@@ -925,8 +925,23 @@ private fun categoryTitle(key: String): String = when (key) {
 private fun CategoryRow(title: String, description: String?, icon: ImageVector, onClick: () -> Unit) {
     val rowSource = remember { MutableInteractionSource() }
     ListItem(
-        headlineContent = { Text(title) },
-        supportingContent = description?.let { { Text(it) } },
+        // Description folded into headlineContent (not a separate supportingContent slot) for the
+        // same reason as PlayerModeMenu's ListItem above - Material3 top-aligns leading/trailing
+        // content whenever supportingContent is present, and since each category's description
+        // wraps to a different number of lines, that made the icons look inconsistently placed row
+        // to row instead of all sitting at the same relative height.
+        headlineContent = {
+            Column {
+                Text(title)
+                if (description != null) {
+                    Text(
+                        description,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        },
         leadingContent = { Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
         trailingContent = {
             Icon(

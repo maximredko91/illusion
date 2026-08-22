@@ -437,7 +437,26 @@ class PlayerViewModel(
      * where they were watching - this does the same "close and reopen" the warning dialog already
      * told them to do, just without leaving this screen at all.
      */
+    // Rapid-fire reload requests (e.g. mashing the sharpen quick-toggle - each off->on edge
+    // triggers a reload, see the sharpenEnabled/sharpenAmount collector in init) used to overlap:
+    // reloadPlayer() swaps _player.value synchronously but finishes the actual playItem()/
+    // playTrailerItem() call in a launched coroutine, so a second call arriving before that
+    // coroutine ran would release()/replace the player out from under it, and the first
+    // coroutine's eventual playItem() call would then hit an already-released or already-replaced
+    // instance - confirmed on-device as an IllegalStateException from ExoPlayer. isReloading makes
+    // overlapping requests coalesce into one follow-up reload instead of firing concurrently -
+    // safe to coalesce since reloadPlayer() always reads the *current* _state.value/currentItem
+    // fresh, never stale captured values.
+    private var isReloading = false
+    private var reloadRequestedAgain = false
+
     fun reloadPlayer() {
+        if (isReloading) {
+            reloadRequestedAgain = true
+            return
+        }
+        isReloading = true
+
         val old = player
         val position = old.currentPosition.coerceAtLeast(0)
         val wasPlaying = old.isPlaying
@@ -459,6 +478,11 @@ class PlayerViewModel(
             when {
                 item != null -> playItem(item, position, wasPlaying)
                 trailerItem != null -> playTrailerItem(trailerItem, position, wasPlaying)
+            }
+            isReloading = false
+            if (reloadRequestedAgain) {
+                reloadRequestedAgain = false
+                reloadPlayer()
             }
         }
     }
