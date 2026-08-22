@@ -276,6 +276,7 @@ fun LibraryScreen(
                         else -> LazyVerticalGrid(
                             columns = posterGridColumns(),
                             state = gridState,
+                            flingBehavior = com.seance.app.ui.common.rememberSmoothFlingBehavior(),
                             modifier = Modifier.fillMaxSize().focusGroup(),
                             contentPadding = PaddingValues(8.dp)
                         ) {

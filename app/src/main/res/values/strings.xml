@@ -11,6 +11,9 @@
 
     <string name="details_tagline_label">Слоган:</string>
     <string name="details_studio_label">Студия:</string>
+    <string name="details_mpaa_label">Рейтинг:</string>
+    <string name="details_premiered_label">Премьера:</string>
+    <string name="details_collection_name_label">Коллекция:</string>
 
     <string name="settings_factory_reset">Полный сброс приложения</string>
     <string name="settings_factory_reset_description">Удалит источники SMB, всю библиотеку, избранное, историю просмотра, загрузки, кэш и пароль добавления медиа — настройки тоже вернутся к значениям по умолчанию</string>

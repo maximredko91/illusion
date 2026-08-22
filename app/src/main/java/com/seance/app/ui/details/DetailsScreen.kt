@@ -587,83 +587,147 @@ private fun DetailsContent(
         // never had.
         val tagline = item.tagline?.takeIf { it.isNotBlank() }
         val studio = item.studio?.takeIf { it.isNotBlank() }
+        val mpaa = item.mpaa?.takeIf { it.isNotBlank() }
+        val premiered = item.premiered?.takeIf { it.isNotBlank() }
+        val collectionName = item.collectionName?.takeIf { it.isNotBlank() }
         // Always rendered now (not gated on tagline/studio existing) - the audio/subtitle row
         // below moved in here per feedback and has content to show regardless of whether this
         // item even has a tagline or studio.
-        Column(
+        Row(
             modifier = Modifier
                 .padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 8.dp)
                 .fillMaxWidth()
                 .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f), RoundedCornerShape(12.dp))
                 .padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+            horizontalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            tagline?.let {
-                Column {
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                tagline?.let {
+                    Column {
+                        Text(
+                            stringResource(R.string.details_tagline_label),
+                            style = MaterialTheme.typography.bodySmall,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            it,
+                            style = MaterialTheme.typography.titleSmall.copy(fontStyle = FontStyle.Italic),
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.padding(top = 2.dp)
+                        )
+                    }
+                }
+                studio?.let {
+                    Column {
+                        Text(
+                            stringResource(R.string.details_studio_label),
+                            style = MaterialTheme.typography.bodySmall,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(it, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = 2.dp))
+                    }
+                }
+                // Moved in from its own row further down the card per feedback - grouped with
+                // tagline/studio as "metadata about this file" rather than sitting right under the
+                // description text with no visual relation to it. Two separate rows (not one shared
+                // Row like the original standalone version) - a long audio track description (codec/
+                // channels/bitrate) left almost no width for "Субтитры:" + icon, which then wrapped
+                // one character per line instead of overflowing sanely.
+                audioTracks?.takeIf { it.isNotEmpty() }?.let { tracks ->
                     Text(
-                        stringResource(R.string.details_tagline_label),
+                        buildAnnotatedString {
+                            withStyle(SpanStyle(fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)) {
+                                append(stringResource(R.string.details_audio_tracks_label))
+                            }
+                            append(tracks.joinToString("; "))
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        stringResource(R.string.details_subtitles_label),
                         style = MaterialTheme.typography.bodySmall,
                         fontWeight = FontWeight.SemiBold,
                         color = MaterialTheme.colorScheme.onSurface
                     )
-                    Text(
-                        it,
-                        style = MaterialTheme.typography.titleSmall.copy(fontStyle = FontStyle.Italic),
-                        color = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.padding(top = 2.dp)
+                    val hasSubtitles = item.subtitlePaths.isNotEmpty()
+                    Icon(
+                        if (hasSubtitles) Icons.Default.Check else Icons.Default.Close,
+                        contentDescription = null,
+                        tint = if (hasSubtitles) Color(0xFF4CAF50) else Color(0xFFE53935),
+                        modifier = Modifier.padding(start = 4.dp).size(16.dp)
                     )
+                    if (item.hasForcedSubtitles) {
+                        Text(
+                            stringResource(R.string.details_forced_subtitles_suffix),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(start = 4.dp)
+                        )
+                    }
                 }
             }
-            studio?.let {
-                Column {
-                    Text(
-                        stringResource(R.string.details_studio_label),
-                        style = MaterialTheme.typography.bodySmall,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    Text(it, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = 2.dp))
-                }
-            }
-            // Moved in from its own row further down the card per feedback - grouped with
-            // tagline/studio as "metadata about this file" rather than sitting right under the
-            // description text with no visual relation to it. Two separate rows (not one shared
-            // Row like the original standalone version) - a long audio track description (codec/
-            // channels/bitrate) left almost no width for "Субтитры:" + icon, which then wrapped
-            // one character per line instead of overflowing sanely.
-            audioTracks?.takeIf { it.isNotEmpty() }?.let { tracks ->
-                Text(
-                    buildAnnotatedString {
-                        withStyle(SpanStyle(fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)) {
-                            append(stringResource(R.string.details_audio_tracks_label))
+            // Right column: whatever room is left next to tagline/studio - MPAA rating, premiere
+            // date and collection name were previously nowhere on this screen at all. Only shown
+            // when at least one is present, and each field independently, since most items won't
+            // have all three.
+            if (mpaa != null || premiered != null || collectionName != null) {
+                Column(
+                    horizontalAlignment = Alignment.End,
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    mpaa?.let {
+                        Column(horizontalAlignment = Alignment.End) {
+                            Text(
+                                stringResource(R.string.details_mpaa_label),
+                                style = MaterialTheme.typography.bodySmall,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            // NFO mpaa content is often a messy raw certification string (e.g.
+                            // "US:PG-13 / US:Rated PG-13") rather than something fit to show
+                            // directly - shown as a plain 0+/6+/12+/16+/18+ age badge when it maps
+                            // to a recognized rating, falling back to the raw text otherwise so
+                            // nothing is silently hidden for an unrecognized format.
+                            val ageLabel = ageRatingLabel(it)
+                            if (ageLabel != null) {
+                                AgeRatingBadge(ageLabel, modifier = Modifier.padding(top = 2.dp))
+                            } else {
+                                Text(it, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = 2.dp))
+                            }
                         }
-                        append(tracks.joinToString("; "))
-                    },
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    stringResource(R.string.details_subtitles_label),
-                    style = MaterialTheme.typography.bodySmall,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                val hasSubtitles = item.subtitlePaths.isNotEmpty()
-                Icon(
-                    if (hasSubtitles) Icons.Default.Check else Icons.Default.Close,
-                    contentDescription = null,
-                    tint = if (hasSubtitles) Color(0xFF4CAF50) else Color(0xFFE53935),
-                    modifier = Modifier.padding(start = 4.dp).size(16.dp)
-                )
-                if (item.hasForcedSubtitles) {
-                    Text(
-                        stringResource(R.string.details_forced_subtitles_suffix),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(start = 4.dp)
-                    )
+                    }
+                    premiered?.let {
+                        Column(horizontalAlignment = Alignment.End) {
+                            Text(
+                                stringResource(R.string.details_premiered_label),
+                                style = MaterialTheme.typography.bodySmall,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(it, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = 2.dp))
+                        }
+                    }
+                    collectionName?.let {
+                        Column(horizontalAlignment = Alignment.End) {
+                            Text(
+                                stringResource(R.string.details_collection_name_label),
+                                style = MaterialTheme.typography.bodySmall,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(
+                                it,
+                                style = MaterialTheme.typography.bodyMedium,
+                                textAlign = TextAlign.End,
+                                modifier = Modifier.padding(top = 2.dp)
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -1101,4 +1165,36 @@ private fun MediaRow(title: String, items: List<MediaItemEntity>, onOpenItem: (S
             }
         }
     }
+}
+
+/**
+ * Maps a raw NFO `<mpaa>` certification string to a plain 0+/6+/12+/18+ age badge. Handles the
+ * common US/MPAA and TV-parental-guideline codes plus an already-numeric "16+"-style value
+ * verbatim; returns null for anything unrecognized so the caller can fall back to showing the raw
+ * text instead of silently hiding it.
+ */
+private fun ageRatingLabel(mpaa: String): String? {
+    val upper = mpaa.uppercase()
+    Regex("""\b(0|6|12|16|18)\+""").find(upper)?.let { return it.value }
+    return when {
+        upper.contains("NC-17") -> "18+"
+        upper.contains("TV-MA") || Regex("""\bR\b""").containsMatchIn(upper) -> "18+"
+        upper.contains("PG-13") || upper.contains("TV-14") -> "16+"
+        upper.contains("TV-Y7") || upper.contains("TV-PG") || Regex("""\bPG\b""").containsMatchIn(upper) -> "12+"
+        upper.contains("TV-Y") || upper.contains("TV-G") || Regex("""\bG\b""").containsMatchIn(upper) -> "0+"
+        else -> null
+    }
+}
+
+@Composable
+private fun AgeRatingBadge(label: String, modifier: Modifier = Modifier) {
+    Text(
+        label,
+        color = Color.White,
+        style = MaterialTheme.typography.labelMedium,
+        fontWeight = FontWeight.Bold,
+        modifier = modifier
+            .background(Color(0xFFE53935), RoundedCornerShape(6.dp))
+            .padding(horizontal = 8.dp, vertical = 3.dp)
+    )
 }
