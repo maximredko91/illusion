@@ -37,6 +37,7 @@ import com.seance.app.data.repository.LibraryRepository
 import com.seance.app.data.repository.SmbSourceRepository
 import com.seance.app.data.repository.ThumbnailRepository
 import com.seance.app.data.repository.WatchProgressRepository
+import com.seance.app.data.settings.SHARPEN_AMOUNT_DEFAULT
 import com.seance.app.data.settings.SettingsRepository
 import com.seance.app.data.smb.SmbCredentialStore
 import com.seance.app.domain.model.PlayerMode
@@ -90,6 +91,7 @@ data class PlayerUiState(
     val thumbnailFrames: ThumbnailFrames? = null,
     val videoAspectRatio: Float = 16f / 9f,
     val sharpenEnabled: Boolean = false,
+    val sharpenAmount: Float = 0.4f,
     val seekDurationMs: Long = 10_000L,
     /** True once sharpen has been turned on at least once this player session - aspect-ratio cycling is inert from that point on (see the comment in [PlayerViewModel.init]). */
     val aspectRatioLockedBySharpen: Boolean = false,
@@ -232,15 +234,36 @@ class PlayerViewModel(
             // once the user does turn it on for this session, the pipeline is unavoidably tainted
             // for the rest of it (upstream limitation), so later toggles just call through normally.
             var effectsPipelineTainted = false
-            settingsRepository.sharpenEnabled.collect { enabled ->
-                if (enabled) {
-                    effectsPipelineTainted = true
-                    player.setVideoEffects(listOf(SharpenEffect()))
-                } else if (effectsPipelineTainted) {
-                    player.setVideoEffects(emptyList())
+            // Re-enabling sharpen after it was switched off once already in this same tainted
+            // pipeline needs tracking separately from `enabled` itself - see the reload branch
+            // below for why.
+            var wasEnabled = false
+            kotlinx.coroutines.flow.combine(settingsRepository.sharpenEnabled, settingsRepository.sharpenAmount) { enabled, amount -> enabled to amount }
+                .collect { (enabled, amount) ->
+                    val reenableAfterOff = enabled && effectsPipelineTainted && !wasEnabled
+                    if (enabled) effectsPipelineTainted = true
+                    // Updated before the reload branch below runs - reloadPlayer() reads
+                    // _state.value.sharpenEnabled/sharpenAmount to decide what to re-apply on the
+                    // fresh player instance, so it needs this emission's values, not the previous
+                    // one's.
+                    _state.update { it.copy(sharpenEnabled = enabled, sharpenAmount = amount, aspectRatioLockedBySharpen = effectsPipelineTainted) }
+                    when {
+                        reenableAfterOff -> {
+                            // Media3's GL effects VideoSink doesn't reliably pick a fresh
+                            // setVideoEffects() call back up once it's already seen an *empty*
+                            // list on this renderer instance - confirmed on-device: toggling
+                            // sharpen off then back on left the picture visibly unsharpened
+                            // despite the call succeeding with no error. A full reload (position/
+                            // playing state preserved, see reloadPlayer()'s own KDoc) is the only
+                            // reliable way to make it reapply - fast enough that it doesn't read
+                            // as a real reload to the user.
+                            reloadPlayer()
+                        }
+                        enabled -> player.setVideoEffects(listOf(SharpenEffect(amount)))
+                        effectsPipelineTainted -> player.setVideoEffects(emptyList())
+                    }
+                    wasEnabled = enabled
                 }
-                _state.update { it.copy(sharpenEnabled = enabled, aspectRatioLockedBySharpen = effectsPipelineTainted) }
-            }
         }
 
         viewModelScope.launch {
@@ -274,6 +297,14 @@ class PlayerViewModel(
 
     fun setSharpenEnabled(enabled: Boolean) {
         viewModelScope.launch { settingsRepository.setSharpenEnabled(enabled) }
+    }
+
+    fun setSharpenAmount(amount: Float) {
+        viewModelScope.launch { settingsRepository.setSharpenAmount(amount) }
+    }
+
+    fun resetSharpenAmount() {
+        viewModelScope.launch { settingsRepository.setSharpenAmount(SHARPEN_AMOUNT_DEFAULT) }
     }
 
     fun setShowTechnicalInfo(enabled: Boolean) {
@@ -379,6 +410,7 @@ class PlayerViewModel(
                 episodeLabel = episodeLabel,
                 subtitlesEnabled = it.subtitlesEnabled,
                 sharpenEnabled = it.sharpenEnabled,
+                sharpenAmount = it.sharpenAmount,
                 seekDurationMs = it.seekDurationMs,
                 doubleTapSeekEnabled = it.doubleTapSeekEnabled,
                 swipeSeekEnabled = it.swipeSeekEnabled,
@@ -421,7 +453,7 @@ class PlayerViewModel(
         // MediaSession's player can't be swapped in place - re-attaching rebuilds it around the
         // fresh instance so the notification keeps working after a sharpen-triggered reload.
         playbackService?.attachPlayer(fresh)
-        if (_state.value.sharpenEnabled) fresh.setVideoEffects(listOf(SharpenEffect()))
+        if (_state.value.sharpenEnabled) fresh.setVideoEffects(listOf(SharpenEffect(_state.value.sharpenAmount)))
 
         viewModelScope.launch {
             when {
@@ -464,6 +496,7 @@ class PlayerViewModel(
                 title = "${item.title} — трейлер",
                 subtitlesEnabled = it.subtitlesEnabled,
                 sharpenEnabled = it.sharpenEnabled,
+                sharpenAmount = it.sharpenAmount,
                 seekDurationMs = it.seekDurationMs,
                 doubleTapSeekEnabled = it.doubleTapSeekEnabled,
                 swipeSeekEnabled = it.swipeSeekEnabled,

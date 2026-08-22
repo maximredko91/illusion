@@ -3,6 +3,7 @@ package com.seance.app.data.settings
 import android.content.Context
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
@@ -19,12 +20,16 @@ private val Context.dataStore by preferencesDataStore(name = "settings")
 
 private const val SUBTITLE_TEXT_COLOR_DEFAULT = -0x1 // android.graphics.Color.WHITE, opaque
 
+/** Matches [com.seance.app.ui.player.SharpenEffect]'s own default `amount` param - kept in sync manually since the effect class can't depend on this module. */
+const val SHARPEN_AMOUNT_DEFAULT = 0.4f
+
 class SettingsRepository(private val context: Context) {
     private object Keys {
         val REQUIRE_CHARGING_FOR_HEAVY_TASKS = booleanPreferencesKey("require_charging_for_heavy_tasks")
         val RESCAN_INTERVAL_HOURS = intPreferencesKey("rescan_interval_hours")
         val DEFAULT_SORT_ORDER = stringPreferencesKey("default_sort_order")
         val SHARPEN_ENABLED = booleanPreferencesKey("player_sharpen_enabled")
+        val SHARPEN_AMOUNT = floatPreferencesKey("player_sharpen_amount")
         val SEEK_DURATION_SECONDS = intPreferencesKey("player_seek_duration_seconds")
         val POSTER_CACHING_ENABLED = booleanPreferencesKey("poster_caching_enabled")
         val DOWNLOADS_FOLDER_URI = stringPreferencesKey("downloads_folder_uri")
@@ -61,6 +66,13 @@ class SettingsRepository(private val context: Context) {
 
     suspend fun setSharpenEnabled(value: Boolean) {
         context.dataStore.edit { it[Keys.SHARPEN_ENABLED] = value }
+    }
+
+    /** Intensity of the GPU sharpen shader's unsharp-mask kernel - see [com.seance.app.ui.player.SharpenEffect]'s own `amount` param. */
+    val sharpenAmount: Flow<Float> = context.dataStore.data.map { it[Keys.SHARPEN_AMOUNT] ?: SHARPEN_AMOUNT_DEFAULT }
+
+    suspend fun setSharpenAmount(value: Float) {
+        context.dataStore.edit { it[Keys.SHARPEN_AMOUNT] = value }
     }
 
     /** Double-tap seek step in the player, user-adjustable 5-30s in Settings. */

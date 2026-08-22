@@ -199,7 +199,7 @@ fun PlayerScreen(
                 TextButton(
                     onClick = {
                         showAspectRatioBlockedDialog = false
-                        onBack()
+                        viewModel.reloadPlayer()
                     },
                     interactionSource = reloadSource,
                     modifier = Modifier.focusHighlight(reloadSource)
@@ -368,7 +368,9 @@ fun PlayerScreen(
                         onOpenSubtitles = { bumpInteraction(); showSubtitleDialog = true },
                         onOpenAudioTracks = { bumpInteraction(); showAudioDialog = true },
                         onCycleAspectRatio = { bumpInteraction(); cycleResizeMode() },
-                        onOpenSettings = { bumpInteraction(); showSpeedDialog = true }
+                        onOpenSettings = { bumpInteraction(); showSpeedDialog = true },
+                        sharpenEnabled = uiState.sharpenEnabled,
+                        onToggleSharpen = { bumpInteraction(); viewModel.setSharpenEnabled(!uiState.sharpenEnabled) }
                     )
                     Box(modifier = Modifier.fillMaxSize().weight(1f), contentAlignment = Alignment.Center) {
                         if (uiState.isLoading && uiState.error == null && !isLocked) {
@@ -407,6 +409,9 @@ fun PlayerScreen(
             videoFormatSummary = viewModel.currentVideoFormatSummary(),
             sharpenEnabled = uiState.sharpenEnabled,
             onSharpenEnabledChange = viewModel::setSharpenEnabled,
+            sharpenAmount = uiState.sharpenAmount,
+            onSharpenAmountChange = viewModel::setSharpenAmount,
+            onResetSharpenAmount = viewModel::resetSharpenAmount,
             aspectRatioLockedBySharpen = uiState.aspectRatioLockedBySharpen,
             onReloadPlayer = viewModel::reloadPlayer,
             showTechnicalInfo = uiState.showTechnicalInfo,

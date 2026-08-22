@@ -33,6 +33,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.AutoFixHigh
 import androidx.compose.material.icons.filled.Audiotrack
 import androidx.compose.material.icons.filled.Cast
 import androidx.compose.material.icons.filled.Close
@@ -85,6 +86,8 @@ fun TopGradientBar(
     onOpenAudioTracks: () -> Unit,
     onCycleAspectRatio: () -> Unit,
     onOpenSettings: () -> Unit,
+    sharpenEnabled: Boolean,
+    onToggleSharpen: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Row(
@@ -107,6 +110,19 @@ fun TopGradientBar(
         val subtitlesSource = remember { MutableInteractionSource() }
         IconButton(onClick = onOpenSubtitles, interactionSource = subtitlesSource, modifier = Modifier.focusHighlight(subtitlesSource, color = Color.White)) {
             Icon(Icons.Default.Subtitles, contentDescription = stringResource(R.string.player_subtitles_button), tint = Color.White)
+        }
+        // Quick on/off next to the subtitles button, deliberately without the settings panel's
+        // "this permanently locks aspect-ratio cycling" confirmation dialog - the whole point is a
+        // fast, low-friction A/B look at the sharpened vs. unsharpened picture. Anyone who does hit
+        // that consequence gets told about it right when it's actually relevant, via the aspect-
+        // ratio-blocked dialog (see PlayerScreen's cycleResizeMode()).
+        val sharpenSource = remember { MutableInteractionSource() }
+        IconButton(onClick = onToggleSharpen, interactionSource = sharpenSource, modifier = Modifier.focusHighlight(sharpenSource, color = Color.White)) {
+            Icon(
+                Icons.Default.AutoFixHigh,
+                contentDescription = stringResource(R.string.player_sharpen_quick_toggle),
+                tint = if (sharpenEnabled) MaterialTheme.colorScheme.primary else Color.White
+            )
         }
         val audioSource = remember { MutableInteractionSource() }
         IconButton(onClick = onOpenAudioTracks, interactionSource = audioSource, modifier = Modifier.focusHighlight(audioSource, color = Color.White)) {
@@ -336,6 +352,9 @@ fun PlayerSettingsPanel(
     videoFormatSummary: String,
     sharpenEnabled: Boolean,
     onSharpenEnabledChange: (Boolean) -> Unit,
+    sharpenAmount: Float,
+    onSharpenAmountChange: (Float) -> Unit,
+    onResetSharpenAmount: () -> Unit,
     aspectRatioLockedBySharpen: Boolean,
     onReloadPlayer: () -> Unit,
     showTechnicalInfo: Boolean,
@@ -525,6 +544,23 @@ fun PlayerSettingsPanel(
                             if (enabled) showEnableWarning = true else onSharpenEnabledChange(false)
                         }
                     )
+                }
+                if (sharpenEnabled) {
+                    Text(
+                        stringResource(R.string.player_sharpen_amount, (sharpenAmount * 100).roundToInt()),
+                        color = Color.White.copy(alpha = 0.7f),
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.padding(top = 8.dp)
+                    )
+                    androidx.compose.material3.Slider(
+                        value = sharpenAmount,
+                        onValueChange = onSharpenAmountChange,
+                        valueRange = 0.1f..1f,
+                        steps = 8
+                    )
+                    TextButton(onClick = onResetSharpenAmount, modifier = Modifier.padding(top = 4.dp)) {
+                        Text(stringResource(R.string.player_sharpen_amount_reset))
+                    }
                 }
                 if (aspectRatioLockedBySharpen) {
                     Text(

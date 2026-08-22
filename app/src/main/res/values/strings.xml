@@ -249,6 +249,9 @@
     <string name="player_subtitles_title">Субтитры</string>
     <string name="player_video_info_title">Информация о видео</string>
     <string name="player_sharpen_toggle">Повышение резкости (GPU)</string>
+    <string name="player_sharpen_amount">Интенсивность: %1$d%%</string>
+    <string name="player_sharpen_amount_reset">Сбросить по умолчанию</string>
+    <string name="player_sharpen_quick_toggle">Резкость</string>
     <string name="player_settings_section_technical">Информация о видео</string>
     <string name="player_show_technical_info">Показать информацию о видео</string>
     <string name="player_settings_section_subtitles">Субтитры</string>
