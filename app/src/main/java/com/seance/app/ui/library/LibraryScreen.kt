@@ -17,6 +17,8 @@ import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowDownward
+import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.History
@@ -29,6 +31,7 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SegmentedButton
@@ -55,6 +58,7 @@ import com.seance.app.R
 import com.seance.app.data.local.entity.MediaItemEntity
 import com.seance.app.domain.model.Category
 import com.seance.app.domain.model.SortOrder
+import com.seance.app.domain.model.defaultAscending
 import com.seance.app.ui.common.PosterCard
 import com.seance.app.ui.common.focusHighlight
 import com.seance.app.ui.common.posterGridColumns
@@ -68,6 +72,8 @@ fun LibraryScreen(
     isLoading: Boolean,
     sortOrder: SortOrder,
     onSortOrderChange: (SortOrder) -> Unit,
+    sortAscending: Boolean,
+    onSortAscendingChange: (Boolean) -> Unit,
     genreFilter: String?,
     onGenreFilterChange: (String?) -> Unit,
     availableGenres: List<String>,
@@ -113,7 +119,12 @@ fun LibraryScreen(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             modifier = Modifier.horizontalScroll(rememberScrollState())
         ) {
-            SortMenu(sortOrder, onSortOrderChange = { scrollToTop(); onSortOrderChange(it) })
+            SortMenu(
+                sortOrder,
+                onSortOrderChange = { scrollToTop(); onSortOrderChange(it) },
+                ascending = sortAscending,
+                onAscendingChange = { scrollToTop(); onSortAscendingChange(it) }
+            )
             if (availableGenres.isNotEmpty()) {
                 FilterMenu(
                     label = stringResource(R.string.library_genre),
@@ -266,26 +277,56 @@ private fun CartoonCategoryToggle(
 }
 
 @Composable
-private fun SortMenu(sortOrder: SortOrder, onSortOrderChange: (SortOrder) -> Unit) {
+private fun SortMenu(
+    sortOrder: SortOrder,
+    onSortOrderChange: (SortOrder) -> Unit,
+    ascending: Boolean,
+    onAscendingChange: (Boolean) -> Unit
+) {
     var expanded by remember { mutableStateOf(false) }
     val haptics = LocalHapticFeedback.current
     Box {
         val triggerSource = remember { MutableInteractionSource() }
+        // The direction is spelled out right in the chip's own text - a bare arrow icon means
+        // nothing until you've already learned what it does, but "Рейтинг: сначала высокий" is
+        // legible on first look, and this text is always visible (unlike a tooltip, which
+        // touch/D-pad users have no reliable way to trigger before tapping).
         AssistChip(
             onClick = { expanded = true },
-            label = { Text(sortLabel(sortOrder)) },
+            label = { Text(sortDirectionLabel(sortOrder, ascending)) },
             interactionSource = triggerSource,
             modifier = Modifier.focusHighlight(triggerSource)
         )
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             SortOrder.entries.forEach { order ->
                 val itemSource = remember { MutableInteractionSource() }
+                val isCurrent = order == sortOrder
+                // The currently active row shows which direction it's sorted in and tapping it
+                // again flips that direction in place (menu stays open - a quick toggle you might
+                // want to hit more than once shouldn't require reopening the menu every time).
+                // Other rows preview the direction switching to them would land on (each order's
+                // own natural default, per SortOrder.defaultAscending) and tapping switches to it,
+                // closing the menu same as before this feature existed.
+                val rowAscending = if (isCurrent) ascending else order.defaultAscending
                 DropdownMenuItem(
                     text = { Text(sortLabel(order)) },
+                    trailingIcon = {
+                        Icon(
+                            if (rowAscending) Icons.Default.ArrowUpward else Icons.Default.ArrowDownward,
+                            contentDescription = stringResource(
+                                if (rowAscending) R.string.library_sort_ascending else R.string.library_sort_descending
+                            ),
+                            tint = if (isCurrent) MaterialTheme.colorScheme.primary else LocalContentColor.current
+                        )
+                    },
                     onClick = {
                         haptics.segmentTick()
-                        onSortOrderChange(order)
-                        expanded = false
+                        if (isCurrent) {
+                            onAscendingChange(!ascending)
+                        } else {
+                            onSortOrderChange(order)
+                            expanded = false
+                        }
                     },
                     interactionSource = itemSource,
                     modifier = Modifier.focusHighlight(itemSource)
@@ -301,6 +342,18 @@ internal fun sortLabel(order: SortOrder): String = when (order) {
     SortOrder.YEAR -> stringResource(R.string.sort_year)
     SortOrder.TITLE -> stringResource(R.string.sort_title)
     SortOrder.RATING -> stringResource(R.string.sort_rating)
+}
+
+/** Spells out what the current direction actually means for this sort order, e.g. "Год: сначала новые" - see the SortMenu chip's own comment for why this can't just be a bare arrow icon. */
+@Composable
+private fun sortDirectionLabel(order: SortOrder, ascending: Boolean): String {
+    val resId = when (order) {
+        SortOrder.YEAR -> if (ascending) R.string.sort_year_asc else R.string.sort_year_desc
+        SortOrder.RATING -> if (ascending) R.string.sort_rating_asc else R.string.sort_rating_desc
+        SortOrder.DATE_ADDED -> if (ascending) R.string.sort_date_added_asc else R.string.sort_date_added_desc
+        SortOrder.TITLE -> if (ascending) R.string.sort_title_asc else R.string.sort_title_desc
+    }
+    return stringResource(resId)
 }
 
 @Composable

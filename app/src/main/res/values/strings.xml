@@ -91,6 +91,16 @@
     <string name="sort_rating">По рейтингу</string>
     <string name="library_genre">Жанр</string>
     <string name="library_year">Год</string>
+    <string name="library_sort_ascending">По возрастанию</string>
+    <string name="library_sort_descending">По убыванию</string>
+    <string name="sort_year_asc">Год: сначала старые</string>
+    <string name="sort_year_desc">Год: сначала новые</string>
+    <string name="sort_rating_asc">Рейтинг: сначала низкий</string>
+    <string name="sort_rating_desc">Рейтинг: сначала высокий</string>
+    <string name="sort_date_added_asc">Добавлено: сначала старые</string>
+    <string name="sort_date_added_desc">Добавлено: сначала новые</string>
+    <string name="sort_title_asc">Название: А→Я</string>
+    <string name="sort_title_desc">Название: Я→А</string>
     <string name="library_filter_all">Все</string>
     <string name="library_empty">Здесь пока ничего нет</string>
     <string name="library_empty_filtered">Ничего не найдено по выбранным фильтрам</string>

@@ -35,17 +35,26 @@ interface MediaItemDao {
     )
     suspend fun getFilmography(name: String): List<MediaItemEntity>
 
+    // Doubled CASE-per-direction (rather than a single expression whose ASC/DESC could flip at
+    // runtime, which SQL has no syntax for) - for any given row, only the CASE matching both the
+    // active :sort AND :ascending evaluates non-null, the other seven are NULL for every row alike
+    // and so don't affect relative order, same trick the pre-existing single-direction version
+    // already used per-column.
     @Query(
         """
         SELECT * FROM media_items WHERE category = :category
         ORDER BY
-            CASE WHEN :sort = 'YEAR' THEN year END DESC,
-            CASE WHEN :sort = 'RATING' THEN rating END DESC,
-            CASE WHEN :sort = 'DATE_ADDED' THEN dateAdded END DESC,
-            CASE WHEN :sort = 'TITLE' THEN title END ASC
+            CASE WHEN :sort = 'YEAR' AND :ascending THEN year END ASC,
+            CASE WHEN :sort = 'YEAR' AND NOT :ascending THEN year END DESC,
+            CASE WHEN :sort = 'RATING' AND :ascending THEN rating END ASC,
+            CASE WHEN :sort = 'RATING' AND NOT :ascending THEN rating END DESC,
+            CASE WHEN :sort = 'DATE_ADDED' AND :ascending THEN dateAdded END ASC,
+            CASE WHEN :sort = 'DATE_ADDED' AND NOT :ascending THEN dateAdded END DESC,
+            CASE WHEN :sort = 'TITLE' AND :ascending THEN title END ASC,
+            CASE WHEN :sort = 'TITLE' AND NOT :ascending THEN title END DESC
         """
     )
-    fun observeByCategory(category: Category, sort: String): Flow<List<MediaItemEntity>>
+    fun observeByCategory(category: Category, sort: String, ascending: Boolean): Flow<List<MediaItemEntity>>
 
     @Query("SELECT * FROM media_items ORDER BY dateAdded DESC LIMIT :limit")
     fun observeRecentlyAdded(limit: Int = 20): Flow<List<MediaItemEntity>>

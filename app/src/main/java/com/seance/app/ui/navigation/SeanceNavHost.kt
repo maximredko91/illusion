@@ -588,6 +588,7 @@ private fun TabsHost(app: SeanceApplication, navController: NavHostController) {
             val items by libraryViewModel.items.collectAsState()
             val isLoading by libraryViewModel.isLoading.collectAsState()
             val sortOrder by libraryViewModel.sortOrder.collectAsState()
+            val sortAscending by libraryViewModel.sortAscending.collectAsState()
             val genreFilter by libraryViewModel.genreFilter.collectAsState()
             val availableGenres by libraryViewModel.availableGenres.collectAsState()
             val yearFilter by libraryViewModel.yearFilter.collectAsState()
@@ -598,6 +599,8 @@ private fun TabsHost(app: SeanceApplication, navController: NavHostController) {
                 isLoading = isLoading,
                 sortOrder = sortOrder,
                 onSortOrderChange = libraryViewModel::setSortOrder,
+                sortAscending = sortAscending,
+                onSortAscendingChange = libraryViewModel::setSortAscending,
                 genreFilter = genreFilter,
                 onGenreFilterChange = libraryViewModel::setGenreFilter,
                 availableGenres = availableGenres,

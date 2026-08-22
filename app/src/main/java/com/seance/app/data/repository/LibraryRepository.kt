@@ -13,8 +13,8 @@ class LibraryRepository(private val dao: MediaItemDao) {
     suspend fun getAll(): List<MediaItemEntity> = dao.getAll()
     suspend fun getBySource(sourceId: Long): List<MediaItemEntity> = dao.getBySource(sourceId)
     suspend fun clearAll() = dao.deleteAll()
-    fun observeByCategory(category: Category, sort: SortOrder): Flow<List<MediaItemEntity>> =
-        dao.observeByCategory(category, sort.name)
+    fun observeByCategory(category: Category, sort: SortOrder, ascending: Boolean): Flow<List<MediaItemEntity>> =
+        dao.observeByCategory(category, sort.name, ascending)
 
     /**
      * Same as [observeByCategory] but collapses every episode of a series down to a single
@@ -23,8 +23,8 @@ class LibraryRepository(private val dao: MediaItemDao) {
      * own copy gets its title swapped for the show's name (derived from its folder) - elsewhere
      * (recently-added, filmography, similar) an episode should still show its own episode title.
      */
-    fun observeSeriesGroupedByCategory(category: Category, sort: SortOrder): Flow<List<MediaItemEntity>> =
-        observeByCategory(category, sort).map { items ->
+    fun observeSeriesGroupedByCategory(category: Category, sort: SortOrder, ascending: Boolean): Flow<List<MediaItemEntity>> =
+        observeByCategory(category, sort, ascending).map { items ->
             val (episodes, standalone) = items.partition { it.seriesStableId != null }
             val representatives = episodes
                 .groupBy { it.seriesStableId }

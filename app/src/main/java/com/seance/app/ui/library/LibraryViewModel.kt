@@ -9,6 +9,7 @@ import com.seance.app.data.repository.LibraryRepository
 import com.seance.app.data.settings.SettingsRepository
 import com.seance.app.domain.model.Category
 import com.seance.app.domain.model.SortOrder
+import com.seance.app.domain.model.defaultAscending
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -30,6 +31,17 @@ class LibraryViewModel(
     private val _sortOrder = MutableStateFlow(SortOrder.DATE_ADDED)
     val sortOrder: StateFlow<SortOrder> = _sortOrder.asStateFlow()
 
+    // Defaults per order match what direction used to be hardcoded before this was made a user
+    // toggle (year/rating/date added newest-first, title A-Z) - picking a *different* sort order
+    // resets to that order's own natural default rather than carrying over whatever direction was
+    // last toggled, so switching from "Рейтинг ↓" to "Название" doesn't land on Z-A unexpectedly.
+    private val _sortAscending = MutableStateFlow(SortOrder.DATE_ADDED.defaultAscending)
+    val sortAscending: StateFlow<Boolean> = _sortAscending.asStateFlow()
+
+    fun setSortAscending(ascending: Boolean) {
+        _sortAscending.value = ascending
+    }
+
     // Tracks whether the user has picked a sort order via this screen's own SortMenu this
     // session - until they do, this ViewModel keeps following live changes to Settings' "default
     // sort order" instead of only reading it once in init{} (a one-shot read meant the setting
@@ -40,7 +52,10 @@ class LibraryViewModel(
     init {
         viewModelScope.launch {
             settingsRepository.defaultSortOrder.collect { default ->
-                if (!userOverrodeSortOrder) _sortOrder.value = default
+                if (!userOverrodeSortOrder) {
+                    _sortOrder.value = default
+                    _sortAscending.value = default.defaultAscending
+                }
             }
         }
     }
@@ -61,12 +76,12 @@ class LibraryViewModel(
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
 
     @OptIn(ExperimentalCoroutinesApi::class)
-    private val allItems: StateFlow<List<MediaItemEntity>> = _sortOrder
-        .flatMapLatest { sort ->
+    private val allItems: StateFlow<List<MediaItemEntity>> = combine(_sortOrder, _sortAscending) { sort, ascending -> sort to ascending }
+        .flatMapLatest { (sort, ascending) ->
             if (isSeriesCategory) {
-                libraryRepository.observeSeriesGroupedByCategory(category, sort)
+                libraryRepository.observeSeriesGroupedByCategory(category, sort, ascending)
             } else {
-                libraryRepository.observeByCategory(category, sort)
+                libraryRepository.observeByCategory(category, sort, ascending)
             }
         }
         .onEach { _isLoading.value = false }
@@ -106,6 +121,7 @@ class LibraryViewModel(
     fun setSortOrder(order: SortOrder) {
         userOverrodeSortOrder = true
         _sortOrder.value = order
+        _sortAscending.value = order.defaultAscending
     }
 
     fun setGenreFilter(genre: String?) {
