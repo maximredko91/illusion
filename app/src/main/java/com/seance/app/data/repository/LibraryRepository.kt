@@ -24,21 +24,28 @@ class LibraryRepository(private val dao: MediaItemDao) {
      * (recently-added, filmography, similar) an episode should still show its own episode title.
      */
     fun observeSeriesGroupedByCategory(category: Category, sort: SortOrder, ascending: Boolean): Flow<List<MediaItemEntity>> =
-        observeByCategory(category, sort, ascending).map { items ->
-            val (episodes, standalone) = items.partition { it.seriesStableId != null }
-            val representatives = episodes
-                .groupBy { it.seriesStableId }
-                .values
-                .map { group ->
-                    val representative = group.minWith(compareBy({ it.seasonNumber ?: Int.MAX_VALUE }, { it.episodeNumber ?: Int.MAX_VALUE }))
-                    val seriesTitle = representative.seriesStableId?.substringAfterLast('\\')
-                    if (seriesTitle != null) representative.copy(title = seriesTitle) else representative
-                }
-            standalone + representatives
-        }
+        observeByCategory(category, sort, ascending).map { collapseSeriesToRepresentatives(it) }
+
+    /** Collapses every episode of a series down to a single representative row (its earliest season/episode, title swapped for the show's own name) - shared by [observeSeriesGroupedByCategory] and [getRandom]. Standalone (non-series) items pass through untouched. */
+    private fun collapseSeriesToRepresentatives(items: List<MediaItemEntity>): List<MediaItemEntity> {
+        val (episodes, standalone) = items.partition { it.seriesStableId != null }
+        val representatives = episodes
+            .groupBy { it.seriesStableId }
+            .values
+            .map { group ->
+                val representative = group.minWith(compareBy({ it.seasonNumber ?: Int.MAX_VALUE }, { it.episodeNumber ?: Int.MAX_VALUE }))
+                val seriesTitle = representative.seriesStableId?.substringAfterLast('\\')
+                if (seriesTitle != null) representative.copy(title = seriesTitle) else representative
+            }
+        return standalone + representatives
+    }
 
     fun observeRecentlyAdded(limit: Int = 20): Flow<List<MediaItemEntity>> =
         dao.observeRecentlyAdded(limit)
+
+    /** Random pick for the Home screen's "Случайная подборка" row - one card per series (its earliest episode, retitled to the show's name), not one per individual episode, same collapsing as the library grids. */
+    suspend fun getRandom(limit: Int = 20): List<MediaItemEntity> =
+        collapseSeriesToRepresentatives(dao.getAll()).shuffled().take(limit)
 
     fun observeEpisodes(seriesStableId: String): Flow<List<MediaItemEntity>> =
         dao.observeEpisodes(seriesStableId)

@@ -5,7 +5,9 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
@@ -16,6 +18,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -39,7 +42,8 @@ import com.seance.app.ui.common.posterCardMinWidth
 @Composable
 fun HomeScreen(
     continueWatching: List<MediaItemEntity>,
-    recentlyAdded: List<MediaItemEntity>,
+    randomPicks: List<MediaItemEntity>,
+    onRefreshRandomPicks: () -> Unit,
     onOpenSettings: () -> Unit,
     onOpenFavorites: () -> Unit,
     onOpenHistory: () -> Unit,
@@ -86,9 +90,10 @@ fun HomeScreen(
                 )
             }
             MediaCarousel(
-                title = stringResource(R.string.home_recently_added),
-                items = recentlyAdded,
-                onOpenItem = onOpenItem
+                title = stringResource(R.string.home_random_picks),
+                items = randomPicks,
+                onOpenItem = onOpenItem,
+                onRefresh = onRefreshRandomPicks
             )
         }
     }
@@ -98,10 +103,23 @@ fun HomeScreen(
 private fun MediaCarousel(
     title: String,
     items: List<MediaItemEntity>,
-    onOpenItem: (String) -> Unit
+    onOpenItem: (String) -> Unit,
+    onRefresh: (() -> Unit)? = null
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(title, modifier = Modifier.padding(horizontal = 16.dp))
+        Row(
+            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
+        ) {
+            Text(title, modifier = Modifier.weight(1f))
+            if (onRefresh != null) {
+                com.seance.app.ui.common.TooltipIconButton(
+                    stringResource(R.string.home_random_picks_refresh),
+                    Icons.Default.Refresh,
+                    onRefresh
+                )
+            }
+        }
         LazyRow(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             contentPadding = PaddingValues(horizontal = 16.dp),

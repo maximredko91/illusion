@@ -32,7 +32,8 @@
     <string name="nav_search">Поиск</string>
 
     <string name="home_continue_watching">Продолжить просмотр</string>
-    <string name="home_recently_added">Недавно добавленное</string>
+    <string name="home_random_picks">Случайная подборка</string>
+    <string name="home_random_picks_refresh">Обновить подборку</string>
 
     <string name="settings_title">Настройки</string>
     <string name="settings_category_smb_sources_description">Список подключённых сетевых папок</string>

@@ -611,10 +611,11 @@ private fun TabsHost(app: SeanceApplication, navController: NavHostController) {
                 factory = HomeViewModel.factory(app.libraryRepository, app.watchProgressRepository)
             )
             val continueWatching by homeViewModel.continueWatching.collectAsState()
-            val recentlyAdded by homeViewModel.recentlyAdded.collectAsState()
+            val randomPicks by homeViewModel.randomPicks.collectAsState()
             HomeScreen(
                 continueWatching = continueWatching,
-                recentlyAdded = recentlyAdded,
+                randomPicks = randomPicks,
+                onRefreshRandomPicks = homeViewModel::refreshRandomPicks,
                 onOpenSettings = { navController.navigate(Destination.Settings) },
                 onOpenFavorites = { navController.navigate(Destination.Favorites) },
                 onOpenHistory = { navController.navigate(Destination.History) },
