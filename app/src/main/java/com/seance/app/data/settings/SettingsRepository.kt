@@ -12,6 +12,8 @@ import com.seance.app.domain.model.SortOrder
 import com.seance.app.domain.model.UiMode
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 
 private val Context.dataStore by preferencesDataStore(name = "settings")
 
@@ -31,6 +33,7 @@ class SettingsRepository(private val context: Context) {
         val ACCENT_COLOR = stringPreferencesKey("accent_color")
         val PLAYER_MODE = stringPreferencesKey("player_mode")
         val PREDICTIVE_BACK_ENABLED = booleanPreferencesKey("predictive_back_enabled")
+        val RECENT_SEARCHES = stringPreferencesKey("recent_searches")
         val DOUBLE_TAP_SEEK_ENABLED = booleanPreferencesKey("player_double_tap_seek_enabled")
         val SWIPE_SEEK_ENABLED = booleanPreferencesKey("player_swipe_seek_enabled")
         val HOLD_TO_SEEK_ENABLED = booleanPreferencesKey("player_hold_to_seek_enabled")
@@ -202,6 +205,35 @@ class SettingsRepository(private val context: Context) {
 
     suspend fun setPredictiveBackEnabled(value: Boolean) {
         context.dataStore.edit { it[Keys.PREDICTIVE_BACK_ENABLED] = value }
+    }
+
+    private val MAX_RECENT_SEARCHES = 10
+
+    val recentSearches: Flow<List<String>> = context.dataStore.data.map {
+        val raw = it[Keys.RECENT_SEARCHES] ?: return@map emptyList()
+        runCatching { Json.decodeFromString<List<String>>(raw) }.getOrDefault(emptyList())
+    }
+
+    /** Moves [query] to the front (case-insensitive dedupe against any existing entry), capped at [MAX_RECENT_SEARCHES]. */
+    suspend fun addRecentSearch(query: String) {
+        val trimmed = query.trim()
+        if (trimmed.isEmpty()) return
+        context.dataStore.edit {
+            val current = it[Keys.RECENT_SEARCHES]?.let { raw -> runCatching { Json.decodeFromString<List<String>>(raw) }.getOrDefault(emptyList()) } ?: emptyList()
+            val updated = (listOf(trimmed) + current.filterNot { existing -> existing.equals(trimmed, ignoreCase = true) }).take(MAX_RECENT_SEARCHES)
+            it[Keys.RECENT_SEARCHES] = Json.encodeToString(updated)
+        }
+    }
+
+    suspend fun removeRecentSearch(query: String) {
+        context.dataStore.edit {
+            val current = it[Keys.RECENT_SEARCHES]?.let { raw -> runCatching { Json.decodeFromString<List<String>>(raw) }.getOrDefault(emptyList()) } ?: emptyList()
+            it[Keys.RECENT_SEARCHES] = Json.encodeToString(current.filterNot { existing -> existing == query })
+        }
+    }
+
+    suspend fun clearRecentSearches() {
+        context.dataStore.edit { it.remove(Keys.RECENT_SEARCHES) }
     }
 
     /** Clears every preference here (sort order, haptics, seek duration, sharpen, poster caching, rescan interval, charging requirement, downloads folder, UI mode, player mode, gesture toggles, technical info, subtitle style, predictive back) back to its default - does not touch SMB sources or the library index, only this DataStore. */

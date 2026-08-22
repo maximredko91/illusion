@@ -339,6 +339,7 @@ private fun SeanceNavGraph(app: SeanceApplication, navController: NavHostControl
                 CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides this) {
                     SearchScreen(
                         libraryRepository = app.libraryRepository,
+                        settingsRepository = app.settingsRepository,
                         onOpenItem = { stableId -> navController.navigate(Destination.Details(stableId)) },
                         onOpenSettings = { navController.navigate(Destination.Settings) },
                         onOpenFavorites = { navController.navigate(Destination.Favorites) },

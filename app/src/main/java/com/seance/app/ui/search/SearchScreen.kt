@@ -1,15 +1,24 @@
 package com.seance.app.ui.search
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.History
@@ -17,20 +26,25 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.ListItem
+import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
@@ -39,12 +53,14 @@ import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.input.ImeAction
 import com.seance.app.domain.model.UiMode
 import com.seance.app.ui.common.LocalUiMode
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.seance.app.R
 import com.seance.app.data.repository.LibraryRepository
+import com.seance.app.data.settings.SettingsRepository
 import com.seance.app.ui.common.PosterCard
 import com.seance.app.ui.common.focusHighlight
 import com.seance.app.ui.common.posterGridColumns
@@ -53,6 +69,7 @@ import com.seance.app.ui.common.posterGridColumns
 @Composable
 fun SearchScreen(
     libraryRepository: LibraryRepository,
+    settingsRepository: SettingsRepository,
     onOpenItem: (String) -> Unit,
     onOpenSettings: () -> Unit,
     onOpenFavorites: () -> Unit,
@@ -60,9 +77,10 @@ fun SearchScreen(
     onOpenDownloads: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val viewModel: SearchViewModel = viewModel(factory = SearchViewModel.factory(libraryRepository))
+    val viewModel: SearchViewModel = viewModel(factory = SearchViewModel.factory(libraryRepository, settingsRepository))
     val query by viewModel.query.collectAsState()
     val results by viewModel.results.collectAsState()
+    val recentSearches by viewModel.recentSearches.collectAsState()
 
     Scaffold(
         modifier = modifier,
@@ -98,6 +116,11 @@ fun SearchScreen(
                 onValueChange = viewModel::setQuery,
                 label = { Text(stringResource(R.string.search_hint)) },
                 singleLine = true,
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                keyboardActions = KeyboardActions(onSearch = {
+                    viewModel.commitSearch()
+                    keyboardController?.hide()
+                }),
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(8.dp)
@@ -126,11 +149,20 @@ fun SearchScreen(
                     }
             )
             if (query.isBlank()) {
-                Text(
-                    stringResource(R.string.search_empty_query),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.fillMaxWidth().padding(24.dp)
-                )
+                if (recentSearches.isEmpty()) {
+                    Text(
+                        stringResource(R.string.search_empty_query),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.fillMaxWidth().padding(24.dp)
+                    )
+                } else {
+                    RecentSearchesList(
+                        recentSearches = recentSearches,
+                        onSelect = { viewModel.setQuery(it) },
+                        onRemove = viewModel::removeRecentSearch,
+                        onClearAll = viewModel::clearRecentSearches
+                    )
+                }
             } else if (results.isEmpty()) {
                 Text(
                     stringResource(R.string.search_no_results),
@@ -138,15 +170,68 @@ fun SearchScreen(
                     modifier = Modifier.fillMaxWidth().padding(24.dp)
                 )
             } else {
+                val gridState = rememberLazyGridState()
+                // Results are rebuilt wholesale on every keystroke (debounced) - without an
+                // explicit reset the grid could be left scrolled deep into the PREVIOUS query's
+                // results, which read as "jumping to the bottom of the list" the moment new,
+                // shorter results replaced them underneath the same scroll offset.
+                LaunchedEffect(query) { gridState.scrollToItem(0) }
                 LazyVerticalGrid(
                     columns = posterGridColumns(),
+                    state = gridState,
                     modifier = Modifier.fillMaxSize().focusGroup(),
                     contentPadding = PaddingValues(8.dp)
                 ) {
                     items(results, key = { it.stableId }) { item ->
-                        PosterCard(item = item, onClick = { onOpenItem(item.stableId) }, modifier = Modifier.padding(4.dp))
+                        PosterCard(
+                            item = item,
+                            onClick = {
+                                viewModel.commitSearch()
+                                onOpenItem(item.stableId)
+                            },
+                            modifier = Modifier.padding(4.dp)
+                        )
                     }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun RecentSearchesList(
+    recentSearches: List<String>,
+    onSelect: (String) -> Unit,
+    onRemove: (String) -> Unit,
+    onClearAll: () -> Unit
+) {
+    Column(modifier = Modifier.fillMaxSize()) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(stringResource(R.string.search_recent_title), style = MaterialTheme.typography.titleSmall)
+            TextButton(onClick = onClearAll) {
+                Text(stringResource(R.string.search_recent_clear_all))
+            }
+        }
+        LazyColumn(modifier = Modifier.fillMaxSize()) {
+            items(recentSearches, key = { it }) { recent ->
+                ListItem(
+                    headlineContent = { Text(recent) },
+                    leadingContent = { Icon(Icons.Default.History, contentDescription = null) },
+                    trailingContent = {
+                        IconButton(onClick = { onRemove(recent) }) {
+                            Icon(
+                                Icons.Default.Close,
+                                contentDescription = stringResource(R.string.search_recent_remove)
+                            )
+                        }
+                    },
+                    colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                    modifier = Modifier.fillMaxWidth().clickable { onSelect(recent) }
+                )
             }
         }
     }

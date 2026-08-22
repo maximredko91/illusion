@@ -31,6 +31,15 @@
     <string name="home_recently_added">Недавно добавленное</string>
 
     <string name="settings_title">Настройки</string>
+    <string name="settings_category_smb_sources_description">Список подключённых сетевых папок</string>
+    <string name="settings_category_ui_mode_description">Режим экрана, тактильный отклик, анимация жеста «назад»</string>
+    <string name="settings_category_accent_color_description">Цветовая тема приложения</string>
+    <string name="settings_category_library_description">Сортировка по умолчанию</string>
+    <string name="settings_category_scan_description">Пересканирование и расписание</string>
+    <string name="settings_category_player_description">Внутренний или внешний плеер</string>
+    <string name="settings_category_downloads_description">Папка и объём загруженного</string>
+    <string name="settings_category_backup_description">Экспорт и импорт источников</string>
+    <string name="settings_category_reset_description">Сброс настроек или полный сброс приложения</string>
     <string name="settings_smb_sources">Источники SMB</string>
     <string name="settings_scan_section">Сканирование</string>
     <string name="settings_rescan_interval">Интервал пересканирования</string>
@@ -84,6 +93,9 @@
     <string name="search_hint">Поиск фильмов и сериалов</string>
     <string name="search_empty_query">Начните вводить название, актёра или описание</string>
     <string name="search_no_results">Ничего не найдено</string>
+    <string name="search_recent_title">Недавние запросы</string>
+    <string name="search_recent_clear_all">Очистить всё</string>
+    <string name="search_recent_remove">Удалить запрос</string>
 
     <string name="library_sort">Сортировка</string>
     <string name="sort_date_added">По дате добавления</string>

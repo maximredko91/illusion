@@ -674,9 +674,14 @@ private fun DetailsContent(
             // Right column: whatever room is left next to tagline/studio - MPAA rating, premiere
             // date and collection name were previously nowhere on this screen at all. Only shown
             // when at least one is present, and each field independently, since most items won't
-            // have all three.
+            // have all three. Explicitly weighted (not just "whatever's left") - an unweighted
+            // Column here sizes to its own unconstrained intrinsic width, and a long collection
+            // name (e.g. "Очень страшное кино (Коллекция)") wanted enough of that to squeeze the
+            // left column down to almost nothing, forcing the tagline to wrap one syllable per
+            // line instead of at word boundaries.
             if (mpaa != null || premiered != null || collectionName != null) {
                 Column(
+                    modifier = Modifier.weight(1f),
                     horizontalAlignment = Alignment.End,
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
