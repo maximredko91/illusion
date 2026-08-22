@@ -92,7 +92,15 @@ data class PlayerUiState(
     val sharpenEnabled: Boolean = false,
     val seekDurationMs: Long = 10_000L,
     /** True once sharpen has been turned on at least once this player session - aspect-ratio cycling is inert from that point on (see the comment in [PlayerViewModel.init]). */
-    val aspectRatioLockedBySharpen: Boolean = false
+    val aspectRatioLockedBySharpen: Boolean = false,
+    val doubleTapSeekEnabled: Boolean = true,
+    val swipeSeekEnabled: Boolean = true,
+    val holdToSeekEnabled: Boolean = true,
+    /** Codec/resolution/HDR diagnostic block in the settings sheet - off by default, see [SettingsRepository.showTechnicalInfo]. */
+    val showTechnicalInfo: Boolean = false,
+    val subtitleTextColor: Int = -0x1,
+    val subtitleBackgroundOpacity: Int = 60,
+    val subtitleTextSizePercent: Int = 100
 )
 
 @OptIn(UnstableApi::class)
@@ -101,7 +109,7 @@ class PlayerViewModel(
     private val watchProgressRepository: WatchProgressRepository,
     private val thumbnailRepository: ThumbnailRepository,
     private val settingsRepository: SettingsRepository,
-    dataSourceFactory: SmbDataSourceFactory,
+    private val dataSourceFactory: SmbDataSourceFactory,
     private val downloadRepository: DownloadRepository,
     private val smbSourceRepository: SmbSourceRepository,
     private val credentialStore: SmbCredentialStore,
@@ -110,22 +118,29 @@ class PlayerViewModel(
 
     private val appContext = context.applicationContext
 
-    val player: ExoPlayer = ExoPlayer.Builder(
-        context,
+    private fun createPlayer(): ExoPlayer = ExoPlayer.Builder(
+        appContext,
         // EXTENSION_RENDERER_MODE_ON: falls back to the FFmpeg extension (DTS/AC3/TrueHD) only when no
         // platform decoder handles the format - a no-op today since the extension isn't on the classpath
         // yet (see scripts/build_ffmpeg_extension.sh), but no code change will be needed once it is.
-        DefaultRenderersFactory(context).setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON)
+        DefaultRenderersFactory(appContext).setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON)
     )
         // DefaultDataSource routes file:// URIs (a completed offline download) to Media3's built-in
         // FileDataSource and everything else to dataSourceFactory - so smb-item:// keeps streaming
         // over SMB exactly as before, with no branching needed at the MediaItem-building call site.
         .setMediaSourceFactory(
-            DefaultMediaSourceFactory(context).setDataSourceFactory(DefaultDataSource.Factory(context, dataSourceFactory))
+            DefaultMediaSourceFactory(appContext).setDataSourceFactory(DefaultDataSource.Factory(appContext, dataSourceFactory))
         )
-        .setLoadControl(buildAdaptiveLoadControl(context))
+        .setLoadControl(buildAdaptiveLoadControl(appContext))
         .build()
         .apply { setWakeMode(C.WAKE_MODE_NETWORK) }
+
+    // Backed by a StateFlow (not a plain val) so it can be swapped out entirely - reloadPlayer()
+    // needs a truly fresh ExoPlayer instance to reset the sharpen effects pipeline (see its own
+    // KDoc), and PlayerScreen's AndroidView needs to observe that swap to rebind view.player.
+    private val _player = MutableStateFlow(createPlayer())
+    val playerState: StateFlow<ExoPlayer> = _player.asStateFlow()
+    val player: ExoPlayer get() = _player.value
 
     private val _state = MutableStateFlow(PlayerUiState())
     val state: StateFlow<PlayerUiState> = _state.asStateFlow()
@@ -142,8 +157,8 @@ class PlayerViewModel(
     private var tickerJob: Job? = null
     private var lastSavedAtMs = 0L
 
-    init {
-        player.addListener(object : Player.Listener {
+    private fun attachListeners(target: ExoPlayer) {
+        target.addListener(object : Player.Listener {
             override fun onIsPlayingChanged(isPlaying: Boolean) {
                 _state.update { it.copy(isPlaying = isPlaying) }
                 if (isPlaying) startTicker() else stopTicker()
@@ -173,6 +188,10 @@ class PlayerViewModel(
                 }
             }
         })
+    }
+
+    init {
+        attachListeners(player)
 
         viewModelScope.launch {
             // Calling setVideoEffects() at all - even with an empty list - permanently switches
@@ -203,10 +222,68 @@ class PlayerViewModel(
                 _state.update { it.copy(seekDurationMs = seconds * 1000L) }
             }
         }
+
+        viewModelScope.launch {
+            settingsRepository.doubleTapSeekEnabled.collect { enabled -> _state.update { it.copy(doubleTapSeekEnabled = enabled) } }
+        }
+        viewModelScope.launch {
+            settingsRepository.swipeSeekEnabled.collect { enabled -> _state.update { it.copy(swipeSeekEnabled = enabled) } }
+        }
+        viewModelScope.launch {
+            settingsRepository.holdToSeekEnabled.collect { enabled -> _state.update { it.copy(holdToSeekEnabled = enabled) } }
+        }
+        viewModelScope.launch {
+            settingsRepository.showTechnicalInfo.collect { enabled -> _state.update { it.copy(showTechnicalInfo = enabled) } }
+        }
+        viewModelScope.launch {
+            settingsRepository.subtitleTextColor.collect { color -> _state.update { it.copy(subtitleTextColor = color) } }
+        }
+        viewModelScope.launch {
+            settingsRepository.subtitleBackgroundOpacity.collect { opacity -> _state.update { it.copy(subtitleBackgroundOpacity = opacity) } }
+        }
+        viewModelScope.launch {
+            settingsRepository.subtitleTextSizePercent.collect { percent -> _state.update { it.copy(subtitleTextSizePercent = percent) } }
+        }
     }
 
     fun setSharpenEnabled(enabled: Boolean) {
         viewModelScope.launch { settingsRepository.setSharpenEnabled(enabled) }
+    }
+
+    fun setShowTechnicalInfo(enabled: Boolean) {
+        viewModelScope.launch { settingsRepository.setShowTechnicalInfo(enabled) }
+    }
+
+    fun setSeekDurationSeconds(seconds: Int) {
+        viewModelScope.launch { settingsRepository.setSeekDurationSeconds(seconds) }
+    }
+
+    fun setDoubleTapSeekEnabled(enabled: Boolean) {
+        viewModelScope.launch { settingsRepository.setDoubleTapSeekEnabled(enabled) }
+    }
+
+    fun setSwipeSeekEnabled(enabled: Boolean) {
+        viewModelScope.launch { settingsRepository.setSwipeSeekEnabled(enabled) }
+    }
+
+    fun setHoldToSeekEnabled(enabled: Boolean) {
+        viewModelScope.launch { settingsRepository.setHoldToSeekEnabled(enabled) }
+    }
+
+    fun setSubtitleTextColor(colorArgb: Int) {
+        viewModelScope.launch { settingsRepository.setSubtitleTextColor(colorArgb) }
+    }
+
+    fun setSubtitleBackgroundOpacity(percent: Int) {
+        viewModelScope.launch { settingsRepository.setSubtitleBackgroundOpacity(percent) }
+    }
+
+    fun setSubtitleTextSizePercent(percent: Int) {
+        viewModelScope.launch { settingsRepository.setSubtitleTextSizePercent(percent) }
+    }
+
+    fun resetSubtitleStyle() {
+        viewModelScope.launch { settingsRepository.resetSubtitleStyle() }
     }
 
     fun load(stableId: String, playTrailer: Boolean = false) {
@@ -239,45 +316,89 @@ class PlayerViewModel(
 
             val resume = watchProgressRepository.getProgress(stableId)
             val startPositionMs = resume?.takeIf { !it.watched }?.positionMs ?: 0L
+            playItem(item, startPositionMs, autoPlay = true)
+        }
+    }
 
-            val download = completedDownload(stableId)
-            val uri = download?.let { Uri.parse(it.contentUri) } ?: SmbMediaUri.build(item.sourceId, item.filePath, item.sizeBytes)
-            val subtitleConfigs = if (download != null && download.subtitles.isNotEmpty()) {
-                download.subtitles.map { sub -> buildSubtitleConfig(Uri.parse(sub.uri), sub.remotePath) }
-            } else {
-                item.subtitlePaths.map { path -> buildSubtitleConfig(item.sourceId, path) }
+    /** Actually hands [item] to the current player - shared by [load] (fresh navigation into the
+     * player) and [reloadPlayer] (same item, same [player] instance identity swapped out under it). */
+    private suspend fun playItem(item: MediaItemEntity, startPositionMs: Long, autoPlay: Boolean) {
+        val download = completedDownload(item.stableId)
+        val uri = download?.let { Uri.parse(it.contentUri) } ?: SmbMediaUri.build(item.sourceId, item.filePath, item.sizeBytes)
+        val subtitleConfigs = if (download != null && download.subtitles.isNotEmpty()) {
+            download.subtitles.map { sub -> buildSubtitleConfig(Uri.parse(sub.uri), sub.remotePath) }
+        } else {
+            item.subtitlePaths.map { path -> buildSubtitleConfig(item.sourceId, path) }
+        }
+        val mediaItem = MediaItem.Builder()
+            .setUri(uri)
+            .setSubtitleConfigurations(subtitleConfigs)
+            .setMediaMetadata(MediaMetadata.Builder().setTitle(item.title).build())
+            .build()
+
+        player.setMediaItem(mediaItem, startPositionMs)
+        player.prepare()
+        player.playWhenReady = autoPlay
+
+        val episodeLabel = if (item.seasonNumber != null && item.episodeNumber != null) {
+            "S${item.seasonNumber}E${item.episodeNumber} · ${item.title}"
+        } else {
+            null
+        }
+
+        _state.update {
+            PlayerUiState(
+                isLoading = true,
+                title = item.title,
+                episodeLabel = episodeLabel,
+                subtitlesEnabled = it.subtitlesEnabled,
+                sharpenEnabled = it.sharpenEnabled,
+                seekDurationMs = it.seekDurationMs,
+                doubleTapSeekEnabled = it.doubleTapSeekEnabled,
+                swipeSeekEnabled = it.swipeSeekEnabled,
+                holdToSeekEnabled = it.holdToSeekEnabled,
+                showTechnicalInfo = it.showTechnicalInfo,
+                subtitleTextColor = it.subtitleTextColor,
+                subtitleBackgroundOpacity = it.subtitleBackgroundOpacity,
+                subtitleTextSizePercent = it.subtitleTextSizePercent,
+                canMarkIntro = item.seriesStableId != null && item.seasonNumber != null,
+                introMarkedEndMs = item.introEndMs
+            )
+        }
+
+        checkNextEpisode(item)
+        viewModelScope.launch { loadThumbnailFrames(item.stableId) }
+    }
+
+    /**
+     * Swaps in a brand-new [ExoPlayer] instance at the same position/playing-state instead of
+     * requiring the user to back out to Details and press Play again - turning sharpen on taints
+     * the effects pipeline for the rest of the session (see the KDoc in [init]), and the only way
+     * to actually undo that is a fresh ExoPlayer. Previously the only way to get one was the full
+     * navigate-away-and-back round trip, which dropped the user back on the Details card instead of
+     * where they were watching - this does the same "close and reopen" the warning dialog already
+     * told them to do, just without leaving this screen at all.
+     */
+    fun reloadPlayer() {
+        val old = player
+        val position = old.currentPosition.coerceAtLeast(0)
+        val wasPlaying = old.isPlaying
+        val duration = old.duration.takeIf { it != C.TIME_UNSET }?.coerceAtLeast(0) ?: 0L
+        val item = currentItem
+        val trailerItem = currentTrailerItem
+        if (item != null) persistProgress(position, duration)
+
+        old.release()
+        val fresh = createPlayer()
+        attachListeners(fresh)
+        _player.value = fresh
+        if (_state.value.sharpenEnabled) fresh.setVideoEffects(listOf(SharpenEffect()))
+
+        viewModelScope.launch {
+            when {
+                item != null -> playItem(item, position, wasPlaying)
+                trailerItem != null -> playTrailerItem(trailerItem, position, wasPlaying)
             }
-            val mediaItem = MediaItem.Builder()
-                .setUri(uri)
-                .setSubtitleConfigurations(subtitleConfigs)
-                .setMediaMetadata(MediaMetadata.Builder().setTitle(item.title).build())
-                .build()
-
-            player.setMediaItem(mediaItem, startPositionMs)
-            player.prepare()
-            player.playWhenReady = true
-
-            val episodeLabel = if (item.seasonNumber != null && item.episodeNumber != null) {
-                "S${item.seasonNumber}E${item.episodeNumber} · ${item.title}"
-            } else {
-                null
-            }
-
-            _state.update {
-                PlayerUiState(
-                    isLoading = true,
-                    title = item.title,
-                    episodeLabel = episodeLabel,
-                    subtitlesEnabled = it.subtitlesEnabled,
-                    sharpenEnabled = it.sharpenEnabled,
-                    seekDurationMs = it.seekDurationMs,
-                    canMarkIntro = item.seriesStableId != null && item.seasonNumber != null,
-                    introMarkedEndMs = item.introEndMs
-                )
-            }
-
-            checkNextEpisode(item)
-            launch { loadThumbnailFrames(item.stableId) }
         }
     }
 
@@ -288,28 +409,40 @@ class PlayerViewModel(
      * no-op for the duration, which is the correct behavior here.
      */
     private fun loadTrailer(item: MediaItemEntity) {
-        val path = item.trailerPath ?: run {
+        if (item.trailerPath == null) {
             _state.update { it.copy(error = "Трейлер не найден", isLoading = false) }
             return
         }
         currentItem = null
         currentTrailerItem = item
         nextEpisode = null
+        playTrailerItem(item, startPositionMs = 0L, autoPlay = true)
+    }
+
+    private fun playTrailerItem(item: MediaItemEntity, startPositionMs: Long, autoPlay: Boolean) {
+        val path = item.trailerPath ?: return
         val uri = SmbMediaUri.build(item.sourceId, path, item.trailerSizeBytes ?: -1L)
         val mediaItem = MediaItem.Builder()
             .setUri(uri)
             .setMediaMetadata(MediaMetadata.Builder().setTitle(item.title).build())
             .build()
-        player.setMediaItem(mediaItem, 0L)
+        player.setMediaItem(mediaItem, startPositionMs)
         player.prepare()
-        player.playWhenReady = true
+        player.playWhenReady = autoPlay
         _state.update {
             PlayerUiState(
                 isLoading = true,
                 title = "${item.title} — трейлер",
                 subtitlesEnabled = it.subtitlesEnabled,
                 sharpenEnabled = it.sharpenEnabled,
-                seekDurationMs = it.seekDurationMs
+                seekDurationMs = it.seekDurationMs,
+                doubleTapSeekEnabled = it.doubleTapSeekEnabled,
+                swipeSeekEnabled = it.swipeSeekEnabled,
+                holdToSeekEnabled = it.holdToSeekEnabled,
+                showTechnicalInfo = it.showTechnicalInfo,
+                subtitleTextColor = it.subtitleTextColor,
+                subtitleBackgroundOpacity = it.subtitleBackgroundOpacity,
+                subtitleTextSizePercent = it.subtitleTextSizePercent
             )
         }
     }
@@ -457,32 +590,81 @@ class PlayerViewModel(
      * MediaCodec decodes the base layer like any other HEVC track - just without the EL detail.
      */
     fun currentVideoFormatSummary(): String {
-        val format = player.videoFormat ?: return "Видеодорожка ещё не определена"
-        val color = format.colorInfo
-        val dvProfile = format.codecs
-            ?.takeIf { it.startsWith("dvhe") || it.startsWith("dvh1") || it.startsWith("dva1") || it.startsWith("dvav") }
-            ?.split(".")
-            ?.getOrNull(1)
-            ?.toIntOrNull()
-        val dynamicRange = when {
-            dvProfile != null -> "Dolby Vision (Profile $dvProfile)"
-            color?.colorTransfer == C.COLOR_TRANSFER_ST2084 -> "HDR10/HDR10+"
-            color?.colorTransfer == C.COLOR_TRANSFER_HLG -> "HLG"
-            else -> "SDR"
-        }
+        val format = player.videoFormat
+        val item = currentItem ?: currentTrailerItem
+        val audio = player.audioFormat
+
         return buildString {
-            appendLine("Кодек: ${format.sampleMimeType ?: "—"} (${format.codecs ?: "—"})")
-            appendLine("Разрешение: ${format.width}x${format.height}")
-            appendLine("Динамический диапазон: $dynamicRange")
-            appendLine("Цвет: пространство=${color?.colorSpace ?: "—"}, transfer=${color?.colorTransfer ?: "—"}, range=${color?.colorRange ?: "—"}")
-            if (dvProfile == 7) {
-                appendLine()
-                append(
-                    "⚠ Profile 7 хранит доп. детализацию в отдельном enhancement-layer потоке. " +
-                        "Плеер показывает только базовый слой - картинка корректна, но без этой детализации."
-                )
+            item?.let {
+                appendLine("Файл: ${it.filePath.substringAfterLast('\\')}")
+                appendLine("Размер: ${formatFileSize(it.sizeBytes)}")
             }
+            if (player.duration > 0) appendLine("Длительность: ${formatTime(player.duration)}")
+
+            if (format == null) {
+                appendLine()
+                appendLine("Видеодорожка ещё не определена")
+            } else {
+                val color = format.colorInfo
+                val dvProfile = format.codecs
+                    ?.takeIf { it.startsWith("dvhe") || it.startsWith("dvh1") || it.startsWith("dva1") || it.startsWith("dvav") }
+                    ?.split(".")
+                    ?.getOrNull(1)
+                    ?.toIntOrNull()
+                val dynamicRange = when {
+                    dvProfile != null -> "Dolby Vision (Profile $dvProfile)"
+                    color?.colorTransfer == C.COLOR_TRANSFER_ST2084 -> "HDR10/HDR10+"
+                    color?.colorTransfer == C.COLOR_TRANSFER_HLG -> "HLG"
+                    else -> "SDR"
+                }
+                appendLine()
+                appendLine("Видео")
+                appendLine("Кодек: ${format.sampleMimeType ?: "—"} (${format.codecs ?: "—"})")
+                appendLine("Разрешение: ${format.width}x${format.height}")
+                if (format.frameRate > 0) appendLine("Частота кадров: ${"%.2f".format(format.frameRate)} fps")
+                if (format.bitrate > 0) appendLine("Битрейт: ${format.bitrate / 1000} кбит/с")
+                appendLine("Динамический диапазон: $dynamicRange")
+                appendLine("Цвет: пространство=${color?.colorSpace ?: "—"}, transfer=${color?.colorTransfer ?: "—"}, range=${color?.colorRange ?: "—"}")
+                if (dvProfile == 7) {
+                    appendLine(
+                        "⚠ Profile 7 хранит доп. детализацию в отдельном enhancement-layer потоке. " +
+                            "Плеер показывает только базовый слой - картинка корректна, но без этой детализации."
+                    )
+                }
+            }
+
+            if (audio != null) {
+                appendLine()
+                appendLine("Аудио")
+                appendLine("Кодек: ${audio.sampleMimeType ?: "—"} (${audio.codecs ?: "—"})")
+                if (audio.channelCount != androidx.media3.common.Format.NO_VALUE) appendLine("Каналы: ${audio.channelCount}")
+                if (audio.sampleRate != androidx.media3.common.Format.NO_VALUE) appendLine("Частота дискретизации: ${audio.sampleRate} Гц")
+                if (audio.bitrate > 0) appendLine("Битрейт: ${audio.bitrate / 1000} кбит/с")
+            }
+
+            if (_state.value.audioTracks.size > 1) {
+                appendLine()
+                appendLine("Все аудиодорожки: ${_state.value.audioTracks.joinToString(", ") { it.label }}")
+            }
+            if (_state.value.subtitleTracks.isNotEmpty()) {
+                appendLine("Субтитры: ${_state.value.subtitleTracks.joinToString(", ") { it.label }}")
+            } else {
+                appendLine()
+                appendLine("Субтитры: нет")
+            }
+        }.trim()
+    }
+
+    private fun formatFileSize(bytes: Long): String {
+        if (bytes <= 0) return "—"
+        val units = arrayOf("Б", "КБ", "МБ", "ГБ")
+        var value = bytes.toDouble()
+        var unitIndex = 0
+        while (value >= 1024 && unitIndex < units.lastIndex) {
+            value /= 1024
+            unitIndex++
         }
+        return "%.1f %s".format(value, units[unitIndex])
     }
 
     fun retry() {

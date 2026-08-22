@@ -55,12 +55,12 @@ class SettingsViewModel(
 
     val requireChargingForHeavyTasks: Flow<Boolean> = settingsRepository.requireChargingForHeavyTasks
     val rescanIntervalHours: Flow<Int> = settingsRepository.rescanIntervalHours
-    val seekDurationSeconds: Flow<Int> = settingsRepository.seekDurationSeconds
     val posterCachingEnabled: Flow<Boolean> = settingsRepository.posterCachingEnabled
     val downloadsFolderUri: Flow<String?> = settingsRepository.downloadsFolderUri
     val uiMode: Flow<UiMode?> = settingsRepository.uiMode
     val defaultSortOrder: Flow<SortOrder> = settingsRepository.defaultSortOrder
     val hapticsEnabled: Flow<Boolean> = settingsRepository.hapticsEnabled
+    val predictiveBackEnabled: Flow<Boolean> = settingsRepository.predictiveBackEnabled
     val accentColor: Flow<com.seance.app.domain.model.AccentColor> = settingsRepository.accentColor
     val playerMode: Flow<PlayerMode> = settingsRepository.playerMode
 
@@ -78,6 +78,10 @@ class SettingsViewModel(
 
     fun setHapticsEnabled(enabled: Boolean) {
         viewModelScope.launch { settingsRepository.setHapticsEnabled(enabled) }
+    }
+
+    fun setPredictiveBackEnabled(enabled: Boolean) {
+        viewModelScope.launch { settingsRepository.setPredictiveBackEnabled(enabled) }
     }
 
     fun resetToDefaults() {
@@ -131,10 +135,6 @@ class SettingsViewModel(
             settingsRepository.setRescanIntervalHours(hours)
             rescheduleIfEnabled(context)
         }
-    }
-
-    fun setSeekDurationSeconds(seconds: Int) {
-        viewModelScope.launch { settingsRepository.setSeekDurationSeconds(seconds) }
     }
 
     fun setUiMode(mode: UiMode) {

@@ -587,39 +587,83 @@ private fun DetailsContent(
         // never had.
         val tagline = item.tagline?.takeIf { it.isNotBlank() }
         val studio = item.studio?.takeIf { it.isNotBlank() }
-        if (tagline != null || studio != null) {
-            Column(
-                modifier = Modifier
-                    .padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 8.dp)
-                    .fillMaxWidth()
-                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f), RoundedCornerShape(12.dp))
-                    .padding(12.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                tagline?.let {
-                    Column {
-                        Text(
-                            stringResource(R.string.details_tagline_label),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Text(
-                            it,
-                            style = MaterialTheme.typography.titleSmall.copy(fontStyle = FontStyle.Italic),
-                            color = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.padding(top = 2.dp)
-                        )
-                    }
+        // Always rendered now (not gated on tagline/studio existing) - the audio/subtitle row
+        // below moved in here per feedback and has content to show regardless of whether this
+        // item even has a tagline or studio.
+        Column(
+            modifier = Modifier
+                .padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 8.dp)
+                .fillMaxWidth()
+                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f), RoundedCornerShape(12.dp))
+                .padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            tagline?.let {
+                Column {
+                    Text(
+                        stringResource(R.string.details_tagline_label),
+                        style = MaterialTheme.typography.bodySmall,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        it,
+                        style = MaterialTheme.typography.titleSmall.copy(fontStyle = FontStyle.Italic),
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(top = 2.dp)
+                    )
                 }
-                studio?.let {
-                    Column {
-                        Text(
-                            stringResource(R.string.details_studio_label),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Text(it, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = 2.dp))
-                    }
+            }
+            studio?.let {
+                Column {
+                    Text(
+                        stringResource(R.string.details_studio_label),
+                        style = MaterialTheme.typography.bodySmall,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(it, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = 2.dp))
+                }
+            }
+            // Moved in from its own row further down the card per feedback - grouped with
+            // tagline/studio as "metadata about this file" rather than sitting right under the
+            // description text with no visual relation to it. Two separate rows (not one shared
+            // Row like the original standalone version) - a long audio track description (codec/
+            // channels/bitrate) left almost no width for "Субтитры:" + icon, which then wrapped
+            // one character per line instead of overflowing sanely.
+            audioTracks?.takeIf { it.isNotEmpty() }?.let { tracks ->
+                Text(
+                    buildAnnotatedString {
+                        withStyle(SpanStyle(fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)) {
+                            append(stringResource(R.string.details_audio_tracks_label))
+                        }
+                        append(tracks.joinToString("; "))
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    stringResource(R.string.details_subtitles_label),
+                    style = MaterialTheme.typography.bodySmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                val hasSubtitles = item.subtitlePaths.isNotEmpty()
+                Icon(
+                    if (hasSubtitles) Icons.Default.Check else Icons.Default.Close,
+                    contentDescription = null,
+                    tint = if (hasSubtitles) Color(0xFF4CAF50) else Color(0xFFE53935),
+                    modifier = Modifier.padding(start = 4.dp).size(16.dp)
+                )
+                if (item.hasForcedSubtitles) {
+                    Text(
+                        stringResource(R.string.details_forced_subtitles_suffix),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(start = 4.dp)
+                    )
                 }
             }
         }
@@ -679,55 +723,18 @@ private fun DetailsContent(
             )
         }
 
+        // Same backdrop treatment as the tagline/studio/audio/subtitles card above it (per
+        // feedback) - a plain Text here previously had no visual container of its own at all.
         Text(
             item.plot?.takeIf { it.isNotBlank() } ?: stringResource(R.string.details_no_description),
             style = MaterialTheme.typography.bodyMedium,
             textAlign = TextAlign.Justify,
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+            modifier = Modifier
+                .padding(horizontal = 16.dp, vertical = 8.dp)
+                .fillMaxWidth()
+                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f), RoundedCornerShape(12.dp))
+                .padding(12.dp)
         )
-
-        // Subtitles rides on the same line as "Озвучка:" (rather than its own row below) so this
-        // indicator - always shown, unlike the audio-tracks text which only appears once tracks
-        // are actually probed - doesn't grow the card's height on every item.
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
-        ) {
-            audioTracks?.takeIf { it.isNotEmpty() }?.let { tracks ->
-                Text(
-                    buildAnnotatedString {
-                        withStyle(SpanStyle(fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)) {
-                            append(stringResource(R.string.details_audio_tracks_label))
-                        }
-                        append(tracks.joinToString("; "))
-                    },
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(end = 12.dp)
-                )
-            }
-            Text(
-                stringResource(R.string.details_subtitles_label),
-                style = MaterialTheme.typography.bodySmall,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-            val hasSubtitles = item.subtitlePaths.isNotEmpty()
-            Icon(
-                if (hasSubtitles) Icons.Default.Check else Icons.Default.Close,
-                contentDescription = null,
-                tint = if (hasSubtitles) Color(0xFF4CAF50) else Color(0xFFE53935),
-                modifier = Modifier.padding(start = 4.dp).size(16.dp)
-            )
-            if (item.hasForcedSubtitles) {
-                Text(
-                    stringResource(R.string.details_forced_subtitles_suffix),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(start = 4.dp)
-                )
-            }
-        }
 
         if (episodes.isNotEmpty()) {
             EpisodeList(episodes, downloads, onPlay, onDownloadSeason, onDownloadEpisode, onRemoveEpisodeDownload, onRemoveSeasonDownloads)

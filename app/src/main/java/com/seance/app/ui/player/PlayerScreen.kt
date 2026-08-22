@@ -65,7 +65,10 @@ import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import android.util.Rational
 import androidx.media3.ui.AspectRatioFrameLayout
+import androidx.media3.ui.CaptionStyleCompat
 import androidx.media3.ui.PlayerView
+import androidx.media3.ui.SubtitleView
+import androidx.compose.ui.graphics.toArgb
 import com.seance.app.R
 import com.seance.app.data.player.SmbDataSourceFactory
 import com.seance.app.data.repository.DownloadRepository
@@ -75,6 +78,7 @@ import com.seance.app.data.repository.WatchProgressRepository
 import com.seance.app.ui.common.focusHighlight
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlin.math.abs
 import kotlin.math.roundToInt
@@ -92,6 +96,14 @@ private const val EDGE_ZONE_FRACTION = 0.3f
  * against a shorter effective range makes the same 0-100% swing reachable from a comfortable
  * middle stretch of the screen instead. */
 private const val VERTICAL_GESTURE_RANGE_FRACTION = 0.55f
+
+/** No tap/double-tap/hold/drag gesture starts within this distance of either screen edge - matches
+ * the same reasoning as Details' fanart hit-region fix (a touch that close to the bezel is an easy
+ * accidental hit, and it's also where the OS's own edge-swipe-back gesture lives). */
+private val EDGE_DEAD_ZONE = 32.dp
+
+/** How often a held press re-fires the seek step while holdToSeek is active. */
+private const val HOLD_SEEK_INTERVAL_MS = 400L
 
 @Composable
 fun PlayerScreen(
@@ -124,6 +136,10 @@ fun PlayerScreen(
     )
     LaunchedEffect(stableId, isTrailer) { viewModel.load(stableId, playTrailer = isTrailer) }
     val uiState by viewModel.state.collectAsState()
+    // Collected (not read as a plain viewModel.player property access) so this composition
+    // actually recomposes when reloadPlayer() swaps in a fresh ExoPlayer instance - a plain
+    // property read wouldn't be observed by Compose's snapshot system.
+    val currentPlayer by viewModel.playerState.collectAsState()
     val noExternalAppMessage = stringResource(R.string.player_open_external_no_app)
 
     // Settings' "external player" choice (see SettingsRepository.playerMode) is applied once by
@@ -233,7 +249,14 @@ fun PlayerScreen(
 
     DisposableEffect(Unit) {
         PipController.isPlayerActive = true
-        onDispose { PipController.isPlayerActive = false }
+        // See PipController.onPipClosed's own KDoc - some OEM skins don't finish() the activity
+        // when the PiP window's close button is tapped, so this is the fallback that actually
+        // stops playback in that case instead of leaving audio running with nothing visible.
+        PipController.onPipClosed = { viewModel.player.pause() }
+        onDispose {
+            PipController.isPlayerActive = false
+            PipController.onPipClosed = null
+        }
     }
     LaunchedEffect(uiState.videoAspectRatio) {
         val ratio = uiState.videoAspectRatio
@@ -253,8 +276,26 @@ fun PlayerScreen(
         AndroidView(
             factory = { ctx -> PlayerView(ctx).apply { useController = false }.also { playerViewRef = it } },
             update = { view ->
-                view.player = viewModel.player
+                view.player = currentPlayer
                 view.resizeMode = resizeMode
+                // backgroundAlpha is the per-glyph "подложка" directly behind the text - windowColor
+                // (the larger padded box around the whole cue) is left fully transparent since that's
+                // not what "opacity" here refers to. edgeType/edgeColor stay Media3's own defaults.
+                val backgroundAlpha = (uiState.subtitleBackgroundOpacity * 255 / 100).coerceIn(0, 255)
+                val backgroundColor = (backgroundAlpha shl 24) or 0x000000
+                view.subtitleView?.setStyle(
+                    CaptionStyleCompat(
+                        uiState.subtitleTextColor,
+                        backgroundColor,
+                        Color.Transparent.toArgb(),
+                        CaptionStyleCompat.EDGE_TYPE_OUTLINE,
+                        Color.Black.toArgb(),
+                        null
+                    )
+                )
+                view.subtitleView?.setFractionalTextSize(
+                    SubtitleView.DEFAULT_TEXT_SIZE_FRACTION * (uiState.subtitleTextSizePercent / 100f)
+                )
             },
             modifier = Modifier.fillMaxSize()
         )
@@ -264,6 +305,9 @@ fun PlayerScreen(
                 enabled = !isLocked,
                 seekDurationMs = uiState.seekDurationMs,
                 currentPositionMs = uiState.currentPositionMs,
+                doubleTapSeekEnabled = uiState.doubleTapSeekEnabled,
+                swipeSeekEnabled = uiState.swipeSeekEnabled,
+                holdToSeekEnabled = uiState.holdToSeekEnabled,
                 onSingleTap = { controlsVisible = !controlsVisible },
                 onDoubleTapSeek = viewModel::seekBy,
                 onSeekByCommit = viewModel::seekBy,
@@ -363,6 +407,25 @@ fun PlayerScreen(
             videoFormatSummary = viewModel.currentVideoFormatSummary(),
             sharpenEnabled = uiState.sharpenEnabled,
             onSharpenEnabledChange = viewModel::setSharpenEnabled,
+            aspectRatioLockedBySharpen = uiState.aspectRatioLockedBySharpen,
+            onReloadPlayer = viewModel::reloadPlayer,
+            showTechnicalInfo = uiState.showTechnicalInfo,
+            onShowTechnicalInfoChange = viewModel::setShowTechnicalInfo,
+            subtitleTextColor = uiState.subtitleTextColor,
+            onSubtitleTextColorChange = viewModel::setSubtitleTextColor,
+            subtitleBackgroundOpacity = uiState.subtitleBackgroundOpacity,
+            onSubtitleBackgroundOpacityChange = viewModel::setSubtitleBackgroundOpacity,
+            subtitleTextSizePercent = uiState.subtitleTextSizePercent,
+            onSubtitleTextSizePercentChange = viewModel::setSubtitleTextSizePercent,
+            onResetSubtitleStyle = viewModel::resetSubtitleStyle,
+            seekDurationSeconds = (uiState.seekDurationMs / 1000L).toInt(),
+            onSeekDurationSecondsChange = viewModel::setSeekDurationSeconds,
+            doubleTapSeekEnabled = uiState.doubleTapSeekEnabled,
+            onDoubleTapSeekEnabledChange = viewModel::setDoubleTapSeekEnabled,
+            swipeSeekEnabled = uiState.swipeSeekEnabled,
+            onSwipeSeekEnabledChange = viewModel::setSwipeSeekEnabled,
+            holdToSeekEnabled = uiState.holdToSeekEnabled,
+            onHoldToSeekEnabledChange = viewModel::setHoldToSeekEnabled,
             canMarkIntro = uiState.canMarkIntro,
             introMarkedEndMs = uiState.introMarkedEndMs,
             onMarkIntroEnd = { viewModel.markIntroEnd(); showSpeedDialog = false },
@@ -447,6 +510,9 @@ private fun GestureLayer(
     enabled: Boolean,
     seekDurationMs: Long,
     currentPositionMs: Long,
+    doubleTapSeekEnabled: Boolean,
+    swipeSeekEnabled: Boolean,
+    holdToSeekEnabled: Boolean,
     onSingleTap: () -> Unit,
     onDoubleTapSeek: (Long) -> Unit,
     onSeekByCommit: (Long) -> Unit,
@@ -524,12 +590,53 @@ private fun GestureLayer(
         }
     }
 
+    Box(modifier = modifier) {
     Box(
-        modifier = modifier
-            .pointerInput(Unit) {
+        modifier = Modifier
+            .fillMaxSize()
+            // Excludes a strip at each edge from every gesture below (tap/double-tap/hold/drag) -
+            // same idea as Details' fanart hit-region fix: a swipe that starts right at the physical
+            // bezel is easy to land by accident (and competes with the OS's own edge-swipe-back
+            // gesture there), so nothing in this player should react to a touch that starts that
+            // close to the edge.
+            // Vertical too, not just horizontal - a swipe down from the very top edge is meant to
+            // open the system notification shade, but without this the vertical brightness/volume
+            // drag detector (active in the left/right EDGE_ZONE_FRACTION thirds) claimed it first
+            // since the shade's own gesture-recognition strip is thin and this Box sat right under it.
+            .padding(horizontal = EDGE_DEAD_ZONE, vertical = EDGE_DEAD_ZONE)
+            .pointerInput(Unit, doubleTapSeekEnabled, holdToSeekEnabled) {
                 detectTapGestures(
+                    onPress = { offset ->
+                        if (!holdToSeekEnabled) return@detectTapGestures
+                        val forward = offset.x >= size.width / 2f
+                        var holdTickJob: Job? = null
+                        val armJob = scope.launch {
+                            delay(viewConfiguration.longPressTimeoutMillis)
+                            holdTickJob = scope.launch {
+                                while (isActive) {
+                                    onDoubleTapSeek(if (forward) seekDurationMs else -seekDurationMs)
+                                    val seconds = seekDurationMs / 1000
+                                    showSeekToast(
+                                        text = "${if (forward) "+" else "-"}$seconds сек",
+                                        alignment = if (forward) Alignment.CenterEnd else Alignment.CenterStart,
+                                        autoHideMs = HOLD_SEEK_INTERVAL_MS + 150
+                                    )
+                                    delay(HOLD_SEEK_INTERVAL_MS)
+                                }
+                            }
+                        }
+                        tryAwaitRelease()
+                        armJob.cancel()
+                        holdTickJob?.cancel()
+                    },
+                    // No-op, not omitted - passing this makes detectTapGestures treat a long hold as
+                    // consumed once past the long-press timeout, instead of still firing onTap the
+                    // moment the finger eventually lifts (which would toggle the controls visibility
+                    // right as a hold-seek gesture ends).
+                    onLongPress = {},
                     onTap = { onSingleTap() },
                     onDoubleTap = { offset ->
+                        if (!doubleTapSeekEnabled) return@detectTapGestures
                         val forward = offset.x >= size.width / 2f
                         onDoubleTapSeek(if (forward) seekDurationMs else -seekDurationMs)
                         val seconds = seekDurationMs / 1000
@@ -541,7 +648,7 @@ private fun GestureLayer(
                     }
                 )
             }
-            .pointerInput(activity) {
+            .pointerInput(activity, swipeSeekEnabled) {
                 var mode = DragMode.NONE
                 var startX = 0f
                 var accumulatedDx = 0f
@@ -566,8 +673,12 @@ private fun GestureLayer(
                         if (mode == DragMode.NONE) {
                             if (abs(accumulatedDx) > 24f || abs(accumulatedDy) > 24f) {
                                 val edgeZone = size.width * EDGE_ZONE_FRACTION
-                                mode = if (abs(accumulatedDx) > abs(accumulatedDy)) {
-                                    DragMode.SEEK
+                                val isHorizontalDrag = abs(accumulatedDx) > abs(accumulatedDy)
+                                mode = if (isHorizontalDrag) {
+                                    // A horizontal drag is never reinterpreted as brightness/volume
+                                    // even when swipe-seek is off - it just does nothing, rather than
+                                    // falling through to the vertical-only edge checks below.
+                                    if (swipeSeekEnabled) DragMode.SEEK else DragMode.NONE
                                 } else if (startX <= edgeZone) {
                                     DragMode.BRIGHTNESS
                                 } else if (startX >= size.width - edgeZone) {
@@ -618,10 +729,13 @@ private fun GestureLayer(
                     }
                 )
             }
-    ) {
+    )
+
         // Was a hard if/else snap (found by this session's audit) - every other transient overlay
         // on this same screen (controls, skip-intro banner) already fades, so these two stood out
-        // as the last instant show/hide left in the player.
+        // as the last instant show/hide left in the player. Attached to the OUTER box (not the
+        // edge-inset gesture box above) so they stay aligned to the real screen edges regardless of
+        // EDGE_DEAD_ZONE.
         AnimatedVisibility(
             visible = showBrightness,
             enter = fadeIn(),

@@ -6,6 +6,8 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.ui.draw.clip
+import kotlin.math.roundToInt
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -67,6 +69,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.seance.app.R
@@ -333,6 +336,25 @@ fun PlayerSettingsPanel(
     videoFormatSummary: String,
     sharpenEnabled: Boolean,
     onSharpenEnabledChange: (Boolean) -> Unit,
+    aspectRatioLockedBySharpen: Boolean,
+    onReloadPlayer: () -> Unit,
+    showTechnicalInfo: Boolean,
+    onShowTechnicalInfoChange: (Boolean) -> Unit,
+    subtitleTextColor: Int,
+    onSubtitleTextColorChange: (Int) -> Unit,
+    subtitleBackgroundOpacity: Int,
+    onSubtitleBackgroundOpacityChange: (Int) -> Unit,
+    subtitleTextSizePercent: Int,
+    onSubtitleTextSizePercentChange: (Int) -> Unit,
+    onResetSubtitleStyle: () -> Unit,
+    seekDurationSeconds: Int,
+    onSeekDurationSecondsChange: (Int) -> Unit,
+    doubleTapSeekEnabled: Boolean,
+    onDoubleTapSeekEnabledChange: (Boolean) -> Unit,
+    swipeSeekEnabled: Boolean,
+    onSwipeSeekEnabledChange: (Boolean) -> Unit,
+    holdToSeekEnabled: Boolean,
+    onHoldToSeekEnabledChange: (Boolean) -> Unit,
     canMarkIntro: Boolean,
     introMarkedEndMs: Long?,
     onMarkIntroEnd: () -> Unit,
@@ -418,6 +440,82 @@ fun PlayerSettingsPanel(
                     }
                 }
 
+                PanelSectionLabel(stringResource(R.string.player_settings_section_subtitles))
+                Text(
+                    stringResource(R.string.player_subtitle_color),
+                    color = Color.White.copy(alpha = 0.7f),
+                    style = MaterialTheme.typography.bodySmall
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.padding(top = 6.dp, bottom = 12.dp)) {
+                    listOf(
+                        Color.White, Color.Yellow, Color(0xFF00E5FF), Color(0xFF7CFC00), Color(0xFFFF5252)
+                    ).forEach { swatch ->
+                        val swatchArgb = swatch.toArgb()
+                        val selected = swatchArgb == subtitleTextColor
+                        val swatchSource = remember { MutableInteractionSource() }
+                        Box(
+                            modifier = Modifier
+                                .size(32.dp)
+                                .clip(androidx.compose.foundation.shape.CircleShape)
+                                .background(swatch)
+                                .clickable(interactionSource = swatchSource, indication = null) { onSubtitleTextColorChange(swatchArgb) }
+                                .then(
+                                    if (selected) Modifier.border(2.dp, MaterialTheme.colorScheme.primary, androidx.compose.foundation.shape.CircleShape) else Modifier
+                                )
+                        )
+                    }
+                }
+                Text(
+                    stringResource(R.string.player_subtitle_background_opacity, subtitleBackgroundOpacity),
+                    color = Color.White.copy(alpha = 0.7f),
+                    style = MaterialTheme.typography.bodySmall
+                )
+                androidx.compose.material3.Slider(
+                    value = subtitleBackgroundOpacity.toFloat(),
+                    onValueChange = { onSubtitleBackgroundOpacityChange(it.roundToInt()) },
+                    valueRange = 0f..100f,
+                    steps = 9
+                )
+                Text(
+                    stringResource(R.string.player_subtitle_text_size, subtitleTextSizePercent),
+                    color = Color.White.copy(alpha = 0.7f),
+                    style = MaterialTheme.typography.bodySmall
+                )
+                androidx.compose.material3.Slider(
+                    value = subtitleTextSizePercent.toFloat(),
+                    onValueChange = { onSubtitleTextSizePercentChange(it.roundToInt()) },
+                    valueRange = 50f..200f,
+                    steps = 14
+                )
+                TextButton(onClick = onResetSubtitleStyle, modifier = Modifier.padding(top = 4.dp)) {
+                    Text(stringResource(R.string.player_subtitle_style_reset))
+                }
+
+                PanelSectionLabel(stringResource(R.string.player_settings_section_gestures))
+                Text(
+                    stringResource(R.string.player_seek_duration, seekDurationSeconds),
+                    color = Color.White.copy(alpha = 0.7f),
+                    style = MaterialTheme.typography.bodySmall
+                )
+                androidx.compose.material3.Slider(
+                    value = seekDurationSeconds.toFloat(),
+                    onValueChange = { onSeekDurationSecondsChange(it.roundToInt()) },
+                    valueRange = 5f..30f,
+                    steps = 4
+                )
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                    Text(stringResource(R.string.player_double_tap_seek), color = Color.White, modifier = Modifier.weight(1f))
+                    androidx.compose.material3.Switch(checked = doubleTapSeekEnabled, onCheckedChange = onDoubleTapSeekEnabledChange)
+                }
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                    Text(stringResource(R.string.player_swipe_seek), color = Color.White, modifier = Modifier.weight(1f))
+                    androidx.compose.material3.Switch(checked = swipeSeekEnabled, onCheckedChange = onSwipeSeekEnabledChange)
+                }
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                    Text(stringResource(R.string.player_hold_to_seek), color = Color.White, modifier = Modifier.weight(1f))
+                    androidx.compose.material3.Switch(checked = holdToSeekEnabled, onCheckedChange = onHoldToSeekEnabledChange)
+                }
+
                 PanelSectionLabel(stringResource(R.string.player_settings_section_image))
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                     Text(stringResource(R.string.player_sharpen_toggle), color = Color.White, modifier = Modifier.weight(1f))
@@ -428,7 +526,31 @@ fun PlayerSettingsPanel(
                         }
                     )
                 }
-                Text(videoFormatSummary, color = Color.White.copy(alpha = 0.7f), style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 8.dp))
+                if (aspectRatioLockedBySharpen) {
+                    Text(
+                        stringResource(R.string.player_aspect_ratio_locked),
+                        color = Color.White.copy(alpha = 0.7f),
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.padding(top = 4.dp)
+                    )
+                    TextButton(onClick = onReloadPlayer, modifier = Modifier.padding(top = 4.dp)) {
+                        Text(stringResource(R.string.player_reload))
+                    }
+                }
+                // A separate, off-by-default toggle rather than always showing the text below the
+                // sharpen switch - codec/resolution/HDR details aren't something most viewers ever
+                // look for, and it cluttered this panel by default for everyone who never asked.
+                PanelSectionLabel(stringResource(R.string.player_settings_section_technical))
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                    Text(stringResource(R.string.player_show_technical_info), color = Color.White, modifier = Modifier.weight(1f))
+                    androidx.compose.material3.Switch(
+                        checked = showTechnicalInfo,
+                        onCheckedChange = onShowTechnicalInfoChange
+                    )
+                }
+                if (showTechnicalInfo) {
+                    Text(videoFormatSummary, color = Color.White.copy(alpha = 0.7f), style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 8.dp))
+                }
 
                 if (canMarkIntro) {
                     PanelSectionLabel(stringResource(R.string.player_settings_section_intro))

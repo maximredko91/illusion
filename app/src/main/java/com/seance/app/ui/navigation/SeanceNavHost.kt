@@ -2,6 +2,8 @@ package com.seance.app.ui.navigation
 
 import android.content.res.Configuration
 import androidx.compose.animation.Crossfade
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionLayout
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -13,6 +15,7 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.activity.compose.BackHandler
@@ -68,6 +71,7 @@ import androidx.navigation.NavDestination.Companion.hasRoute
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
 import com.seance.app.R
@@ -187,6 +191,7 @@ private const val NAV_TRANSITION_MS = 350
 
 @Composable
 private fun SeanceNavGraph(app: SeanceApplication, navController: NavHostController, modifier: Modifier = Modifier) {
+        val predictiveBackEnabled by app.settingsRepository.predictiveBackEnabled.collectAsState(initial = true)
         NavHost(
             navController = navController,
             startDestination = Destination.Splash,
@@ -222,10 +227,12 @@ private fun SeanceNavGraph(app: SeanceApplication, navController: NavHostControl
                 }
             },
             popEnterTransition = {
-                // Popping back FROM Details (initialState, the screen being left) - the returning
-                // screen should fade in too, matching the shared element animating back down onto
-                // its poster card rather than sliding underneath that motion.
-                if (initialState.destination.hasRoute<Destination.Details>()) {
+                if (!predictiveBackEnabled) {
+                    EnterTransition.None
+                } else if (initialState.destination.hasRoute<Destination.Details>()) {
+                    // Popping back FROM Details (initialState, the screen being left) - the
+                    // returning screen should fade in too, matching the shared element animating
+                    // back down onto its poster card rather than sliding underneath that motion.
                     fadeIn(tween(NAV_TRANSITION_MS))
                 } else {
                     slideInHorizontally(tween(NAV_TRANSITION_MS, easing = FastOutSlowInEasing)) { -it / 6 } +
@@ -233,8 +240,16 @@ private fun SeanceNavGraph(app: SeanceApplication, navController: NavHostControl
                 }
             },
             popExitTransition = {
-                if (initialState.destination.hasRoute<Destination.Details>()) {
-                    fadeOut(tween(NAV_TRANSITION_MS))
+                if (!predictiveBackEnabled) {
+                    ExitTransition.None
+                } else if (initialState.destination.hasRoute<Destination.Details>()) {
+                    // A plain fadeOut alone cross-dissolves in place - held partway through a
+                    // predictive-back swipe, Details' poster/fanart and the Tabs grid underneath
+                    // sit at the same overlapping alpha, reading as the destination "bleeding
+                    // through" rather than Details visibly leaving. Pairing the fade with a slight
+                    // scale-down (Material's own predictive-back convention) makes Details read as
+                    // shrinking away even when the gesture is paused mid-swipe, not just at 60fps.
+                    fadeOut(tween(NAV_TRANSITION_MS)) + scaleOut(tween(NAV_TRANSITION_MS), targetScale = 0.92f)
                 } else {
                     slideOutHorizontally(tween(NAV_TRANSITION_MS, easing = FastOutSlowInEasing)) { it / 3 } +
                         fadeOut(tween(NAV_TRANSITION_MS))
@@ -405,8 +420,6 @@ private fun SeanceNavGraph(app: SeanceApplication, navController: NavHostControl
                     sources = sources,
                     requireChargingForHeavyTasks = settingsViewModel.requireChargingForHeavyTasks,
                     rescanIntervalHours = settingsViewModel.rescanIntervalHours,
-                    seekDurationSeconds = settingsViewModel.seekDurationSeconds,
-                    onSeekDurationChange = settingsViewModel::setSeekDurationSeconds,
                     playerMode = settingsViewModel.playerMode,
                     onPlayerModeChange = settingsViewModel::setPlayerMode,
                     cacheSizeBytes = cacheSizeBytes,
@@ -418,6 +431,8 @@ private fun SeanceNavGraph(app: SeanceApplication, navController: NavHostControl
                     onDefaultSortOrderChange = settingsViewModel::setDefaultSortOrder,
                     hapticsEnabled = settingsViewModel.hapticsEnabled,
                     onHapticsEnabledChange = settingsViewModel::setHapticsEnabled,
+                    predictiveBackEnabled = settingsViewModel.predictiveBackEnabled,
+                    onPredictiveBackEnabledChange = settingsViewModel::setPredictiveBackEnabled,
                     accentColor = settingsViewModel.accentColor,
                     onAccentColorChange = settingsViewModel::setAccentColor,
                     onToggleChargingRequirement = { enabled ->
@@ -500,6 +515,26 @@ private fun SeanceNavGraph(app: SeanceApplication, navController: NavHostControl
                     onBack = { navController.popBackStack() }
                 )
             }
+        }
+
+        // Setting popEnterTransition/popExitTransition above to EnterTransition.None/
+        // ExitTransition.None when predictiveBackEnabled is off does NOT stop the OS from doing a
+        // live predictive-back swipe preview - it only removes our animation's alpha/scale, so
+        // under a *held*, seekable gesture the destination screen still gets composed at once at
+        // whatever partial progress and just snaps to fully visible with no fade to mask it,
+        // reading as an even worse "bleed-through" than with the animation on. The only real way to
+        // suppress the system preview is to make sure the ACTIVE back callback isn't
+        // predictive-aware at all: androidx.activity.compose.BackHandler registers a plain
+        // (non-animated) OnBackPressedCallback, and per the OnBackInvokedCallback contract, if
+        // that's the topmost enabled callback the system skips the live-scrub preview entirely and
+        // just waits for gesture completion. Composed after NavHost (and thus registered after, so
+        // higher LIFO priority than NavHost's own internal predictive-back callback) - but gated on
+        // canPop so it doesn't shadow TabsHost's own always-on exit-confirmation BackHandler when
+        // sitting on the root Tabs destination with nothing left to pop.
+        val currentBackStackEntry by navController.currentBackStackEntryAsState()
+        val canPop = navController.previousBackStackEntry != null
+        BackHandler(enabled = !predictiveBackEnabled && canPop) {
+            navController.popBackStack()
         }
 }
 

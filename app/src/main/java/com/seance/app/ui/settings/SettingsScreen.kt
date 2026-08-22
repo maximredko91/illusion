@@ -2,6 +2,7 @@ package com.seance.app.ui.settings
 
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -26,6 +27,8 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
@@ -53,6 +56,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -81,8 +85,6 @@ fun SettingsScreen(
     sources: List<SmbSourceEntity>,
     requireChargingForHeavyTasks: Flow<Boolean>,
     rescanIntervalHours: Flow<Int>,
-    seekDurationSeconds: Flow<Int>,
-    onSeekDurationChange: (Int) -> Unit,
     playerMode: Flow<com.seance.app.domain.model.PlayerMode>,
     onPlayerModeChange: (com.seance.app.domain.model.PlayerMode) -> Unit,
     cacheSizeBytes: Long?,
@@ -94,6 +96,8 @@ fun SettingsScreen(
     onDefaultSortOrderChange: (SortOrder) -> Unit,
     hapticsEnabled: Flow<Boolean>,
     onHapticsEnabledChange: (Boolean) -> Unit,
+    predictiveBackEnabled: Flow<Boolean>,
+    onPredictiveBackEnabledChange: (Boolean) -> Unit,
     accentColor: Flow<com.seance.app.domain.model.AccentColor>,
     onAccentColorChange: (com.seance.app.domain.model.AccentColor) -> Unit,
     onToggleChargingRequirement: (Boolean) -> Unit,
@@ -130,16 +134,22 @@ fun SettingsScreen(
     val currentDefaultSortOrder by defaultSortOrder.collectAsState(initial = SortOrder.DATE_ADDED)
     val currentPlayerMode by playerMode.collectAsState(initial = com.seance.app.domain.model.PlayerMode.INTERNAL)
     val hapticsOn by hapticsEnabled.collectAsState(initial = true)
+    val predictiveBackOn by predictiveBackEnabled.collectAsState(initial = true)
     val currentAccentColor by accentColor.collectAsState(initial = com.seance.app.domain.model.AccentColor.DEFAULT)
     val chargingOnly by requireChargingForHeavyTasks.collectAsState(initial = true)
     val rescanHours by rescanIntervalHours.collectAsState(initial = 48)
-    val seekSeconds by seekDurationSeconds.collectAsState(initial = 10)
     val downloadsFolder by downloadsFolderUri.collectAsState(initial = null)
     // Deleting a source used to fire straight from the trash icon with no confirmation - the most
     // destructive action on this whole screen (orphans everything that source scanned into the
     // library) had less friction than clearing a poster cache. Mirrors the confirm-dialog pattern
     // already used for cache clearing / history removal elsewhere in the app.
     var pendingDeleteSource by remember { mutableStateOf<SmbSourceEntity?>(null) }
+    // Session-only (not persisted) collapse state, keyed by section title - all expanded by
+    // default. One shared map instead of a separate `var expanded by remember` per section since
+    // there are a dozen-plus of them here.
+    val expandedSections = remember { mutableStateMapOf<String, Boolean>() }
+    fun isSectionExpanded(key: String) = expandedSections[key] != false
+    fun toggleSection(key: String) { expandedSections[key] = !isSectionExpanded(key) }
     val context = LocalContext.current
     val noFileAppMessage = stringResource(R.string.settings_downloads_no_file_app)
     val folderPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
@@ -233,8 +243,8 @@ fun SettingsScreen(
                 .padding(innerPadding)
                 .verticalScroll(rememberScrollState())
         ) {
-            SettingsGroupLabel(stringResource(R.string.settings_smb_sources))
-            SettingsGroup {
+            CollapsibleSettingsHeader(stringResource(R.string.settings_smb_sources), isSectionExpanded("smb_sources"), { toggleSection("smb_sources") })
+            SettingsGroup(visible = isSectionExpanded("smb_sources")) {
                 if (sources.isEmpty()) {
                     ListItem(headlineContent = { Text(stringResource(R.string.settings_no_sources)) })
                 } else {
@@ -270,8 +280,8 @@ fun SettingsScreen(
                 }
             }
 
-            SettingsGroupLabel(stringResource(R.string.settings_ui_mode_section))
-            SettingsGroup {
+            CollapsibleSettingsHeader(stringResource(R.string.settings_ui_mode_section), isSectionExpanded("ui_mode"), { toggleSection("ui_mode") })
+            SettingsGroup(visible = isSectionExpanded("ui_mode")) {
                 val phoneRowSource = remember { MutableInteractionSource() }
                 ListItem(
                     headlineContent = { Text(stringResource(R.string.settings_ui_mode_phone)) },
@@ -322,10 +332,23 @@ fun SettingsScreen(
                     colors = ListItemDefaults.colors(containerColor = Color.Transparent),
                     modifier = Modifier.fillMaxWidth()
                 )
+                SettingsDivider()
+                ListItem(
+                    headlineContent = { Text(stringResource(R.string.settings_predictive_back)) },
+                    supportingContent = { Text(stringResource(R.string.settings_predictive_back_description)) },
+                    trailingContent = {
+                        Switch(
+                            checked = predictiveBackOn,
+                            onCheckedChange = onPredictiveBackEnabledChange
+                        )
+                    },
+                    colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                    modifier = Modifier.fillMaxWidth()
+                )
             }
 
-            SettingsGroupLabel(stringResource(R.string.settings_accent_color))
-            SettingsGroup(modifier = Modifier.padding(bottom = 24.dp)) {
+            CollapsibleSettingsHeader(stringResource(R.string.settings_accent_color), isSectionExpanded("accent_color"), { toggleSection("accent_color") })
+            SettingsGroup(visible = isSectionExpanded("accent_color"), modifier = Modifier.padding(bottom = 24.dp)) {
                 // FlowRow, not a plain Row - 7 swatches at 40dp + spacing (~352dp) can exceed a
                 // narrow phone's available width once the Card's own padding is subtracted, and a
                 // plain Row doesn't wrap. Wrapping to a second line reaches every swatch without
@@ -348,8 +371,8 @@ fun SettingsScreen(
                 }
             }
 
-            SettingsGroupLabel(stringResource(R.string.settings_library_section))
-            SettingsGroup(modifier = Modifier.padding(bottom = 24.dp)) {
+            CollapsibleSettingsHeader(stringResource(R.string.settings_library_section), isSectionExpanded("library"), { toggleSection("library") })
+            SettingsGroup(visible = isSectionExpanded("library"), modifier = Modifier.padding(bottom = 24.dp)) {
                 ListItem(
                     headlineContent = { Text(stringResource(R.string.settings_default_sort_order)) },
                     trailingContent = { DefaultSortOrderMenu(currentDefaultSortOrder, onDefaultSortOrderChange) },
@@ -358,8 +381,8 @@ fun SettingsScreen(
                 )
             }
 
-            SettingsGroupLabel(stringResource(R.string.settings_scan_section))
-            SettingsGroup {
+            CollapsibleSettingsHeader(stringResource(R.string.settings_scan_section), isSectionExpanded("scan"), { toggleSection("scan") })
+            SettingsGroup(visible = isSectionExpanded("scan")) {
                 ListItem(
                     headlineContent = { Text(stringResource(R.string.settings_rescan_now)) },
                     supportingContent = { Text(stringResource(R.string.settings_rescan_now_description)) },
@@ -402,28 +425,35 @@ fun SettingsScreen(
                 )
             }
 
-            SettingsGroupLabel(stringResource(R.string.settings_player_section))
-            SettingsGroup {
-                ListItem(
-                    headlineContent = { Text(stringResource(R.string.settings_seek_duration)) },
-                    trailingContent = { SeekDurationMenu(seekSeconds, onSeekDurationChange) },
-                    colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-                    modifier = Modifier.fillMaxWidth()
-                )
+            CollapsibleSettingsHeader(stringResource(R.string.settings_player_section), isSectionExpanded("player"), { toggleSection("player") })
+            SettingsGroup(visible = isSectionExpanded("player")) {
                 // Was a one-off "open in external player" button inside the player's own settings
                 // sheet (had to be tapped every single playback) - moved here as a persistent
                 // default per user feedback: choose the player once, not every time.
                 ListItem(
-                    headlineContent = { Text(stringResource(R.string.settings_player_mode)) },
-                    supportingContent = { Text(stringResource(R.string.settings_player_mode_description)) },
+                    // Description folded into headlineContent (not a separate supportingContent
+                    // slot) specifically so the trailing chip centers vertically - Material3's
+                    // ListItem deliberately top-aligns trailing content whenever supportingContent
+                    // is present (2/3-line item spec), which read as misaligned next to the other
+                    // single-line rows' centered chips in this same group.
+                    headlineContent = {
+                        Column {
+                            Text(stringResource(R.string.settings_player_mode))
+                            Text(
+                                stringResource(R.string.settings_player_mode_description),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    },
                     trailingContent = { PlayerModeMenu(currentPlayerMode, onPlayerModeChange) },
                     colors = ListItemDefaults.colors(containerColor = Color.Transparent),
                     modifier = Modifier.fillMaxWidth()
                 )
             }
 
-            SettingsGroupLabel(stringResource(R.string.settings_cache))
-            SettingsGroup {
+            CollapsibleSettingsHeader(stringResource(R.string.settings_cache), isSectionExpanded("cache"), { toggleSection("cache") })
+            SettingsGroup(visible = isSectionExpanded("cache")) {
                 val cacheRowSource = remember { MutableInteractionSource() }
                 ListItem(
                     headlineContent = { Text(stringResource(R.string.settings_cache)) },
@@ -444,8 +474,8 @@ fun SettingsScreen(
                 )
             }
 
-            SettingsGroupLabel(stringResource(R.string.settings_downloads))
-            SettingsGroup {
+            CollapsibleSettingsHeader(stringResource(R.string.settings_downloads), isSectionExpanded("downloads"), { toggleSection("downloads") })
+            SettingsGroup(visible = isSectionExpanded("downloads")) {
                 ListItem(
                     headlineContent = { Text(stringResource(R.string.settings_downloads_folder)) },
                     supportingContent = { Text(DownloadStorage.folderDisplayName(context, downloadsFolder)) },
@@ -506,8 +536,8 @@ fun SettingsScreen(
                 )
             }
 
-            SettingsGroupLabel(stringResource(R.string.settings_backup))
-            SettingsGroup(modifier = Modifier.padding(bottom = 24.dp)) {
+            CollapsibleSettingsHeader(stringResource(R.string.settings_backup), isSectionExpanded("backup"), { toggleSection("backup") })
+            SettingsGroup(visible = isSectionExpanded("backup"), modifier = Modifier.padding(bottom = 24.dp)) {
                 ListItem(
                     headlineContent = { Text(stringResource(R.string.settings_backup)) },
                     trailingContent = {
@@ -542,8 +572,8 @@ fun SettingsScreen(
             var showDevPasswordGenerated by remember { mutableStateOf<String?>(null) }
             var devPasswordError by remember { mutableStateOf(false) }
 
-            SettingsGroupLabel(stringResource(R.string.settings_add_media))
-            SettingsGroup(modifier = Modifier.padding(bottom = 24.dp)) {
+            CollapsibleSettingsHeader(stringResource(R.string.settings_add_media), isSectionExpanded("add_media"), { toggleSection("add_media") })
+            SettingsGroup(visible = isSectionExpanded("add_media"), modifier = Modifier.padding(bottom = 24.dp)) {
                 Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp)) {
                     Text(stringResource(R.string.settings_add_media), style = MaterialTheme.typography.bodyLarge)
                     Text(
@@ -583,8 +613,8 @@ fun SettingsScreen(
                 }
             }
 
-            SettingsGroupLabel(stringResource(R.string.settings_feedback))
-            SettingsGroup(modifier = Modifier.padding(bottom = 24.dp)) {
+            CollapsibleSettingsHeader(stringResource(R.string.settings_feedback), isSectionExpanded("feedback"), { toggleSection("feedback") })
+            SettingsGroup(visible = isSectionExpanded("feedback"), modifier = Modifier.padding(bottom = 24.dp)) {
                 ListItem(
                     headlineContent = { Text(stringResource(R.string.settings_feedback)) },
                     supportingContent = { Text(stringResource(R.string.settings_feedback_description)) },
@@ -604,8 +634,8 @@ fun SettingsScreen(
             }
 
             var showResetConfirm by remember { mutableStateOf(false) }
-            SettingsGroupLabel(stringResource(R.string.settings_reset_section))
-            SettingsGroup(modifier = Modifier.padding(bottom = 24.dp)) {
+            CollapsibleSettingsHeader(stringResource(R.string.settings_reset_section), isSectionExpanded("reset"), { toggleSection("reset") })
+            SettingsGroup(visible = isSectionExpanded("reset"), modifier = Modifier.padding(bottom = 24.dp)) {
                 ListItem(
                     headlineContent = { Text(stringResource(R.string.settings_reset_to_defaults)) },
                     supportingContent = { Text(stringResource(R.string.settings_reset_to_defaults_description)) },
@@ -660,7 +690,7 @@ fun SettingsScreen(
             }
 
             var showFactoryResetConfirm by remember { mutableStateOf(false) }
-            SettingsGroup(modifier = Modifier.padding(bottom = 24.dp)) {
+            SettingsGroup(visible = isSectionExpanded("reset"), modifier = Modifier.padding(bottom = 24.dp)) {
                 ListItem(
                     headlineContent = { Text(stringResource(R.string.settings_factory_reset)) },
                     supportingContent = { Text(stringResource(R.string.settings_factory_reset_description)) },
@@ -775,16 +805,50 @@ internal fun SettingsGroupLabel(text: String) {
     )
 }
 
+/**
+ * Clickable section header that collapses the group(s) below it - per feedback, the settings
+ * screen had grown into one long stretched scroll with a dozen-plus sections all expanded at
+ * once. Expanded by default (nothing is hidden on first open, only once the user deliberately
+ * collapses a section they're not using right now) - collapse state is session-only (not
+ * persisted), matching how the rest of this screen's transient UI state already behaves.
+ */
+@Composable
+internal fun CollapsibleSettingsHeader(text: String, expanded: Boolean, onToggle: () -> Unit) {
+    val interactionSource = remember { MutableInteractionSource() }
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(interactionSource = interactionSource, indication = LocalIndication.current, onClick = onToggle)
+            .focusHighlight(interactionSource)
+            .padding(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 8.dp)
+    ) {
+        Text(
+            text,
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.weight(1f)
+        )
+        Icon(
+            if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary
+        )
+    }
+}
+
 /** Groups related settings rows into one visually bounded card, so adjacent unrelated rows don't blend together. */
 @Composable
-internal fun SettingsGroup(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
-    Card(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = 12.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
-        content = content
-    )
+internal fun SettingsGroup(visible: Boolean = true, modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
+    AnimatedVisibility(visible = visible) {
+        Card(
+            modifier = modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
+            content = content
+        )
+    }
 }
 
 @Composable
@@ -920,33 +984,6 @@ private fun PlayerModeMenu(current: com.seance.app.domain.model.PlayerMode, onCh
 private fun playerModeLabel(mode: com.seance.app.domain.model.PlayerMode): String = when (mode) {
     com.seance.app.domain.model.PlayerMode.INTERNAL -> stringResource(R.string.settings_player_mode_internal)
     com.seance.app.domain.model.PlayerMode.EXTERNAL -> stringResource(R.string.settings_player_mode_external)
-}
-
-private val SEEK_DURATION_OPTIONS = listOf(5, 10, 15, 20, 25, 30)
-
-@Composable
-private fun SeekDurationMenu(seconds: Int, onChange: (Int) -> Unit) {
-    var expanded by remember { mutableStateOf(false) }
-    Box {
-        val triggerSource = remember { MutableInteractionSource() }
-        OutlinedButton(onClick = { expanded = true }, interactionSource = triggerSource, modifier = Modifier.focusHighlight(triggerSource)) {
-            Text(stringResource(R.string.settings_seek_duration_seconds, seconds))
-        }
-        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            SEEK_DURATION_OPTIONS.forEach { option ->
-                val itemSource = remember { MutableInteractionSource() }
-                DropdownMenuItem(
-                    text = { Text(stringResource(R.string.settings_seek_duration_seconds, option)) },
-                    onClick = {
-                        onChange(option)
-                        expanded = false
-                    },
-                    interactionSource = itemSource,
-                    modifier = Modifier.focusHighlight(itemSource)
-                )
-            }
-        }
-    }
 }
 
 internal fun formatBytes(bytes: Long): String {

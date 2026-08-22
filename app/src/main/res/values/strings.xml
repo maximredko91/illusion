@@ -9,8 +9,8 @@
     <string name="settings_player_mode_internal">Внутренний</string>
     <string name="settings_player_mode_external">Внешний</string>
 
-    <string name="details_tagline_label">Слоган</string>
-    <string name="details_studio_label">Студия</string>
+    <string name="details_tagline_label">Слоган:</string>
+    <string name="details_studio_label">Студия:</string>
 
     <string name="settings_factory_reset">Полный сброс приложения</string>
     <string name="settings_factory_reset_description">Удалит источники SMB, всю библиотеку, избранное, историю просмотра, загрузки, кэш и пароль добавления медиа — настройки тоже вернутся к значениям по умолчанию</string>
@@ -37,15 +37,13 @@
     <string name="settings_rescan_off">Отключено</string>
     <string name="settings_rescan_hours">Каждые %1$d ч</string>
     <string name="settings_player_section">Плеер</string>
-    <string name="settings_seek_duration">Длительность перемотки</string>
-    <string name="settings_seek_duration_seconds">%1$d с</string>
     <string name="settings_cache">Кэш</string>
     <string name="settings_cache_size">Занято: %1$s</string>
     <string name="settings_cache_size_unknown">Вычисление размера…</string>
     <string name="settings_cache_clear">Очистить кэш</string>
     <string name="settings_cache_clear_confirm_title">Очистить кэш?</string>
     <string name="settings_cache_clear_confirm_message">Все временные файлы будут удалены. Постеры и фоны, если кеширование включено, подгрузятся заново с сервера при следующем открытии.</string>
-    <string name="settings_charging_only">Тяжёлые фоновые задачи только при зарядке</string>
+    <string name="settings_charging_only">Фоновые задачи только при зарядке</string>
     <string name="settings_charging_only_description">Генерация превью-кадров для перемотки и фоновое пересканирование библиотеки — не будут запускаться от батареи</string>
     <string name="settings_poster_caching">Кеширование постеров</string>
     <string name="settings_poster_caching_description">Хранить загруженные постеры и фоны на устройстве. При отключении все закешированные постеры будут удалены</string>
@@ -63,7 +61,7 @@
     <string name="settings_feedback_description">Сообщить об ошибке или предложить улучшение</string>
     <string name="settings_feedback_action">Написать</string>
     <string name="settings_downloads">Загрузки</string>
-    <string name="settings_downloads_folder">Место загрузок</string>
+    <string name="settings_downloads_folder">Место загрузок:</string>
     <string name="settings_downloads_open_folder">Открыть папку</string>
     <string name="settings_downloads_choose_folder">Выбрать папку</string>
     <string name="settings_downloads_size">Скачано: %1$s</string>
@@ -150,6 +148,8 @@
     <string name="settings_ui_mode_tv">Телевизор (пульт)</string>
     <string name="settings_haptics">Вибрация</string>
     <string name="settings_haptics_description">Тактильный отклик на нажатия и переключатели</string>
+    <string name="settings_predictive_back">Анимация жеста «назад»</string>
+    <string name="settings_predictive_back_description">Плавный анимированный предпросмотр экрана при свайпе назад (Android 13+). Отключите, если анимация подтормаживает на вашем устройстве — возврат назад будет мгновенным, без анимации</string>
     <string name="settings_accent_color">Акцентный цвет</string>
     <string name="settings_library_section">Библиотека</string>
     <string name="settings_default_sort_order">Сортировка по умолчанию</string>
@@ -234,6 +234,18 @@
     <string name="player_subtitles_title">Субтитры</string>
     <string name="player_video_info_title">Информация о видео</string>
     <string name="player_sharpen_toggle">Повышение резкости (GPU)</string>
+    <string name="player_settings_section_technical">Информация о видео</string>
+    <string name="player_show_technical_info">Показать информацию о видео</string>
+    <string name="player_settings_section_subtitles">Субтитры</string>
+    <string name="player_subtitle_color">Цвет текста</string>
+    <string name="player_subtitle_background_opacity">Прозрачность подложки: %1$d%%</string>
+    <string name="player_subtitle_text_size">Размер текста: %1$d%%</string>
+    <string name="player_subtitle_style_reset">Сбросить стиль субтитров</string>
+    <string name="player_settings_section_gestures">Жесты</string>
+    <string name="player_seek_duration">Длительность перемотки: %1$d с</string>
+    <string name="player_double_tap_seek">Перемотка двойным тапом</string>
+    <string name="player_swipe_seek">Перемотка свайпом</string>
+    <string name="player_hold_to_seek">Перемотка удержанием</string>
     <string name="player_mark_intro_end">Отметить конец заставки</string>
     <string name="player_mark_intro_end_hint">Применится ко всем сериям этого сезона</string>
     <string name="player_intro_marked_at">Заставка отмечена: 0:00–%1$s</string>
@@ -253,8 +265,10 @@
     <string name="player_aspect_ratio_zoom">Заполнить экран (обрезка)</string>
     <string name="player_aspect_ratio_fill">Растянуть</string>
     <string name="player_sharpen_enable_warning_title">Включить резкость?</string>
-    <string name="player_sharpen_enable_warning_message">Из-за ограничения видеодвижка после включения резкости переключение соотношения сторон перестанет работать до конца этого просмотра. Если оно вам нужно — настройте его сейчас, до включения резкости, либо позже перезайдите в плеер.</string>
+    <string name="player_sharpen_enable_warning_message">Из-за ограничения видеодвижка после включения резкости переключение соотношения сторон перестанет работать до конца этого просмотра. Если оно вам нужно — настройте его сейчас, до включения резкости, либо позже нажмите «Перезайти в плеер» здесь же в настройках.</string>
     <string name="player_sharpen_enable_warning_confirm">Всё равно включить</string>
+    <string name="player_aspect_ratio_locked">Переключение соотношения сторон недоступно до перезахода в плеер</string>
+    <string name="player_reload">Перезайти в плеер</string>
     <string name="player_aspect_ratio_blocked_title">Соотношение сторон недоступно</string>
     <string name="player_aspect_ratio_blocked_message">В этом сеансе была включена резкость — из-за ограничения видеодвижка переключение соотношения сторон больше не сработает. Перезайдите в плеер, чтобы сбросить это ограничение.</string>
     <string name="player_aspect_ratio_blocked_reload">Перезайти в плеер</string>

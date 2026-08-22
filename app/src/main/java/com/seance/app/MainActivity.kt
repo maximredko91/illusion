@@ -61,6 +61,16 @@ class MainActivity : ComponentActivity() {
         super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
         PipController.isInPipMode = isInPictureInPictureMode
     }
+
+    // onStop() only fires here while isInPipMode is still true when the PiP window itself has gone
+    // away (normal PiP keeps the activity STARTED the whole time the small window is visible) - see
+    // PipController.onPipClosed's KDoc for why this can't just rely on the activity finishing.
+    override fun onStop() {
+        super.onStop()
+        if (PipController.isInPipMode) {
+            PipController.onPipClosed?.invoke()
+        }
+    }
 }
 
 /** One-shot request for POST_NOTIFICATIONS (API 33+) so a background library rescan's result notification (see ScanNotifications) can actually show - a denial just means that notification silently doesn't appear, nothing else in the app depends on it. */
