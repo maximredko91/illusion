@@ -89,14 +89,19 @@ class LibraryViewModel(
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    /** Genres/years present in the unfiltered category list, for populating the filter menus. */
-    val availableGenres: StateFlow<List<String>> = allItems
-        .map { items -> items.flatMap { it.genres }.distinct().sorted() }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    // Each filter menu's options reflect the OTHER filter already chosen (not the unfiltered
+    // category) - otherwise picking "Вестерн" then opening the year menu still listed every year
+    // in the whole category, including years with zero westerns in them, a dead end that looked
+    // like a real option but always emptied the list.
+    val availableGenres: StateFlow<List<String>> = combine(allItems, _yearFilter) { items, year ->
+        items.filter { year == null || it.year == year }
+            .flatMap { it.genres }.distinct().sorted()
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    val availableYears: StateFlow<List<Int>> = allItems
-        .map { items -> items.mapNotNull { it.year }.distinct().sortedDescending() }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    val availableYears: StateFlow<List<Int>> = combine(allItems, _genreFilter) { items, genre ->
+        items.filter { genre == null || genre in it.genres }
+            .mapNotNull { it.year }.distinct().sortedDescending()
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     fun setSortOrder(order: SortOrder) {
         userOverrodeSortOrder = true
