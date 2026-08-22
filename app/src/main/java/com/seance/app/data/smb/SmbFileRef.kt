@@ -11,7 +11,7 @@ val VIDEO_EXTENSIONS = setOf(
     "mkv", "mp4", "avi", "mov", "m4v", "ts", "wmv"
 )
 
-val SUBTITLE_EXTENSIONS = setOf("srt", "ass")
+val SUBTITLE_EXTENSIONS = setOf("srt", "ass", "vtt")
 
 val IMAGE_EXTENSIONS = setOf("jpg", "jpeg", "png", "webp")
 

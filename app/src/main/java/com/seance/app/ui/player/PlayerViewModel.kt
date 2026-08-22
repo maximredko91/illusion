@@ -514,7 +514,11 @@ class PlayerViewModel(
     /** [remotePath] is only used to derive mime type/language/label from its filename - the actual bytes are read from [uri], which may be the live SMB path or a downloaded local copy. */
     private fun buildSubtitleConfig(uri: Uri, remotePath: String): MediaItem.SubtitleConfiguration {
         val extension = remotePath.substringAfterLast('.', "").lowercase()
-        val mimeType = if (extension == "ass") MimeTypes.TEXT_SSA else MimeTypes.APPLICATION_SUBRIP
+        val mimeType = when (extension) {
+            "ass" -> MimeTypes.TEXT_SSA
+            "vtt" -> MimeTypes.TEXT_VTT
+            else -> MimeTypes.APPLICATION_SUBRIP
+        }
         val fileName = remotePath.substringAfterLast('\\')
         val language = guessLanguage(fileName)
         return MediaItem.SubtitleConfiguration.Builder(uri)

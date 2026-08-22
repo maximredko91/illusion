@@ -182,6 +182,18 @@
 
     <string name="scan_progress_title">Сканирование библиотеки</string>
     <string name="scan_progress_starting">Подключение к источникам…</string>
+    <string-array name="scan_tips">
+        <item>Во время просмотра можно свернуть видео в маленькое окно (Picture-in-Picture) и продолжить пользоваться телефоном</item>
+        <item>Фильмы и серии можно скачать для просмотра без интернета — раздел «Загрузки»</item>
+        <item>Отметьте конец заставки один раз — плеер сам предложит пропустить её в следующих сериях</item>
+        <item>Поддерживаются внешние субтитры форматов .srt, .ass и .vtt рядом с видеофайлом</item>
+        <item>Есть режим для телевизора с управлением пультом — включается в Настройках</item>
+        <item>Библиотеку можно сортировать по году, рейтингу, алфавиту и дате добавления — в любом направлении</item>
+        <item>В карточке фильма показываются похожие тайтлы, подобранные по общим жанрам</item>
+        <item>Избранное и история просмотра всегда под рукой — иконки на главном экране</item>
+        <item>Аудиодорожки и субтитры можно переключить прямо во время просмотра, без остановки</item>
+        <item>Видео можно резче — в Настройках есть GPU-шейдер повышения чёткости</item>
+    </string-array>
     <string name="scan_progress_source">Источник %1$d из %2$d: %3$s</string>
     <string name="scan_progress_listing">Поиск файлов… найдено %1$d</string>
     <string name="scan_progress_files">Найдено файлов: %1$d из %2$d</string>
@@ -261,7 +273,8 @@
     <string name="details_no_description">Без описания</string>
     <string name="details_audio_tracks">Озвучка: %1$s</string>
     <string name="details_audio_tracks_label">"Озвучка: "</string>
-    <string name="details_forced_subtitles">Есть форсированные субтитры</string>
+    <string name="details_subtitles_label">Субтитры: </string>
+    <string name="details_forced_subtitles_suffix">(Форсированные)</string>
     <string name="details_back">Назад</string>
     <string name="details_go_home">На главную</string>
     <string name="details_season">Сезон %1$d</string>

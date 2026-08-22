@@ -44,6 +44,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Download
@@ -685,26 +686,47 @@ private fun DetailsContent(
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
         )
 
-        audioTracks?.takeIf { it.isNotEmpty() }?.let { tracks ->
+        // Subtitles rides on the same line as "Озвучка:" (rather than its own row below) so this
+        // indicator - always shown, unlike the audio-tracks text which only appears once tracks
+        // are actually probed - doesn't grow the card's height on every item.
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+        ) {
+            audioTracks?.takeIf { it.isNotEmpty() }?.let { tracks ->
+                Text(
+                    buildAnnotatedString {
+                        withStyle(SpanStyle(fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)) {
+                            append(stringResource(R.string.details_audio_tracks_label))
+                        }
+                        append(tracks.joinToString("; "))
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(end = 12.dp)
+                )
+            }
             Text(
-                buildAnnotatedString {
-                    withStyle(SpanStyle(fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)) {
-                        append(stringResource(R.string.details_audio_tracks_label))
-                    }
-                    append(tracks.joinToString("; "))
-                },
+                stringResource(R.string.details_subtitles_label),
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface
             )
-        }
-        if (item.hasForcedSubtitles) {
-            Text(
-                stringResource(R.string.details_forced_subtitles),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+            val hasSubtitles = item.subtitlePaths.isNotEmpty()
+            Icon(
+                if (hasSubtitles) Icons.Default.Check else Icons.Default.Close,
+                contentDescription = null,
+                tint = if (hasSubtitles) Color(0xFF4CAF50) else Color(0xFFE53935),
+                modifier = Modifier.padding(start = 4.dp).size(16.dp)
             )
+            if (item.hasForcedSubtitles) {
+                Text(
+                    stringResource(R.string.details_forced_subtitles_suffix),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(start = 4.dp)
+                )
+            }
         }
 
         if (episodes.isNotEmpty()) {
