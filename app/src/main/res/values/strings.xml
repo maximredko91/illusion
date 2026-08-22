@@ -283,12 +283,12 @@
     <string name="player_aspect_ratio_zoom">Заполнить экран (обрезка)</string>
     <string name="player_aspect_ratio_fill">Растянуть</string>
     <string name="player_sharpen_enable_warning_title">Включить резкость?</string>
-    <string name="player_sharpen_enable_warning_message">Из-за ограничения видеодвижка после включения резкости переключение соотношения сторон перестанет работать до конца этого просмотра. Если оно вам нужно — настройте его сейчас, до включения резкости, либо позже нажмите «Перезайти в плеер» здесь же в настройках.</string>
+    <string name="player_sharpen_enable_warning_message">Из-за ограничения видеодвижка после включения резкости переключение соотношения сторон сразу перестанет работать. Чтобы вернуть его — нажмите «Перезайти в плеер» здесь же в настройках: это происходит почти незаметно, без потери позиции воспроизведения, но саму резкость придётся включить заново.</string>
     <string name="player_sharpen_enable_warning_confirm">Всё равно включить</string>
-    <string name="player_aspect_ratio_locked">Переключение соотношения сторон недоступно до перезахода в плеер</string>
+    <string name="player_aspect_ratio_locked">Переключение соотношения сторон недоступно, пока включена резкость — нажмите «Перезайти в плеер», это займёт мгновение</string>
     <string name="player_reload">Перезайти в плеер</string>
     <string name="player_aspect_ratio_blocked_title">Соотношение сторон недоступно</string>
-    <string name="player_aspect_ratio_blocked_message">В этом сеансе была включена резкость — из-за ограничения видеодвижка переключение соотношения сторон больше не сработает. Перезайдите в плеер, чтобы сбросить это ограничение.</string>
+    <string name="player_aspect_ratio_blocked_message">Из-за ограничения видеодвижка переключение соотношения сторон не работает, пока включена резкость. Нажмите «Перезайти в плеер» — это займёт мгновение и не собьёт позицию воспроизведения, но резкость придётся включить заново.</string>
     <string name="player_aspect_ratio_blocked_reload">Перезайти в плеер</string>
 
     <string name="details_play">Смотреть</string>
