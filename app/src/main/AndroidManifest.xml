@@ -52,6 +52,17 @@
                 tools:node="remove" />
         </provider>
 
+        <!-- WorkManager's own manifest declares this service with no foregroundServiceType, which
+             defaults to none (0x0) - LibraryScanWorker's setForeground() call requests
+             FOREGROUND_SERVICE_TYPE_DATA_SYNC (0x1), and since targetSdk 34+ the OS fatally
+             rejects a requested type that isn't a subset of what the manifest declares
+             (IllegalArgumentException: "foregroundServiceType 0x1 is not a subset of ... 0x0"),
+             crashing the whole app the moment a scan starts. Must be overridden here to match. -->
+        <service
+            android:name="androidx.work.impl.foreground.SystemForegroundService"
+            android:foregroundServiceType="dataSync"
+            tools:node="merge" />
+
         <activity
             android:name=".MainActivity"
             android:exported="true"
