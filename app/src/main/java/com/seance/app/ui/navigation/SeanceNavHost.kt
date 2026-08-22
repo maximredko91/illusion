@@ -189,6 +189,12 @@ fun SeanceNavHost(
 
 private const val NAV_TRANSITION_MS = 350
 
+// Details' own fade (see the enterTransition/exitTransition KDoc below for why it's a plain fade,
+// not a slide) used to share NAV_TRANSITION_MS with the slide-based transitions elsewhere on this
+// screen - per feedback, that felt too abrupt paired with the shared-element poster/fanart motion
+// happening at the same time. Slower and gentler on its own, independent of the slide transitions.
+private const val DETAILS_FADE_MS = 500
+
 @Composable
 private fun SeanceNavGraph(app: SeanceApplication, navController: NavHostController, modifier: Modifier = Modifier) {
         val predictiveBackEnabled by app.settingsRepository.predictiveBackEnabled.collectAsState(initial = true)
@@ -212,7 +218,7 @@ private fun SeanceNavGraph(app: SeanceApplication, navController: NavHostControl
             // container-transform pattern is meant to pair with a fade, not a second slide.
             enterTransition = {
                 if (targetState.destination.hasRoute<Destination.Details>()) {
-                    fadeIn(tween(NAV_TRANSITION_MS))
+                    fadeIn(tween(DETAILS_FADE_MS))
                 } else {
                     slideInHorizontally(tween(NAV_TRANSITION_MS, easing = FastOutSlowInEasing)) { it / 3 } +
                         fadeIn(tween(NAV_TRANSITION_MS))
@@ -220,7 +226,7 @@ private fun SeanceNavGraph(app: SeanceApplication, navController: NavHostControl
             },
             exitTransition = {
                 if (targetState.destination.hasRoute<Destination.Details>()) {
-                    fadeOut(tween(NAV_TRANSITION_MS))
+                    fadeOut(tween(DETAILS_FADE_MS))
                 } else {
                     slideOutHorizontally(tween(NAV_TRANSITION_MS, easing = FastOutSlowInEasing)) { -it / 6 } +
                         fadeOut(tween(NAV_TRANSITION_MS))
@@ -233,7 +239,7 @@ private fun SeanceNavGraph(app: SeanceApplication, navController: NavHostControl
                     // Popping back FROM Details (initialState, the screen being left) - the
                     // returning screen should fade in too, matching the shared element animating
                     // back down onto its poster card rather than sliding underneath that motion.
-                    fadeIn(tween(NAV_TRANSITION_MS))
+                    fadeIn(tween(DETAILS_FADE_MS))
                 } else {
                     slideInHorizontally(tween(NAV_TRANSITION_MS, easing = FastOutSlowInEasing)) { -it / 6 } +
                         fadeIn(tween(NAV_TRANSITION_MS))
@@ -249,7 +255,7 @@ private fun SeanceNavGraph(app: SeanceApplication, navController: NavHostControl
                     // through" rather than Details visibly leaving. Pairing the fade with a slight
                     // scale-down (Material's own predictive-back convention) makes Details read as
                     // shrinking away even when the gesture is paused mid-swipe, not just at 60fps.
-                    fadeOut(tween(NAV_TRANSITION_MS)) + scaleOut(tween(NAV_TRANSITION_MS), targetScale = 0.92f)
+                    fadeOut(tween(DETAILS_FADE_MS)) + scaleOut(tween(DETAILS_FADE_MS), targetScale = 0.92f)
                 } else {
                     slideOutHorizontally(tween(NAV_TRANSITION_MS, easing = FastOutSlowInEasing)) { it / 3 } +
                         fadeOut(tween(NAV_TRANSITION_MS))

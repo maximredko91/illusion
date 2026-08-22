@@ -400,6 +400,29 @@ fun PlayerScreen(
             }
         }
 
+        if (uiState.awaitingPlayerModeChoice) {
+            AlertDialog(
+                onDismissRequest = onBack,
+                title = { Text(stringResource(R.string.player_mode_ask_title)) },
+                confirmButton = {
+                    val externalSource = remember { MutableInteractionSource() }
+                    TextButton(
+                        onClick = { viewModel.choosePlayerMode(external = true) },
+                        interactionSource = externalSource,
+                        modifier = Modifier.focusHighlight(externalSource)
+                    ) { Text(stringResource(R.string.player_mode_ask_external)) }
+                },
+                dismissButton = {
+                    val internalSource = remember { MutableInteractionSource() }
+                    TextButton(
+                        onClick = { viewModel.choosePlayerMode(external = false) },
+                        interactionSource = internalSource,
+                        modifier = Modifier.focusHighlight(internalSource)
+                    ) { Text(stringResource(R.string.player_mode_ask_internal)) }
+                }
+            )
+        }
+
         // Stays mounted at all times (not gated behind `if (showSpeedDialog)` like the other
         // dialogs below) so its slide-in/out animation actually has something to animate - see the
         // KDoc on PlayerSettingsPanel itself.

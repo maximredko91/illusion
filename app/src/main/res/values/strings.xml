@@ -8,6 +8,10 @@
     <string name="settings_player_mode_description">Каким плеером воспроизводить фильмы и сериалы</string>
     <string name="settings_player_mode_internal">Внутренний</string>
     <string name="settings_player_mode_external">Внешний</string>
+    <string name="settings_player_mode_ask">Спрашивать каждый раз</string>
+    <string name="player_mode_ask_title">Как открыть?</string>
+    <string name="player_mode_ask_internal">Внутри приложения</string>
+    <string name="player_mode_ask_external">Внешний плеер</string>
 
     <string name="details_tagline_label">Слоган:</string>
     <string name="details_studio_label">Студия:</string>
@@ -32,8 +36,7 @@
 
     <string name="settings_title">Настройки</string>
     <string name="settings_category_smb_sources_description">Список подключённых сетевых папок</string>
-    <string name="settings_category_ui_mode_description">Режим экрана, тактильный отклик, анимация жеста «назад»</string>
-    <string name="settings_category_accent_color_description">Цветовая тема приложения</string>
+    <string name="settings_category_ui_mode_description">Режим экрана, акцентный цвет, тактильный отклик, анимация жеста «назад»</string>
     <string name="settings_category_library_description">Сортировка по умолчанию</string>
     <string name="settings_category_scan_description">Пересканирование и расписание</string>
     <string name="settings_category_player_description">Внутренний или внешний плеер</string>

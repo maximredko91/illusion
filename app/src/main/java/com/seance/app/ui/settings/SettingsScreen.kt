@@ -33,7 +33,6 @@ import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Feedback
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Movie
-import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material.icons.filled.RestartAlt
 import androidx.compose.material.icons.filled.Storage
@@ -265,11 +264,17 @@ fun SettingsScreen(
             )
         }
     ) { innerPadding ->
+        // Hoisted above Crossfade (not just rememberScrollState() inside it) specifically so the
+        // top-level category list's scroll position survives leaving it for a category and coming
+        // back - Crossfade disposes each target's composition once it's no longer showing, so a
+        // scroll state remembered inside the content lambda got recreated at 0 on every return
+        // trip instead of restoring where the user had scrolled to.
+        val categoryListScrollState = rememberScrollState()
         Crossfade(targetState = selectedCategory, modifier = Modifier.fillMaxSize().padding(innerPadding), label = "settings_category") { category ->
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .verticalScroll(rememberScrollState())
+                    .verticalScroll(if (category == null) categoryListScrollState else rememberScrollState())
             ) {
                 when (category) {
                     null -> {
@@ -285,13 +290,6 @@ fun SettingsScreen(
                             description = stringResource(R.string.settings_category_ui_mode_description),
                             icon = Icons.Default.Tune,
                             onClick = { selectedCategory = "ui_mode" }
-                        )
-                        SettingsDivider()
-                        CategoryRow(
-                            title = stringResource(R.string.settings_accent_color),
-                            description = stringResource(R.string.settings_category_accent_color_description),
-                            icon = Icons.Default.Palette,
-                            onClick = { selectedCategory = "accent_color" }
                         )
                         SettingsDivider()
                         CategoryRow(
@@ -480,10 +478,16 @@ fun SettingsScreen(
                                 modifier = Modifier.fillMaxWidth()
                             )
                         }
-                    }
 
-                    "accent_color" -> {
-                        SettingsGroup(modifier = Modifier.padding(bottom = 24.dp)) {
+                        // Accent color merged in here (was its own top-level category) per user
+                        // feedback - it's another interface-level appearance choice, same as the
+                        // phone/TV mode and haptics/predictive-back switches above.
+                        SettingsGroup(modifier = Modifier.padding(top = 12.dp, bottom = 24.dp)) {
+                            Text(
+                                stringResource(R.string.settings_accent_color),
+                                style = MaterialTheme.typography.titleSmall,
+                                modifier = Modifier.padding(start = 16.dp, top = 12.dp, bottom = 4.dp)
+                            )
                             // FlowRow, not a plain Row - 7 swatches at 40dp + spacing (~352dp) can
                             // exceed a narrow phone's available width once the Card's own padding
                             // is subtracted, and a plain Row doesn't wrap. Wrapping to a second
@@ -522,8 +526,19 @@ fun SettingsScreen(
                     "scan" -> {
                         SettingsGroup {
                             ListItem(
-                                headlineContent = { Text(stringResource(R.string.settings_rescan_now)) },
-                                supportingContent = { Text(stringResource(R.string.settings_rescan_now_description)) },
+                                // Folded into headlineContent - see the "player" branch's own
+                                // ListItem below for why (ListItem top-aligns trailing content
+                                // whenever supportingContent is present).
+                                headlineContent = {
+                                    Column {
+                                        Text(stringResource(R.string.settings_rescan_now))
+                                        Text(
+                                            stringResource(R.string.settings_rescan_now_description),
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                },
                                 trailingContent = {
                                     val rescanNowSource = remember { MutableInteractionSource() }
                                     OutlinedButton(
@@ -597,8 +612,16 @@ fun SettingsScreen(
                     "downloads" -> {
                         SettingsGroup {
                             ListItem(
-                                headlineContent = { Text(stringResource(R.string.settings_downloads_folder)) },
-                                supportingContent = { Text(DownloadStorage.folderDisplayName(context, downloadsFolder)) },
+                                headlineContent = {
+                                    Column {
+                                        Text(stringResource(R.string.settings_downloads_folder))
+                                        Text(
+                                            DownloadStorage.folderDisplayName(context, downloadsFolder),
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                },
                                 trailingContent = {
                                     Row {
                                         val openFolderSource = remember { MutableInteractionSource() }
@@ -631,17 +654,21 @@ fun SettingsScreen(
                                 modifier = Modifier.fillMaxWidth()
                             )
                             SettingsDivider()
-                            ListItem(
-                                headlineContent = {
-                                    Text(
-                                        if (downloadsSizeBytes != null) {
-                                            stringResource(R.string.settings_downloads_size, formatBytes(downloadsSizeBytes))
-                                        } else {
-                                            stringResource(R.string.settings_cache_size_unknown)
-                                        }
-                                    )
-                                },
-                                trailingContent = {
+                            // Not a ListItem with a trailing button - "Скачано: 0,0 МБ" plus a
+                            // long "Удалить все загрузки" button squeezed into ListItem's shared
+                            // headline/trailing Row left too little width for the text in portrait,
+                            // wrapping it awkwardly mid-value ("0,0" / "МБ" on separate lines). Full
+                            // row width for the text, button on its own line below instead.
+                            Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp)) {
+                                Text(
+                                    if (downloadsSizeBytes != null) {
+                                        stringResource(R.string.settings_downloads_size, formatBytes(downloadsSizeBytes))
+                                    } else {
+                                        stringResource(R.string.settings_cache_size_unknown)
+                                    },
+                                    style = MaterialTheme.typography.bodyLarge
+                                )
+                                Row(modifier = Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.End) {
                                     val clearDownloadsSource = remember { MutableInteractionSource() }
                                     OutlinedButton(
                                         onClick = onClearDownloads,
@@ -650,10 +677,8 @@ fun SettingsScreen(
                                     ) {
                                         Text(stringResource(R.string.settings_downloads_clear))
                                     }
-                                },
-                                colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-                                modifier = Modifier.fillMaxWidth()
-                            )
+                                }
+                            }
                         }
                     }
 
@@ -732,8 +757,16 @@ fun SettingsScreen(
                     "feedback" -> {
                         SettingsGroup(modifier = Modifier.padding(bottom = 24.dp)) {
                             ListItem(
-                                headlineContent = { Text(stringResource(R.string.settings_feedback)) },
-                                supportingContent = { Text(stringResource(R.string.settings_feedback_description)) },
+                                headlineContent = {
+                                    Column {
+                                        Text(stringResource(R.string.settings_feedback))
+                                        Text(
+                                            stringResource(R.string.settings_feedback_description),
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                },
                                 trailingContent = {
                                     val feedbackSource = remember { MutableInteractionSource() }
                                     OutlinedButton(
@@ -753,8 +786,16 @@ fun SettingsScreen(
                     "reset" -> {
                         SettingsGroup(modifier = Modifier.padding(bottom = 24.dp)) {
                             ListItem(
-                                headlineContent = { Text(stringResource(R.string.settings_reset_to_defaults)) },
-                                supportingContent = { Text(stringResource(R.string.settings_reset_to_defaults_description)) },
+                                headlineContent = {
+                                    Column {
+                                        Text(stringResource(R.string.settings_reset_to_defaults))
+                                        Text(
+                                            stringResource(R.string.settings_reset_to_defaults_description),
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                },
                                 trailingContent = {
                                     val resetSource = remember { MutableInteractionSource() }
                                     OutlinedButton(
@@ -771,8 +812,16 @@ fun SettingsScreen(
                         }
                         SettingsGroup(modifier = Modifier.padding(bottom = 24.dp)) {
                             ListItem(
-                                headlineContent = { Text(stringResource(R.string.settings_factory_reset)) },
-                                supportingContent = { Text(stringResource(R.string.settings_factory_reset_description)) },
+                                headlineContent = {
+                                    Column {
+                                        Text(stringResource(R.string.settings_factory_reset))
+                                        Text(
+                                            stringResource(R.string.settings_factory_reset_description),
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                },
                                 trailingContent = {
                                     val factoryResetSource = remember { MutableInteractionSource() }
                                     OutlinedButton(
@@ -908,7 +957,6 @@ fun SettingsScreen(
 private fun categoryTitle(key: String): String = when (key) {
     "smb_sources" -> stringResource(R.string.settings_smb_sources)
     "ui_mode" -> stringResource(R.string.settings_ui_mode_section)
-    "accent_color" -> stringResource(R.string.settings_accent_color)
     "library" -> stringResource(R.string.settings_library_section)
     "scan" -> stringResource(R.string.settings_scan_section)
     "player" -> stringResource(R.string.settings_player_section)
@@ -1103,6 +1151,7 @@ private fun PlayerModeMenu(current: com.seance.app.domain.model.PlayerMode, onCh
 private fun playerModeLabel(mode: com.seance.app.domain.model.PlayerMode): String = when (mode) {
     com.seance.app.domain.model.PlayerMode.INTERNAL -> stringResource(R.string.settings_player_mode_internal)
     com.seance.app.domain.model.PlayerMode.EXTERNAL -> stringResource(R.string.settings_player_mode_external)
+    com.seance.app.domain.model.PlayerMode.ASK -> stringResource(R.string.settings_player_mode_ask)
 }
 
 internal fun formatBytes(bytes: Long): String {

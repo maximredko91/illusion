@@ -71,6 +71,8 @@ data class ThumbnailFrames(
 
 data class PlayerUiState(
     val isLoading: Boolean = true,
+    /** True while PlayerMode.ASK is waiting on the user to pick internal vs. external for this one playback - see PlayerViewModel.load(). */
+    val awaitingPlayerModeChoice: Boolean = false,
     val title: String = "",
     val episodeLabel: String? = null,
     val isPlaying: Boolean = false,
@@ -361,19 +363,44 @@ class PlayerViewModel(
             // choice per user feedback, checked once here instead. Trailers always play internally
             // regardless (short clips, not worth the round-trip to another app), which is why this
             // sits after the `playTrailer` branch above rather than before it.
-            if (settingsRepository.playerMode.first() == PlayerMode.EXTERNAL) {
-                val intent = resolveExternalPlayerIntent(item)
-                if (intent != null) {
-                    _launchExternalPlayer.send(intent)
+            when (settingsRepository.playerMode.first()) {
+                PlayerMode.EXTERNAL -> {
+                    val intent = resolveExternalPlayerIntent(item)
+                    if (intent != null) {
+                        _launchExternalPlayer.send(intent)
+                        return@launch
+                    }
+                    // No compatible app / the item's SMB source no longer exists - fall through to
+                    // internal playback rather than leaving the user stuck on a blank screen.
+                }
+                PlayerMode.ASK -> {
+                    _state.update { it.copy(isLoading = false, awaitingPlayerModeChoice = true) }
                     return@launch
                 }
-                // No compatible app / the item's SMB source no longer exists - fall through to
-                // internal playback rather than leaving the user stuck on a blank screen.
+                PlayerMode.INTERNAL -> Unit
             }
 
-            val resume = watchProgressRepository.getProgress(stableId)
-            val startPositionMs = resume?.takeIf { !it.watched }?.positionMs ?: 0L
-            playItem(item, startPositionMs, autoPlay = true)
+            playInternally(item)
+        }
+    }
+
+    private suspend fun playInternally(item: MediaItemEntity) {
+        val resume = watchProgressRepository.getProgress(item.stableId)
+        val startPositionMs = resume?.takeIf { !it.watched }?.positionMs ?: 0L
+        playItem(item, startPositionMs, autoPlay = true)
+    }
+
+    /** User's answer to the PlayerMode.ASK prompt for this one playback - falls back to internal playback if no external app is available. */
+    fun choosePlayerMode(external: Boolean) {
+        val item = currentItem ?: return
+        viewModelScope.launch {
+            _state.update { it.copy(awaitingPlayerModeChoice = false) }
+            val intent = if (external) resolveExternalPlayerIntent(item) else null
+            if (intent != null) {
+                _launchExternalPlayer.send(intent)
+            } else {
+                playInternally(item)
+            }
         }
     }
 

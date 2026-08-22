@@ -324,43 +324,27 @@ private fun DetailsContent(
                     if (fanartLoading) {
                         Box(modifier = Modifier.fillMaxSize().shimmer())
                     }
-                }
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(
-                            Brush.verticalGradient(
-                                // Fanart now starts right below the status bar (flat background
-                                // above it, per the statusBarsPadding fix) - a plain hard cut into
-                                // the image there reads as an abrupt seam. Fade in from the same
-                                // background color over a short top strip, in addition to the
-                                // existing fade-out into the background at the bottom.
-                                0f to MaterialTheme.colorScheme.background,
-                                0.15f to Color.Transparent,
-                                0.6f to Color.Transparent,
-                                1f to MaterialTheme.colorScheme.background
+                    // Top: barely-there, just enough to soften the seam against the flat
+                    // status-bar background above (not a real vignette - the fanart itself stays
+                    // clear and bright through the middle, per feedback against darkening it).
+                    // Bottom: a real dissolve to full opaque background over the last third of the
+                    // image, so the hard cut straight into the poster/title row below becomes a
+                    // graceful falloff instead - this is the "abrupt transition" fix, the top fade
+                    // is unrelated and was already there.
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(
+                                Brush.verticalGradient(
+                                    0f to MaterialTheme.colorScheme.background.copy(alpha = 0.28f),
+                                    0.14f to Color.Transparent,
+                                    0.62f to Color.Transparent,
+                                    1f to MaterialTheme.colorScheme.background
+                                )
                             )
-                        )
-                )
+                    )
+                }
                 if (fanart != null) {
-                    // Same idea as the top/bottom fade, on the left/right edges - a fixed-width
-                    // decorative soft edge, independent of `cutoutHorizontalDp` (that one's for
-                    // correctness/symmetry of the surrounding margin, this one's purely cosmetic
-                    // and applies in portrait too, where there's no cutout at all).
-                    Box(
-                        modifier = Modifier
-                            .align(Alignment.CenterStart)
-                            .fillMaxHeight()
-                            .width(24.dp)
-                            .background(Brush.horizontalGradient(listOf(MaterialTheme.colorScheme.background, Color.Transparent)))
-                    )
-                    Box(
-                        modifier = Modifier
-                            .align(Alignment.CenterEnd)
-                            .fillMaxHeight()
-                            .width(24.dp)
-                            .background(Brush.horizontalGradient(listOf(Color.Transparent, MaterialTheme.colorScheme.background)))
-                    )
                     // Zoom only triggers from this inset center region, not the full fanart - a
                     // full-bleed clickable here meant a near-miss on the back/home/favorite buttons
                     // (all anchored to this box's own corners) fell straight through to opening the
