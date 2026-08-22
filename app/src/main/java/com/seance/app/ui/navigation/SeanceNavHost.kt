@@ -686,7 +686,15 @@ private fun TabsHost(app: SeanceApplication, navController: NavHostController) {
             contentWindowInsets = WindowInsets(0, 0, 0, 0),
             snackbarHost = { SnackbarHost(exitSnackbarHostState) },
             bottomBar = {
-                NavigationBar(windowInsets = com.seance.app.ui.common.rememberLatchedNavigationBarsInsets()) {
+                // Was rememberLatchedNavigationBarsInsets() (same monotonic-max-of-real-and-
+                // ambient-inset workaround as the status bar fix) - on this device it latched onto
+                // an inset taller than the real gesture-nav bar and never came back down (the latch
+                // only ever grows), leaving a permanent dark gap above the visible bar that the
+                // user could see instantly disappear/reappear as the ambient and real readings
+                // briefly disagreed during a heavy relayout (e.g. a Library sort switch). The
+                // status-bar bleed-through bug this pattern was built for doesn't apply here -
+                // plain default insets render correctly.
+                NavigationBar {
                     bottomTabs.forEach { tab ->
                         val selected = isTabSelected(tab.category)
                         val interactionSource = remember { MutableInteractionSource() }

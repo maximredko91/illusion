@@ -10,9 +10,15 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.unit.Constraints
+import kotlin.math.roundToInt
 import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
@@ -100,12 +106,23 @@ fun LibraryScreen(
     // screen in view instead of honoring the scroll, so the list silently stayed where the user
     // was. Deferring the actual scroll to a LaunchedEffect keyed on `items` guarantees it only
     // runs once the newly-sorted/filtered list has actually landed.
+    // Declared here (not down by its TopAppBar) so the scroll-to-top effect below can reset it -
+    // enterAlwaysScrollBehavior tracks its own collapse offset independently of the grid's actual
+    // scroll position, driven only by nested-scroll deltas. gridState.scrollToItem(0) is a hard
+    // jump that doesn't dispatch those deltas, so after a filter/sort change the bar's remembered
+    // offset stayed wherever it was before the jump - its background/shadow rendered at that stale
+    // partially-collapsed position while the grid content had already snapped to the top under it,
+    // showing as a floating dark bar with nothing underneath explaining it.
+    val scrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior()
+
     var pendingScrollToTop by remember { mutableStateOf(false) }
     val scrollToTop: () -> Unit = { pendingScrollToTop = true }
     LaunchedEffect(items) {
         if (pendingScrollToTop) {
             pendingScrollToTop = false
             gridState.scrollToItem(0)
+            scrollBehavior.state.contentOffset = 0f
+            scrollBehavior.state.heightOffset = 0f
         }
     }
 
@@ -144,12 +161,12 @@ fun LibraryScreen(
         }
     }
 
-    // Hides the top bar as the grid scrolls forward (title/icons slide up and out) and brings it
-    // straight back the moment the user scrolls the other way, even before reaching the top - the
-    // grid already reclaims real vertical room on a phone, doubly so in landscape (see the sort/
-    // filter row folding into the title above), so letting the bar get out of the way while
-    // browsing is worth the animation, not just decoration.
-    val scrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior()
+    // scrollBehavior itself is declared up top (see its own comment there) - hides the top bar as
+    // the grid scrolls forward (title/icons slide up and out) and brings it straight back the
+    // moment the user scrolls the other way, even before reaching the top - the grid already
+    // reclaims real vertical room on a phone, doubly so in landscape (see the sort/filter row
+    // folding into the title above), so letting the bar get out of the way while browsing is worth
+    // the animation, not just decoration.
     // Computed once here, in LibraryScreen's own (rarely-recomposing) scope, and passed down as a
     // plain value - calling this directly inside the `topBar` lambda below queried the real
     // View-system insets (ViewCompat.getRootWindowInsets, not a cheap Compose snapshot read) on
@@ -159,6 +176,14 @@ fun LibraryScreen(
 
     Scaffold(
         modifier = modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
+        // Without this, Scaffold's own default (WindowInsets.systemBars) reserves bottom
+        // navigation-bar space AGAIN on top of what the outer Scaffold in SeanceNavHost already
+        // reserves for its real NavigationBar - the ambient WindowInsets aren't consumed by that
+        // outer Scaffold (its own contentWindowInsets = WindowInsets(0,0,0,0) only affects ITS
+        // content's local padding value, not the ambient insets every descendant Scaffold reads
+        // fresh), so this screen's grid stopped scrolling short of the visible nav bar, leaving a
+        // dead unpainted gap between the last row and the real bar underneath it.
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
             TopAppBar(
                 windowInsets = topBarInsets,
@@ -188,20 +213,41 @@ fun LibraryScreen(
                 .fillMaxSize()
                 .padding(innerPadding)
         ) {
-            if (category == Category.CARTOONS || category == Category.CARTOON_SERIES) {
-                CartoonCategoryToggle(
-                    category = category,
-                    onCategoryChange = { scrollToTop(); onCategoryChange(it) },
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                )
-            }
-
-            // In landscape this row already lives in the top bar next to the title instead (see
-            // sortFilterRow above) - a whole separate row underneath would just be redundant, and
-            // landscape has much less vertical room to give it anyway.
-            if (!isLandscape) {
-                Box(modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)) {
-                    sortFilterRow()
+            // Rides up and out together with the TopAppBar on scroll (not just repositioned below
+            // a shrinking bar while staying fully visible itself) - per feedback, having only the
+            // bar collapse while this stayed put read as broken/mismatched rather than as one
+            // cohesive header. Reuses the SAME scrollBehavior.state.collapsedFraction the TopAppBar
+            // itself is already driven by, so both move in lockstep with no separate animation to
+            // fall out of sync. The custom Modifier.layout measures this block at its natural
+            // (unconstrained) height first, then reports a shrunk height to the Column based on
+            // collapsedFraction while still placing/drawing the real content at full size - clipToBounds
+            // then clips the part that's scrolled outside those shrunk bounds. Without measuring the
+            // natural height separately like this, there's no "full size" to shrink from.
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clipToBounds()
+                    .layout { measurable, constraints ->
+                        val natural = measurable.measure(constraints.copy(minHeight = 0, maxHeight = Constraints.Infinity))
+                        val shrunkHeight = (natural.height * (1f - scrollBehavior.state.collapsedFraction))
+                            .roundToInt()
+                            .coerceIn(0, natural.height)
+                        layout(natural.width, shrunkHeight) { natural.placeRelative(0, 0) }
+                    }
+            ) {
+                Column {
+                    if (category == Category.CARTOONS || category == Category.CARTOON_SERIES) {
+                        CartoonCategoryToggle(
+                            category = category,
+                            onCategoryChange = { scrollToTop(); onCategoryChange(it) },
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                        )
+                    }
+                    if (!isLandscape) {
+                        Box(modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)) {
+                            sortFilterRow()
+                        }
+                    }
                 }
             }
 
@@ -234,10 +280,16 @@ fun LibraryScreen(
                             contentPadding = PaddingValues(8.dp)
                         ) {
                             items(items, key = { it.stableId }) { item ->
+                                // No animateItem() here (unlike Favorites/History/Downloads) -
+                                // sorting/filtering this grid reorders/reshuffles most or all of
+                                // its items at once, and animating every card's move across a
+                                // multi-column grid simultaneously produced visible dark bar
+                                // artifacts sweeping across rows mid-transition, not a clean
+                                // reflow. A plain instant re-layout has no such glitch.
                                 PosterCard(
                                     item = item,
                                     onClick = { onOpenItem(item.stableId) },
-                                    modifier = Modifier.padding(4.dp).animateItem(),
+                                    modifier = Modifier.padding(4.dp),
                                     showRatingBadge = sortOrder == SortOrder.RATING
                                 )
                             }

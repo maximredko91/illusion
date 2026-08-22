@@ -50,6 +50,12 @@ fun HomeScreen(
 ) {
     Scaffold(
         modifier = modifier,
+        // Scaffold's own default (WindowInsets.systemBars) would otherwise reserve bottom
+        // navigation-bar space a second time on top of what SeanceNavHost's outer Scaffold
+        // already reserves for its real NavigationBar (same fix as LibraryScreen - see its own
+        // comment on this line for the full explanation), leaving a dead gap between this
+        // screen's scrollable content and the visible nav bar underneath it.
+        contentWindowInsets = androidx.compose.foundation.layout.WindowInsets(0, 0, 0, 0),
         topBar = {
             TopAppBar(
                 windowInsets = com.seance.app.ui.common.rememberLatchedStatusBarsInsets(),
