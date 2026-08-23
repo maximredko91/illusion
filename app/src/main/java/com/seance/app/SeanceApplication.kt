@@ -114,6 +114,18 @@ class SeanceApplication : Application(), Configuration.Provider, SingletonImageL
     }
 
     override fun newImageLoader(context: PlatformContext): ImageLoader =
+        buildImageLoader(context, "coil3_disk_cache")
+
+    // Separate ImageLoader + disk cache directory from the poster one above, purely so Settings >
+    // Cache can offer an independent "clear fanart cache" action - fanarts are the bigger files
+    // (a fullscreen backdrop vs a small poster thumbnail) and per user feedback someone tight on
+    // storage may want to drop those first without also losing every poster (which is what makes
+    // grids/carousels render instantly). Coil3's DiskCache has no bulk "clear entries matching X"
+    // API, only a full clear() - two disk caches was the only way to make the two independently
+    // clearable. Same size limit setting applies to both (a per-cache ceiling, not a shared pool).
+    val fanartImageLoader: ImageLoader by lazy { buildImageLoader(this, FANART_CACHE_DIR_NAME) }
+
+    private fun buildImageLoader(context: PlatformContext, cacheDirName: String): ImageLoader =
         ImageLoader.Builder(context)
             .components {
                 add(SmbImageFetcher.Factory(smbImagePool))
@@ -135,7 +147,7 @@ class SeanceApplication : Application(), Configuration.Provider, SingletonImageL
             .diskCache {
                 val limitMb = kotlinx.coroutines.runBlocking { settingsRepository.imageCacheLimitMb.first() }
                 coil3.disk.DiskCache.Builder()
-                    .directory(context.cacheDir.resolve("coil3_disk_cache").toOkioPath())
+                    .directory(context.cacheDir.resolve(cacheDirName).toOkioPath())
                     .maxSizeBytes(limitMb.toLong() * 1024 * 1024)
                     .build()
             }
@@ -144,4 +156,9 @@ class SeanceApplication : Application(), Configuration.Provider, SingletonImageL
             // "hlop", so a grid filling in at staggered times reads as intentional, not janky.
             .crossfade(true)
             .build()
+
+    companion object {
+        /** Shared with SettingsViewModel, which needs the directory name to measure/clear this cache from Settings > Cache without holding a reference to the ImageLoader itself. */
+        const val FANART_CACHE_DIR_NAME = "coil3_disk_cache_fanart"
+    }
 }

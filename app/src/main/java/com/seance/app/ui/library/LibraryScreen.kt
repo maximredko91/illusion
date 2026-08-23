@@ -1,7 +1,12 @@
 package com.seance.app.ui.library
 
 import android.content.res.Configuration
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -28,6 +33,7 @@ import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AssistChip
@@ -35,6 +41,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalContentColor
@@ -48,9 +55,11 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -69,6 +78,8 @@ import com.seance.app.ui.common.PosterCard
 import com.seance.app.ui.common.focusHighlight
 import com.seance.app.ui.common.posterGridColumns
 import com.seance.app.ui.common.segmentTick
+import com.seance.app.ui.common.tick
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -174,6 +185,15 @@ fun LibraryScreen(
     // TopAppBar's own collapsing/color-interpolation triggers while scrolling the grid.
     val topBarInsets = com.seance.app.ui.common.rememberLatchedStatusBarsInsets()
 
+    // Scroll-to-top FAB: appears once the user has scrolled a few rows down, so they can jump
+    // straight back to the top of a long library instead of flinging repeatedly - per feedback,
+    // getting back to the start (or catching the sort/filter row again, which scrolls away with
+    // the top bar) had no shortcut before this.
+    val coroutineScope = rememberCoroutineScope()
+    val showScrollToTop by remember {
+        derivedStateOf { gridState.firstVisibleItemIndex > 6 }
+    }
+
     Scaffold(
         modifier = modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         // Without this, Scaffold's own default (WindowInsets.systemBars) reserves bottom
@@ -206,6 +226,37 @@ fun LibraryScreen(
                     com.seance.app.ui.common.TooltipIconButton(stringResource(R.string.settings_title), Icons.Default.Settings, onOpenSettings)
                 }
             )
+        },
+        floatingActionButton = {
+            AnimatedVisibility(
+                visible = showScrollToTop,
+                enter = fadeIn() + scaleIn(),
+                exit = fadeOut() + scaleOut()
+            ) {
+                val haptics = LocalHapticFeedback.current
+                // Circular, not the default M3 rounded-square FAB shape - matches every other
+                // floating icon control already in the app (Details' back/home/favorite circles,
+                // the fanart zoom close button), which read as the app's own convention rather
+                // than a stock Material control dropped in unchanged.
+                FloatingActionButton(
+                    onClick = {
+                        haptics.tick()
+                        coroutineScope.launch { gridState.animateScrollToItem(0) }
+                        scrollBehavior.state.contentOffset = 0f
+                        scrollBehavior.state.heightOffset = 0f
+                    },
+                    shape = androidx.compose.foundation.shape.CircleShape,
+                    // Default FAB colors (primaryContainer/onPrimaryContainer) don't track a
+                    // user-picked accent color - SeanceTheme only overrides primary/secondary/
+                    // tertiary, leaving the *Container roles at Material3's own baseline
+                    // derivation, so this FAB stayed the same purple-ish gray no matter which
+                    // accent was selected. Using primary/onPrimary directly makes it react.
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary
+                ) {
+                    Icon(Icons.Default.KeyboardArrowUp, contentDescription = stringResource(R.string.library_scroll_to_top))
+                }
+            }
         }
     ) { innerPadding ->
         Column(

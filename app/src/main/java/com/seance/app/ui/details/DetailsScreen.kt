@@ -234,6 +234,8 @@ private fun DetailsContent(
     onGoHome: () -> Unit
 ) {
     var zoomedImage by remember { mutableStateOf<Any?>(null) }
+    var zoomedImageIsFanart by remember { mutableStateOf(false) }
+    val fanartImageLoader = (androidx.compose.ui.platform.LocalContext.current.applicationContext as com.seance.app.SeanceApplication).fanartImageLoader
 
     // Landscape on this device has a real display-cutout inset on one side only (front camera) -
     // padding just that side (the naive fix) looks lopsided, since the cutout is physically on
@@ -315,6 +317,7 @@ private fun DetailsContent(
                     var fanartFailed by remember { mutableStateOf(false) }
                     AsyncImage(
                         model = fanart,
+                        imageLoader = fanartImageLoader,
                         contentDescription = null,
                         contentScale = ContentScale.Crop,
                         modifier = Modifier.fillMaxSize(),
@@ -371,7 +374,7 @@ private fun DetailsContent(
                             .fillMaxSize()
                             .padding(cornerButtonSize)
                             .focusHighlight(fanartSource)
-                            .clickable(interactionSource = fanartSource, indication = LocalIndication.current) { zoomedImage = fanart }
+                            .clickable(interactionSource = fanartSource, indication = LocalIndication.current) { zoomedImage = fanart; zoomedImageIsFanart = true }
                     )
                 }
             }
@@ -482,7 +485,7 @@ private fun DetailsContent(
                 val posterSource = remember { MutableInteractionSource() }
                 posterModifier = posterModifier
                     .focusHighlight(posterSource)
-                    .clickable(interactionSource = posterSource, indication = LocalIndication.current) { zoomedImage = poster }
+                    .clickable(interactionSource = posterSource, indication = LocalIndication.current) { zoomedImage = poster; zoomedImageIsFanart = false }
                 Box(modifier = posterModifier) {
                     var posterLoading by remember { mutableStateOf(true) }
                     AsyncImage(
@@ -808,10 +811,10 @@ private fun DetailsContent(
         ) {
             Text(
                 stringResource(R.string.details_description_label),
-                style = MaterialTheme.typography.bodySmall,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.padding(bottom = 4.dp)
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(bottom = 6.dp)
             )
             Text(
                 item.plot?.takeIf { it.isNotBlank() } ?: stringResource(R.string.details_no_description),
@@ -843,7 +846,12 @@ private fun DetailsContent(
     }
 
     zoomedImage?.let { model ->
-        ZoomableImageViewer(model = model, contentDescription = displayTitle, onDismiss = { zoomedImage = null })
+        ZoomableImageViewer(
+            model = model,
+            contentDescription = displayTitle,
+            onDismiss = { zoomedImage = null },
+            imageLoader = if (zoomedImageIsFanart) fanartImageLoader else null
+        )
     }
 }
 

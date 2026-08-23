@@ -125,6 +125,9 @@ class SettingsViewModel(
     private val _cacheSizeBytes = MutableStateFlow<Long?>(null)
     val cacheSizeBytes: StateFlow<Long?> = _cacheSizeBytes.asStateFlow()
 
+    private val _fanartCacheSizeBytes = MutableStateFlow<Long?>(null)
+    val fanartCacheSizeBytes: StateFlow<Long?> = _fanartCacheSizeBytes.asStateFlow()
+
     private val _downloadsSizeBytes = MutableStateFlow<Long?>(null)
     val downloadsSizeBytes: StateFlow<Long?> = _downloadsSizeBytes.asStateFlow()
 
@@ -165,6 +168,8 @@ class SettingsViewModel(
         viewModelScope.launch(Dispatchers.IO) {
             val size = context.cacheDir.walkBottomUp().filter { it.isFile }.sumOf { it.length() }
             _cacheSizeBytes.value = size
+            val fanartDir = context.cacheDir.resolve(com.seance.app.SeanceApplication.FANART_CACHE_DIR_NAME)
+            _fanartCacheSizeBytes.value = fanartDir.walkBottomUp().filter { it.isFile }.sumOf { it.length() }
         }
     }
 
@@ -172,6 +177,16 @@ class SettingsViewModel(
         viewModelScope.launch {
             kotlinx.coroutines.withContext(Dispatchers.IO) { context.cacheDir.deleteRecursively() }
             thumbnailRepository.clearAll()
+            refreshCacheSize(context)
+        }
+    }
+
+    /** Clears only the fanart disk cache (a subset of the total cache reported above) - lets someone tight on storage drop the bigger backdrop images without also losing every poster, which is what makes grids/carousels render instantly. */
+    fun clearFanartCache(context: Context) {
+        viewModelScope.launch {
+            val fanartImageLoader = (context.applicationContext as com.seance.app.SeanceApplication).fanartImageLoader
+            withContext(Dispatchers.IO) { fanartImageLoader.diskCache?.clear() }
+            fanartImageLoader.memoryCache?.clear()
             refreshCacheSize(context)
         }
     }

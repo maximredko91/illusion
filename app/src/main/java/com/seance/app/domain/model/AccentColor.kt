@@ -30,9 +30,23 @@ enum class AccentColor(
         lightPrimary = Color(0xFF3D6B3E), lightSecondary = Color(0xFF52634F), lightTertiary = Color(0xFF39656A),
         darkPrimary = Color(0xFFA1D4A0), darkSecondary = Color(0xFFB9C9B4), darkTertiary = Color(0xFFA0CFD4)
     ),
+    // Hue nudged from the old value's red-orange (~21°) to a true orange (~30-35°) - the old
+    // swatch read as brick-red/brown to the eye even though it was technically "orange" by hue
+    // math, since M3's light-theme contrast requirement (tone ~40, dark enough for white text)
+    // muddies every warm hue toward brown at that lightness - this is the most vivid true-orange
+    // achievable at that same tone, not a full fix (that ceiling applies to YELLOW below too).
     ORANGE(
-        lightPrimary = Color(0xFF9C4515), lightSecondary = Color(0xFF77574B), lightTertiary = Color(0xFF67602C),
-        darkPrimary = Color(0xFFFFB68C), darkSecondary = Color(0xFFE7BDAE), darkTertiary = Color(0xFFD1C88E)
+        lightPrimary = Color(0xFFA85400), lightSecondary = Color(0xFF7C5732), lightTertiary = Color(0xFF5C6B2C),
+        darkPrimary = Color(0xFFFFB74D), darkSecondary = Color(0xFFE8C0A0), darkTertiary = Color(0xFFC3D19A)
+    ),
+    // True yellow can't stay legible as "yellow" once darkened enough for readable text on a
+    // light background (same tone-40 contrast ceiling noted on ORANGE above) - it reads as a warm
+    // gold/mustard in light theme, which is the closest a light-theme yellow can get without
+    // failing contrast. Dark theme's swatch (used as light text/icons on a dark background, no
+    // such constraint) is a proper bright gold.
+    YELLOW(
+        lightPrimary = Color(0xFF8C6D00), lightSecondary = Color(0xFF6F5F3E), lightTertiary = Color(0xFF3F6C4A),
+        darkPrimary = Color(0xFFFFD54F), darkSecondary = Color(0xFFD6C6A0), darkTertiary = Color(0xFFA6D3AE)
     ),
     RED(
         lightPrimary = Color(0xFFA13F3F), lightSecondary = Color(0xFF775651), lightTertiary = Color(0xFF6D5C2E),

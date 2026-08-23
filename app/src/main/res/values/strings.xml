@@ -62,7 +62,11 @@
     <string name="settings_charging_only">Фоновые задачи только при зарядке</string>
     <string name="settings_charging_only_description">Генерация превью-кадров для перемотки и фоновое пересканирование библиотеки — не будут запускаться от батареи</string>
     <string name="settings_image_cache_limit">Лимит кеша изображений</string>
-    <string name="settings_image_cache_limit_description">Максимальный размер кеша постеров и фанартов на устройстве. Изменение применится после перезапуска приложения. Уменьшите, если места на устройстве мало</string>
+    <string name="settings_image_cache_limit_description">Максимальный размер кеша постеров и фанартов на устройстве (по отдельности для каждого). Изменение применится после перезапуска приложения. Уменьшите, если места на устройстве мало</string>
+    <string name="settings_fanart_cache_size">Кеш фанартов: %1$s</string>
+    <string name="settings_fanart_cache_description">Фоновые изображения — самые крупные файлы в кеше. Можно очистить только их, не трогая постеры</string>
+    <string name="settings_fanart_cache_clear_confirm_title">Очистить кеш фанартов?</string>
+    <string name="settings_fanart_cache_clear_confirm_message">Фоновые изображения будут удалены из кеша и при следующем открытии подгрузятся заново с сервера. Постеры не затронуты</string>
     <string name="settings_poster_caching">Кеширование постеров</string>
     <string name="settings_poster_caching_description">Хранить загруженные постеры и фоны на устройстве. При отключении все закешированные постеры будут удалены</string>
     <string name="settings_poster_cache_disable_title">Отключить кеширование постеров?</string>
@@ -122,6 +126,7 @@
     <string name="sort_title_desc">Название: Я→А</string>
     <string name="library_filter_all">Все</string>
     <string name="library_empty">Здесь пока ничего нет</string>
+    <string name="library_scroll_to_top">Наверх</string>
     <string name="library_empty_filtered">Ничего не найдено по выбранным фильтрам</string>
 
     <string name="favorites_title">Избранное</string>

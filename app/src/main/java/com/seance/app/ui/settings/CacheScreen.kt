@@ -51,6 +51,8 @@ fun CacheScreen(
     cacheSizeBytes: Long?,
     onRefreshCacheSize: () -> Unit,
     onClearCache: () -> Unit,
+    fanartCacheSizeBytes: Long?,
+    onClearFanartCache: () -> Unit,
     posterCachingEnabled: Flow<Boolean>,
     onSetPosterCachingEnabled: (Boolean) -> Unit,
     imageCacheLimitMb: Flow<Int>,
@@ -66,6 +68,7 @@ fun CacheScreen(
     // Clearing the cache used to fire immediately (onClearCache called straight from the button) -
     // inconsistent with the toggle right below it, which confirms a much less destructive action.
     var showClearCacheConfirm by remember { mutableStateOf(false) }
+    var showClearFanartCacheConfirm by remember { mutableStateOf(false) }
 
     val preloadWorkInfos by remember(context) {
         WorkManager.getInstance(context).getWorkInfosForUniqueWorkFlow(WorkScheduler.POSTER_PRELOAD_WORK_NAME)
@@ -135,6 +138,36 @@ fun CacheScreen(
         )
     }
 
+    if (showClearFanartCacheConfirm) {
+        AlertDialog(
+            onDismissRequest = { showClearFanartCacheConfirm = false },
+            title = { Text(stringResource(R.string.settings_fanart_cache_clear_confirm_title)) },
+            text = { Text(stringResource(R.string.settings_fanart_cache_clear_confirm_message)) },
+            confirmButton = {
+                val confirmSource = remember { MutableInteractionSource() }
+                TextButton(
+                    onClick = {
+                        haptics.reject()
+                        showClearFanartCacheConfirm = false
+                        onClearFanartCache()
+                    },
+                    interactionSource = confirmSource,
+                    modifier = Modifier.focusHighlight(confirmSource)
+                ) { Text(stringResource(R.string.settings_cache_clear)) }
+            },
+            dismissButton = {
+                val cancelSource = remember { MutableInteractionSource() }
+                TextButton(
+                    onClick = { showClearFanartCacheConfirm = false },
+                    interactionSource = cancelSource,
+                    modifier = Modifier.focusHighlight(cancelSource)
+                ) {
+                    Text(stringResource(R.string.action_cancel))
+                }
+            }
+        )
+    }
+
     Scaffold(
         modifier = modifier,
         topBar = {
@@ -173,6 +206,31 @@ fun CacheScreen(
                             onClick = { showClearCacheConfirm = true },
                             interactionSource = clearCacheSource,
                             modifier = Modifier.focusHighlight(clearCacheSource)
+                        ) {
+                            Text(stringResource(R.string.settings_cache_clear))
+                        }
+                    },
+                    colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                    modifier = Modifier.fillMaxWidth()
+                )
+                SettingsDivider()
+                ListItem(
+                    headlineContent = {
+                        Text(
+                            if (fanartCacheSizeBytes != null) {
+                                stringResource(R.string.settings_fanart_cache_size, formatBytes(fanartCacheSizeBytes))
+                            } else {
+                                stringResource(R.string.settings_cache_size_unknown)
+                            }
+                        )
+                    },
+                    supportingContent = { Text(stringResource(R.string.settings_fanart_cache_description)) },
+                    trailingContent = {
+                        val clearFanartCacheSource = remember { MutableInteractionSource() }
+                        OutlinedButton(
+                            onClick = { showClearFanartCacheConfirm = true },
+                            interactionSource = clearFanartCacheSource,
+                            modifier = Modifier.focusHighlight(clearFanartCacheSource)
                         ) {
                             Text(stringResource(R.string.settings_cache_clear))
                         }

@@ -30,6 +30,9 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import coil3.ImageLoader
+import coil3.SingletonImageLoader
+import coil3.compose.LocalPlatformContext
 import coil3.compose.rememberAsyncImagePainter
 import com.seance.app.R
 
@@ -43,7 +46,13 @@ private const val DOUBLE_TAP_SCALE = 2.5f
  * at 1x so the image doesn't drift off-screen while still zoomed out.
  */
 @Composable
-fun ZoomableImageViewer(model: Any, contentDescription: String?, onDismiss: () -> Unit) {
+fun ZoomableImageViewer(
+    model: Any,
+    contentDescription: String?,
+    onDismiss: () -> Unit,
+    /** Must match whichever ImageLoader instance originally cached [model] (poster vs fanart have separate disk caches) - passing the wrong one re-fetches over SMB instead of reading straight from disk. Null defaults to the app-wide singleton (the poster loader). */
+    imageLoader: ImageLoader? = null
+) {
     Dialog(
         onDismissRequest = onDismiss,
         // decorFitsSystemWindows defaults to true, which gives this dialog its own separate,
@@ -63,7 +72,11 @@ fun ZoomableImageViewer(model: Any, contentDescription: String?, onDismiss: () -
                 .fillMaxSize()
                 .background(Color.Black)
         ) {
-            val painter = rememberAsyncImagePainter(model = model)
+            val platformContext = LocalPlatformContext.current
+            val painter = rememberAsyncImagePainter(
+                model = model,
+                imageLoader = imageLoader ?: SingletonImageLoader.get(platformContext)
+            )
             Image(
                 painter = painter,
                 contentDescription = contentDescription,

@@ -4,8 +4,10 @@ import android.content.Context
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import androidx.work.workDataOf
+import coil3.ImageLoader
 import coil3.SingletonImageLoader
 import coil3.request.ImageRequest
+import com.seance.app.SeanceApplication
 import com.seance.app.data.image.fanartModel
 import com.seance.app.data.image.posterModel
 import com.seance.app.data.repository.LibraryRepository
@@ -22,14 +24,20 @@ class PosterPreloadWorker(
 
     override suspend fun doWork(): Result {
         val items = libraryRepository.getAll()
-        val imageLoader = SingletonImageLoader.get(applicationContext)
-        val models = items.flatMap { listOfNotNull(it.posterModel, it.fanartModel) }.distinct()
+        val posterLoader = SingletonImageLoader.get(applicationContext)
+        val fanartLoader = (applicationContext as SeanceApplication).fanartImageLoader
+        // Posters and fanarts go through separate ImageLoaders (separate disk caches, see
+        // SeanceApplication) so tagging each model with which loader executes it, rather than one
+        // flat distinct() list like before the cache split.
+        val posterModels = items.mapNotNull { it.posterModel }.distinct().map { it to posterLoader }
+        val fanartModels = items.mapNotNull { it.fanartModel }.distinct().map { it to fanartLoader }
+        val work = posterModels + fanartModels
         var done = 0
-        setProgress(workDataOf(KEY_PROCESSED to 0, KEY_TOTAL to models.size))
+        setProgress(workDataOf(KEY_PROCESSED to 0, KEY_TOTAL to work.size))
 
         coroutineScope {
-            models.chunked(CONCURRENCY).forEach { chunk ->
-                chunk.map { model ->
+            work.chunked(CONCURRENCY).forEach { chunk ->
+                chunk.map { (model, imageLoader: ImageLoader) ->
                     async {
                         runCatching {
                             imageLoader.execute(ImageRequest.Builder(applicationContext).data(model).build())
@@ -37,7 +45,7 @@ class PosterPreloadWorker(
                     }
                 }.awaitAll()
                 done += chunk.size
-                setProgress(workDataOf(KEY_PROCESSED to done, KEY_TOTAL to models.size))
+                setProgress(workDataOf(KEY_PROCESSED to done, KEY_TOTAL to work.size))
             }
         }
 
