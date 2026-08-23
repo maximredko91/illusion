@@ -39,6 +39,8 @@ import androidx.compose.ui.unit.dp
 import java.util.Locale
 import coil3.compose.AsyncImage
 import coil3.compose.AsyncImagePainter
+import androidx.compose.ui.res.stringResource
+import com.seance.app.R
 import com.seance.app.data.image.posterModel
 import com.seance.app.data.local.entity.MediaItemEntity
 import com.seance.app.domain.model.Category
@@ -99,7 +101,7 @@ fun PosterCard(
                     if (loadState is AsyncImagePainter.State.Loading) {
                         Box(modifier = Modifier.fillMaxSize().shimmer())
                     } else if (loadState is AsyncImagePainter.State.Error) {
-                        PosterPlaceholder(item.category)
+                        PosterPlaceholder(item.category, reason = imageLoadFailureReason())
                     }
                 } else {
                     PosterPlaceholder(item.category)
@@ -158,19 +160,41 @@ private fun posterSubtitle(item: MediaItemEntity): String? {
 }
 
 @Composable
-private fun PosterPlaceholder(category: Category) {
+private fun PosterPlaceholder(category: Category, reason: String? = null) {
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.surfaceVariant),
         contentAlignment = Alignment.Center
     ) {
-        Icon(
-            imageVector = category.icon,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.fillMaxSize(0.4f)
-        )
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Icon(
+                imageVector = category.icon,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.fillMaxWidth(0.4f).aspectRatio(1f)
+            )
+            if (reason != null) {
+                Text(
+                    reason,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                    modifier = Modifier.padding(top = 4.dp, start = 4.dp, end = 4.dp)
+                )
+            }
+        }
+    }
+}
+
+/** Why a poster/fanart that DOES have a path failed to actually load - distinct from "no path at all" (PosterPlaceholder's plain no-reason case), which isn't a failure, just nothing to fetch. */
+@Composable
+private fun imageLoadFailureReason(): String {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    return if (isOnLocalNetwork(context)) {
+        stringResource(R.string.poster_load_failed)
+    } else {
+        stringResource(R.string.poster_load_failed_offline)
     }
 }
 

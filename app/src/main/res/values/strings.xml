@@ -178,6 +178,8 @@
     <string name="settings_theme_mode_light">Светлая</string>
     <string name="settings_theme_mode_dark">Тёмная</string>
     <string name="settings_theme_mode_black">Чёрная (AMOLED)</string>
+    <string name="poster_load_failed">Не удалось загрузить</string>
+    <string name="poster_load_failed_offline">Нет Wi-Fi</string>
     <string name="settings_library_section">Библиотека</string>
     <string name="settings_default_sort_order">Сортировка по умолчанию</string>
     <string name="settings_reset_section">Сброс</string>

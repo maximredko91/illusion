@@ -312,15 +312,31 @@ private fun DetailsContent(
                     // this every fanart decoded at full source size regardless of the 220dp strip
                     // it's drawn into, which is what made opening a card feel slow to load.
                     var fanartLoading by remember { mutableStateOf(true) }
+                    var fanartFailed by remember { mutableStateOf(false) }
                     AsyncImage(
                         model = fanart,
                         contentDescription = null,
                         contentScale = ContentScale.Crop,
                         modifier = Modifier.fillMaxSize(),
-                        onLoading = { fanartLoading = true },
-                        onSuccess = { fanartLoading = false },
-                        onError = { fanartLoading = false }
+                        onLoading = { fanartLoading = true; fanartFailed = false },
+                        onSuccess = { fanartLoading = false; fanartFailed = false },
+                        onError = { fanartLoading = false; fanartFailed = true }
                     )
+                    if (fanartFailed) {
+                        val fanartContext = androidx.compose.ui.platform.LocalContext.current
+                        Text(
+                            stringResource(
+                                if (com.seance.app.ui.common.isOnLocalNetwork(fanartContext)) {
+                                    R.string.poster_load_failed
+                                } else {
+                                    R.string.poster_load_failed_offline
+                                }
+                            ),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            style = MaterialTheme.typography.bodySmall,
+                            modifier = Modifier.align(Alignment.Center)
+                        )
+                    }
                     if (fanartLoading) {
                         Box(modifier = Modifier.fillMaxSize().shimmer())
                     }
