@@ -10,7 +10,10 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -118,7 +121,13 @@ private fun AppSplashOverlay() {
         delay(550)
         visible = false
     }
-    AnimatedVisibility(visible = visible, exit = fadeOut(tween(280))) {
+    // enter = None on the outer visibility - the default (fadeIn + expandIn) re-animated the
+    // whole box, including the icon, the instant this composable mounted, which visibly restarted
+    // the icon's appearance right after the OS splash had already finished animating it in - read
+    // as two separate steps snapping together instead of one continuous reveal. With no re-entrance
+    // here, this box's first Compose frame is already at full opacity/scale, picking up exactly
+    // where the OS splash left off; only the wordmark (which the OS splash never had) fades in.
+    AnimatedVisibility(visible = visible, enter = EnterTransition.None, exit = fadeOut(tween(280))) {
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -129,17 +138,25 @@ private fun AppSplashOverlay() {
                 painter = painterResource(R.drawable.ic_mark_splash),
                 contentDescription = null
             )
-            Text(
-                stringResource(R.string.app_name).uppercase(),
+            var wordmarkVisible by remember { mutableStateOf(false) }
+            LaunchedEffect(Unit) { wordmarkVisible = true }
+            AnimatedVisibility(
+                visible = wordmarkVisible,
+                enter = fadeIn(tween(240)),
+                exit = ExitTransition.None,
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
-                    .padding(PaddingValues(bottom = 60.dp)),
-                color = colorResource(R.color.illusion_ink_on_bg),
-                fontFamily = FontFamily.Serif,
-                fontWeight = FontWeight.Medium,
-                fontSize = 20.sp,
-                letterSpacing = 0.22.em
-            )
+                    .padding(PaddingValues(bottom = 60.dp))
+            ) {
+                Text(
+                    stringResource(R.string.app_name).uppercase(),
+                    color = colorResource(R.color.illusion_ink_on_bg),
+                    fontFamily = FontFamily.Serif,
+                    fontWeight = FontWeight.Medium,
+                    fontSize = 20.sp,
+                    letterSpacing = 0.22.em
+                )
+            }
         }
     }
 }
