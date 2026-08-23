@@ -28,14 +28,14 @@ class LibraryViewModel(
     private val settingsRepository: SettingsRepository,
     private val category: Category
 ) : ViewModel() {
-    private val _sortOrder = MutableStateFlow(SortOrder.DATE_ADDED)
+    private val _sortOrder = MutableStateFlow(SortOrder.RATING)
     val sortOrder: StateFlow<SortOrder> = _sortOrder.asStateFlow()
 
     // Defaults per order match what direction used to be hardcoded before this was made a user
     // toggle (year/rating/date added newest-first, title A-Z) - picking a *different* sort order
     // resets to that order's own natural default rather than carrying over whatever direction was
     // last toggled, so switching from "Рейтинг ↓" to "Название" doesn't land on Z-A unexpectedly.
-    private val _sortAscending = MutableStateFlow(SortOrder.DATE_ADDED.defaultAscending)
+    private val _sortAscending = MutableStateFlow(SortOrder.RATING.defaultAscending)
     val sortAscending: StateFlow<Boolean> = _sortAscending.asStateFlow()
 
     fun setSortAscending(ascending: Boolean) {

@@ -198,6 +198,14 @@ private const val DETAILS_FADE_MS = 500
 @Composable
 private fun IllusionNavGraph(app: IllusionApplication, navController: NavHostController, modifier: Modifier = Modifier) {
         val predictiveBackEnabled by app.settingsRepository.predictiveBackEnabled.collectAsState(initial = true)
+        // Lives here (IllusionNavGraph's own scope, never disposed by internal route changes -
+        // unlike the composable<Destination.Tabs> block below, which Details pushes right over)
+        // so it can tell a genuine tab switch (Movies -> Series) apart from merely returning from
+        // Details to the SAME tab - both look identical from inside that disposed/recomposed
+        // block (Details push tears the whole Tabs composition down, so its own LaunchedEffect(category)
+        // couldn't distinguish "fresh tab" from "back from Details" - confirmed bug: sort order
+        // silently reset to default every time you opened a card and came back).
+        var lastVisitedLibraryCategory by remember { mutableStateOf<Category?>(null) }
         NavHost(
             navController = navController,
             startDestination = Destination.Splash,
@@ -331,7 +339,12 @@ private fun IllusionNavGraph(app: IllusionApplication, navController: NavHostCon
 
             composable<Destination.Tabs> {
                 CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides this) {
-                    TabsHost(app, navController)
+                    TabsHost(
+                        app,
+                        navController,
+                        lastVisitedLibraryCategory = lastVisitedLibraryCategory,
+                        onLibraryCategoryVisited = { lastVisitedLibraryCategory = it }
+                    )
                 }
             }
             composable<Destination.Downloads> {
@@ -581,7 +594,12 @@ private fun IllusionNavGraph(app: IllusionApplication, navController: NavHostCon
  * so scroll position survives switching away and back without needing saveState/restoreState.
  */
 @Composable
-private fun TabsHost(app: IllusionApplication, navController: NavHostController) {
+private fun TabsHost(
+    app: IllusionApplication,
+    navController: NavHostController,
+    lastVisitedLibraryCategory: Category?,
+    onLibraryCategoryVisited: (Category) -> Unit
+) {
     val uiMode = LocalUiMode.current
     val haptics = LocalHapticFeedback.current
 
@@ -658,10 +676,19 @@ private fun TabsHost(app: IllusionApplication, navController: NavHostController)
             )
             // This branch is only composed while `category` is the active tab (Crossfade disposes
             // it on switch, recomposing fresh on return) - LaunchedEffect(category) firing on every
-            // fresh entry into composition is exactly "reset sort/filters each time this tab is
-            // navigated to", per feedback. The ViewModel itself is still cached by key across
-            // switches (so items/scroll don't refetch/reset), only its filter state gets cleared.
-            LaunchedEffect(category) { libraryViewModel.resetFilters() }
+            // fresh entry into composition was meant to be "reset sort/filters each time this tab
+            // is navigated to" (per feedback), but that fresh-entry event ALSO fires when merely
+            // returning from Details (which disposes this whole branch too, same as a real tab
+            // switch does) - confirmed bug: sort order silently reset every time a card was opened
+            // and backed out of. Guarding on lastVisitedLibraryCategory (hoisted above Details'
+            // own disposal boundary, in IllusionNavGraph) restricts the reset to when `category`
+            // actually differs from the last tab shown - a genuine switch, not a Details round trip.
+            LaunchedEffect(category) {
+                if (lastVisitedLibraryCategory != category) {
+                    libraryViewModel.resetFilters()
+                    onLibraryCategoryVisited(category)
+                }
+            }
             val items by libraryViewModel.items.collectAsState()
             val isLoading by libraryViewModel.isLoading.collectAsState()
             val sortOrder by libraryViewModel.sortOrder.collectAsState()

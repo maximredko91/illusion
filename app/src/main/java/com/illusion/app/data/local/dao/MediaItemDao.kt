@@ -37,7 +37,7 @@ interface MediaItemDao {
 
     // Doubled CASE-per-direction (rather than a single expression whose ASC/DESC could flip at
     // runtime, which SQL has no syntax for) - for any given row, only the CASE matching both the
-    // active :sort AND :ascending evaluates non-null, the other seven are NULL for every row alike
+    // active :sort AND :ascending evaluates non-null, the other five are NULL for every row alike
     // and so don't affect relative order, same trick the pre-existing single-direction version
     // already used per-column.
     @Query(
@@ -48,8 +48,6 @@ interface MediaItemDao {
             CASE WHEN :sort = 'YEAR' AND NOT :ascending THEN year END DESC,
             CASE WHEN :sort = 'RATING' AND :ascending THEN rating END ASC,
             CASE WHEN :sort = 'RATING' AND NOT :ascending THEN rating END DESC,
-            CASE WHEN :sort = 'DATE_ADDED' AND :ascending THEN dateAdded END ASC,
-            CASE WHEN :sort = 'DATE_ADDED' AND NOT :ascending THEN dateAdded END DESC,
             CASE WHEN :sort = 'TITLE' AND :ascending THEN title END ASC,
             CASE WHEN :sort = 'TITLE' AND NOT :ascending THEN title END DESC
         """

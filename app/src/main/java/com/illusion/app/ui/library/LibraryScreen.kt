@@ -447,7 +447,6 @@ private fun SortMenu(
 
 @Composable
 internal fun sortLabel(order: SortOrder): String = when (order) {
-    SortOrder.DATE_ADDED -> stringResource(R.string.sort_date_added)
     SortOrder.YEAR -> stringResource(R.string.sort_year)
     SortOrder.TITLE -> stringResource(R.string.sort_title)
     SortOrder.RATING -> stringResource(R.string.sort_rating)
@@ -459,7 +458,6 @@ private fun sortDirectionLabel(order: SortOrder, ascending: Boolean): String {
     val resId = when (order) {
         SortOrder.YEAR -> if (ascending) R.string.sort_year_asc else R.string.sort_year_desc
         SortOrder.RATING -> if (ascending) R.string.sort_rating_asc else R.string.sort_rating_desc
-        SortOrder.DATE_ADDED -> if (ascending) R.string.sort_date_added_asc else R.string.sort_date_added_desc
         SortOrder.TITLE -> if (ascending) R.string.sort_title_asc else R.string.sort_title_desc
     }
     return stringResource(resId)

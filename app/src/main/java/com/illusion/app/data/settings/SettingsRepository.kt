@@ -63,7 +63,7 @@ class SettingsRepository(private val context: Context) {
 
     val defaultSortOrder: Flow<SortOrder> = context.dataStore.data.map {
         it[Keys.DEFAULT_SORT_ORDER]?.let { name -> runCatching { SortOrder.valueOf(name) }.getOrNull() }
-            ?: SortOrder.DATE_ADDED
+            ?: SortOrder.RATING
     }
 
     /** GPU sharpen shader toggle in the player's settings sheet - off by default so it doesn't load the GPU for content that's already good quality. */

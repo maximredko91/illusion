@@ -142,7 +142,7 @@ fun SettingsScreen(
     modifier: Modifier = Modifier
 ) {
     val currentUiMode by uiMode.collectAsState(initial = null)
-    val currentDefaultSortOrder by defaultSortOrder.collectAsState(initial = SortOrder.DATE_ADDED)
+    val currentDefaultSortOrder by defaultSortOrder.collectAsState(initial = SortOrder.RATING)
     val currentPlayerMode by playerMode.collectAsState(initial = com.illusion.app.domain.model.PlayerMode.INTERNAL)
     val hapticsOn by hapticsEnabled.collectAsState(initial = true)
     val predictiveBackOn by predictiveBackEnabled.collectAsState(initial = true)
