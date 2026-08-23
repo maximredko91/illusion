@@ -53,7 +53,9 @@ fun PosterCard(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     showRatingBadge: Boolean = false,
-    posterAspectRatio: Float = 2f / 3f
+    posterAspectRatio: Float = 2f / 3f,
+    /** Dims the poster and labels it, e.g. for "which entry in this collection am I on" rows - see MediaRow in DetailsScreen. */
+    isCurrent: Boolean = false
 ) {
     val haptics = LocalHapticFeedback.current
     val interactionSource = remember { MutableInteractionSource() }
@@ -108,6 +110,16 @@ fun PosterCard(
                 }
                 if (showRatingBadge && item.rating != null) {
                     RatingBadge(item.rating, modifier = Modifier.align(Alignment.TopStart).padding(6.dp))
+                }
+                if (isCurrent) {
+                    Box(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.55f)))
+                    Text(
+                        stringResource(R.string.details_collection_current),
+                        color = Color.White,
+                        style = MaterialTheme.typography.labelSmall,
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                        modifier = Modifier.align(Alignment.Center).padding(8.dp)
+                    )
                 }
             }
             Column(modifier = Modifier.padding(8.dp)) {

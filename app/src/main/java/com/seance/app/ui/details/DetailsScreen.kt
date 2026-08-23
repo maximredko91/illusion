@@ -816,8 +816,11 @@ private fun DetailsContent(
             PersonRow(stringResource(R.string.details_actors), item.actors, clickablePersons, onOpenPerson)
         }
 
-        if (collection.isNotEmpty()) {
-            MediaRow(stringResource(R.string.details_collection), collection, onOpenItem)
+        // > 1, not just non-empty - the current item is now included in this list (see
+        // DetailsViewModel), so a collection of just itself (no real other parts) would otherwise
+        // show a pointless one-poster row.
+        if (collection.size > 1) {
+            MediaRow(stringResource(R.string.details_collection), collection, onOpenItem, currentStableId = item.stableId)
         }
         if (similar.isNotEmpty()) {
             MediaRow(stringResource(R.string.details_similar), similar, onOpenItem)
@@ -1157,7 +1160,7 @@ private fun EpisodeList(
 }
 
 @Composable
-private fun MediaRow(title: String, items: List<MediaItemEntity>, onOpenItem: (String) -> Unit) {
+private fun MediaRow(title: String, items: List<MediaItemEntity>, onOpenItem: (String) -> Unit, currentStableId: String? = null) {
     Column(modifier = Modifier.padding(top = 8.dp)) {
         Text(title, style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(horizontal = 16.dp))
         LazyRow(
@@ -1166,7 +1169,12 @@ private fun MediaRow(title: String, items: List<MediaItemEntity>, onOpenItem: (S
             modifier = Modifier.focusGroup()
         ) {
             items(items, key = { it.stableId }) { item ->
-                PosterCard(item = item, onClick = { onOpenItem(item.stableId) }, modifier = Modifier.width(110.dp))
+                PosterCard(
+                    item = item,
+                    onClick = { onOpenItem(item.stableId) },
+                    modifier = Modifier.width(110.dp),
+                    isCurrent = item.stableId == currentStableId
+                )
             }
         }
     }

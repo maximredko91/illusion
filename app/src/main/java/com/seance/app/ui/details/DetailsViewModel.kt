@@ -83,9 +83,12 @@ class DetailsViewModel(
             // smoothly and then visibly hitching partway through as its bounds got recalculated.
             _state.value = DetailsUiState(item = item, isLoading = false)
             val similar = libraryRepository.getSimilar(item)
+            // Includes the current item itself now (not filtered out) - per feedback, seeing where
+            // this one sits chronologically among the others is the whole point of the row.
+            // MediaRow/PosterCard dim it and label it "Смотрите сейчас" instead of hiding it.
             val collection = item.collectionName
                 ?.let { libraryRepository.observeByCollection(it).first() }
-                ?.filter { it.stableId != stableId }
+                ?.sortedBy { it.year ?: Int.MAX_VALUE }
                 ?: emptyList()
             val episodes = item.seriesStableId
                 ?.let { libraryRepository.observeEpisodes(it).first() }
