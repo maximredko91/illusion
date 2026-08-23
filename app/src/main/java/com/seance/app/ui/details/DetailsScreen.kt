@@ -599,7 +599,12 @@ private fun DetailsContent(
                 .fillMaxWidth()
                 .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f), RoundedCornerShape(12.dp))
                 .padding(12.dp),
-            horizontalArrangement = Arrangement.spacedBy(16.dp)
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+            // Center, not the default Top - the right column (MPAA/premiere/collection) often has
+            // fewer rows than the left (tagline/studio/audio/subtitles), and top-aligning both left
+            // it stranded near the top with a visibly lopsided gap of dead space below it whenever
+            // the two columns' row counts didn't match.
+            verticalAlignment = Alignment.CenterVertically
         ) {
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 tagline?.let {
@@ -797,7 +802,10 @@ private fun DetailsContent(
         Text(
             item.plot?.takeIf { it.isNotBlank() } ?: stringResource(R.string.details_no_description),
             style = MaterialTheme.typography.bodyMedium,
-            textAlign = TextAlign.Justify,
+            // Was Justify - stretches word spacing to fill the line width, and on a narrow phone
+            // column a short last line of a paragraph (e.g. 3-4 words) got visibly wide gaps
+            // between words to fill it out. Plain Start reads more naturally at this width.
+            textAlign = TextAlign.Start,
             modifier = Modifier
                 .padding(horizontal = 16.dp, vertical = 8.dp)
                 .fillMaxWidth()
