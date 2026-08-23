@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -188,7 +189,13 @@ private val RatingBadgeBackground = Color.Black.copy(alpha = 0.68f)
 fun RatingBadge(rating: Double, modifier: Modifier = Modifier) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
+        // height(IntrinsicSize.Min) - without it, the perforation strip's fillMaxHeight() below
+        // had nothing but the poster Box's own loose height constraint to fill, stretching the
+        // whole badge down over half the poster instead of matching its actual (small) content
+        // height - confirmed on-device. This measures the Row by its content's min intrinsic
+        // height first, so fillMaxHeight() children match that instead of the unconstrained parent.
         modifier = modifier
+            .height(IntrinsicSize.Min)
             .clip(RoundedCornerShape(6.dp))
             .background(RatingBadgeBackground)
     ) {

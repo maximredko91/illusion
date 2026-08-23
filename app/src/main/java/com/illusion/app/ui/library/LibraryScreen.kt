@@ -118,13 +118,23 @@ fun LibraryScreen(
     // was. Deferring the actual scroll to a LaunchedEffect keyed on `items` guarantees it only
     // runs once the newly-sorted/filtered list has actually landed.
     // Declared here (not down by its TopAppBar) so the scroll-to-top effect below can reset it -
-    // enterAlwaysScrollBehavior tracks its own collapse offset independently of the grid's actual
+    // the scroll behavior tracks its own collapse offset independently of the grid's actual
     // scroll position, driven only by nested-scroll deltas. gridState.scrollToItem(0) is a hard
     // jump that doesn't dispatch those deltas, so after a filter/sort change the bar's remembered
     // offset stayed wherever it was before the jump - its background/shadow rendered at that stale
     // partially-collapsed position while the grid content had already snapped to the top under it,
     // showing as a floating dark bar with nothing underneath explaining it.
-    val scrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior()
+    //
+    // exitUntilCollapsedScrollBehavior, not enterAlways - per feedback, flinging up while the bar
+    // was still mid-collapse felt unrealistically fast. That's nested scroll consuming part of the
+    // drag delta to shrink the bar while the fling velocity handed to the grid at release is still
+    // computed from the *raw* pointer motion, so the grid ends up flinging at a speed the drag
+    // itself never visibly reached - a real characteristic of how Compose splits delta vs. velocity
+    // across nested scroll, not something fixable by tuning fling behavior. enterAlways made this
+    // worse by re-triggering the same collapse dance on every small downward wobble too; this
+    // behavior only collapses once (scrolling up from the top) and only re-expands once the grid
+    // is scrolled back to its own top, so the mid-collapse handoff window comes up far less often.
+    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
 
     var pendingScrollToTop by remember { mutableStateOf(false) }
     val scrollToTop: () -> Unit = { pendingScrollToTop = true }
