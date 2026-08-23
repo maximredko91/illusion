@@ -11,6 +11,7 @@ import androidx.work.WorkManager
 import androidx.work.workDataOf
 import java.util.UUID
 import java.util.concurrent.TimeUnit
+import kotlinx.coroutines.flow.first
 
 object WorkScheduler {
     private const val PERIODIC_SCAN_WORK_NAME = "library_scan_periodic"
@@ -65,6 +66,12 @@ object WorkScheduler {
             request
         )
         return request.id
+    }
+
+    /** Id of a still-running (or not-yet-started) manual "rescan now" work, if any - lets Splash reattach the ScanProgress screen after a cold start instead of dropping straight into the tabs while a scan the user is still expecting to watch keeps running underneath. Null once it's finished/failed/never ran. */
+    suspend fun runningOneTimeScanWorkId(context: Context): UUID? {
+        val infos = WorkManager.getInstance(context).getWorkInfosForUniqueWorkFlow(ONE_TIME_SCAN_WORK_NAME).first()
+        return infos.firstOrNull { !it.state.isFinished }?.id
     }
 
     /** Generates scrubbing-preview sprites for any library items that don't have one yet. Slow - honors the charging-only setting. */

@@ -1,5 +1,6 @@
 package com.seance.app.ui.scan
 
+import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -47,6 +48,9 @@ import androidx.compose.ui.res.stringArrayResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.work.WorkInfo
 import androidx.work.WorkManager
 import com.seance.app.R
@@ -108,78 +112,89 @@ fun ScanProgressScreen(
 
             Text(stringResource(R.string.scan_progress_title))
 
-            if (phase == ScanPhase.INDEXING && progress != null) {
-                LinearProgressIndicator(
-                    progress = { progress.filesScanned.toFloat() / progress.filesTotal },
-                    modifier = Modifier.fillMaxWidth().padding(top = 16.dp)
-                )
-            } else if (isScanning) {
-                LinearProgressIndicator(modifier = Modifier.fillMaxWidth().padding(top = 16.dp))
-            }
-
-            when (phase) {
-                ScanPhase.STARTING -> Text(
-                    stringResource(R.string.scan_progress_starting),
-                    modifier = Modifier.padding(top = 8.dp)
-                )
-                ScanPhase.LISTING -> {
-                    Text(
-                        stringResource(
-                            R.string.scan_progress_source,
-                            progress!!.sourceIndex + 1,
-                            progress.sourceCount,
-                            progress.currentSourceName
-                        ),
-                        modifier = Modifier.padding(top = 8.dp)
-                    )
-                    Text(stringResource(R.string.scan_progress_listing, progress.filesScanned))
-                }
-                ScanPhase.INDEXING -> {
-                    Text(
-                        stringResource(
-                            R.string.scan_progress_source,
-                            progress!!.sourceIndex + 1,
-                            progress.sourceCount,
-                            progress.currentSourceName
-                        ),
-                        modifier = Modifier.padding(top = 8.dp)
-                    )
-                    Text(stringResource(R.string.scan_progress_files, progress.filesScanned, progress.filesTotal))
-                }
-                ScanPhase.SUCCEEDED -> {
-                    val total = workInfo?.outputData?.getInt(LibraryScanWorker.KEY_TOTAL_INDEXED, 0) ?: 0
-                    Text(
-                        stringResource(R.string.scan_progress_done_count, total),
-                        modifier = Modifier.padding(top = 8.dp)
-                    )
-                    workInfo?.outputData?.getString(LibraryScanWorker.KEY_PARTIAL_ERROR)?.let { partialError ->
-                        Text(
-                            stringResource(R.string.scan_progress_partial_error, partialError),
-                            modifier = Modifier.padding(top = 4.dp)
+            // Each phase's text (and the SUCCEEDED/FAILED button) used to hard-cut in with no
+            // transition of its own - per feedback this read as too abrupt between STARTING/
+            // LISTING/INDEXING/done. Crossfade (not AnimatedContent) since these phases differ in
+            // line count/whether a button is present - a fade needs no shared layout to reconcile
+            // between them, unlike a slide/size transform would. Keyed on `phase` alone, not
+            // `progress` - the numbers ticking up within LISTING/INDEXING must NOT restart this
+            // fade on every single update.
+            Crossfade(targetState = phase, label = "scanPhase") { currentPhase ->
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    if (currentPhase == ScanPhase.INDEXING && progress != null) {
+                        LinearProgressIndicator(
+                            progress = { progress.filesScanned.toFloat() / progress.filesTotal },
+                            modifier = Modifier.fillMaxWidth().padding(top = 16.dp)
                         )
+                    } else if (currentPhase != ScanPhase.SUCCEEDED && currentPhase != ScanPhase.FAILED) {
+                        LinearProgressIndicator(modifier = Modifier.fillMaxWidth().padding(top = 16.dp))
                     }
-                    val continueSource = remember { MutableInteractionSource() }
-                    Button(
-                        onClick = onComplete,
-                        interactionSource = continueSource,
-                        modifier = Modifier.padding(top = 16.dp).focusHighlight(continueSource)
-                    ) {
-                        Text(stringResource(R.string.scan_progress_continue))
-                    }
-                }
-                ScanPhase.FAILED -> {
-                    val errorMessage = workInfo?.outputData?.getString(LibraryScanWorker.KEY_ERROR)
-                    Text(
-                        errorMessage ?: stringResource(R.string.scan_progress_failed),
-                        modifier = Modifier.padding(top = 8.dp)
-                    )
-                    val continueSource = remember { MutableInteractionSource() }
-                    Button(
-                        onClick = onComplete,
-                        interactionSource = continueSource,
-                        modifier = Modifier.padding(top = 16.dp).focusHighlight(continueSource)
-                    ) {
-                        Text(stringResource(R.string.scan_progress_continue))
+
+                    when (currentPhase) {
+                        ScanPhase.STARTING -> Text(
+                            stringResource(R.string.scan_progress_starting),
+                            modifier = Modifier.padding(top = 8.dp)
+                        )
+                        ScanPhase.LISTING -> {
+                            Text(
+                                stringResource(
+                                    R.string.scan_progress_source,
+                                    progress!!.sourceIndex + 1,
+                                    progress.sourceCount,
+                                    progress.currentSourceName
+                                ),
+                                modifier = Modifier.padding(top = 8.dp)
+                            )
+                            Text(stringResource(R.string.scan_progress_listing, progress.filesScanned))
+                        }
+                        ScanPhase.INDEXING -> {
+                            Text(
+                                stringResource(
+                                    R.string.scan_progress_source,
+                                    progress!!.sourceIndex + 1,
+                                    progress.sourceCount,
+                                    progress.currentSourceName
+                                ),
+                                modifier = Modifier.padding(top = 8.dp)
+                            )
+                            Text(stringResource(R.string.scan_progress_files, progress.filesScanned, progress.filesTotal))
+                        }
+                        ScanPhase.SUCCEEDED -> {
+                            val total = workInfo?.outputData?.getInt(LibraryScanWorker.KEY_TOTAL_INDEXED, 0) ?: 0
+                            Text(
+                                stringResource(R.string.scan_progress_done_count, total),
+                                modifier = Modifier.padding(top = 8.dp)
+                            )
+                            workInfo?.outputData?.getString(LibraryScanWorker.KEY_PARTIAL_ERROR)?.let { partialError ->
+                                Text(
+                                    stringResource(R.string.scan_progress_partial_error, partialError),
+                                    modifier = Modifier.padding(top = 4.dp)
+                                )
+                            }
+                            val continueSource = remember { MutableInteractionSource() }
+                            Button(
+                                onClick = onComplete,
+                                interactionSource = continueSource,
+                                modifier = Modifier.padding(top = 16.dp).focusHighlight(continueSource)
+                            ) {
+                                Text(stringResource(R.string.scan_progress_continue))
+                            }
+                        }
+                        ScanPhase.FAILED -> {
+                            val errorMessage = workInfo?.outputData?.getString(LibraryScanWorker.KEY_ERROR)
+                            Text(
+                                errorMessage ?: stringResource(R.string.scan_progress_failed),
+                                modifier = Modifier.padding(top = 8.dp)
+                            )
+                            val continueSource = remember { MutableInteractionSource() }
+                            Button(
+                                onClick = onComplete,
+                                interactionSource = continueSource,
+                                modifier = Modifier.padding(top = 16.dp).focusHighlight(continueSource)
+                            ) {
+                                Text(stringResource(R.string.scan_progress_continue))
+                            }
+                        }
                     }
                 }
             }
@@ -263,11 +278,25 @@ private fun ScanTipsCarousel(modifier: Modifier = Modifier) {
     val tips = stringArrayResource(R.array.scan_tips)
     val pagerState = rememberPagerState(pageCount = { tips.size })
 
-    LaunchedEffect(tips) {
-        while (isActive) {
-            delay(6000)
-            val nextPage = (pagerState.currentPage + 1) % tips.size
-            pagerState.animateScrollToPage(nextPage)
+    // repeatOnLifecycle (not a plain LaunchedEffect) - backgrounding the app during a scan and
+    // returning left the pager visibly torn between two tips, half of each showing side by side.
+    // A plain LaunchedEffect's coroutine isn't cancelled by the Activity stopping (Compose stays
+    // composed while backgrounded, only the Window stops drawing), so delay()'s real-time timer
+    // kept ticking and animateScrollToPage() got called while there were no frames to animate
+    // across - by the time frames resumed, the pager's internal scroll offset was left mid-flight
+    // in a state the resumed animation didn't cleanly continue from. repeatOnLifecycle cancels
+    // this effect outright on STOP and restarts it fresh on RESUME, and the fresh start snaps to
+    // the current page (no animation) before its first delay - the same fix as the analogous
+    // "resume mid-transition" issues elsewhere in this app's player/details screens.
+    val lifecycleOwner = LocalLifecycleOwner.current
+    LaunchedEffect(tips, lifecycleOwner) {
+        lifecycleOwner.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+            pagerState.scrollToPage(pagerState.currentPage)
+            while (isActive) {
+                delay(6000)
+                val nextPage = (pagerState.currentPage + 1) % tips.size
+                pagerState.animateScrollToPage(nextPage)
+            }
         }
     }
 
@@ -278,14 +307,18 @@ private fun ScanTipsCarousel(modifier: Modifier = Modifier) {
             state = pagerState,
             modifier = Modifier
                 .fillMaxWidth()
-                .height(110.dp)
+                // Was 110dp with 20dp padding (70dp of actual content height) - the longest tip in
+                // scan_tips wraps to 4 lines on a narrow phone at bodyMedium and got clipped mid-
+                // word at that height. Bumped both the box and the text size down a notch so even
+                // that tip has real margin, not just enough for the tips that happened to be short.
+                .height(130.dp)
                 .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(16.dp))
         ) { page ->
-            Box(modifier = Modifier.fillMaxSize().padding(20.dp), contentAlignment = Alignment.Center) {
+            Box(modifier = Modifier.fillMaxSize().padding(16.dp), contentAlignment = Alignment.Center) {
                 Text(
                     tips[page],
                     textAlign = TextAlign.Center,
-                    style = MaterialTheme.typography.bodyMedium,
+                    style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }

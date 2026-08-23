@@ -264,6 +264,20 @@ private fun SeanceNavGraph(app: SeanceApplication, navController: NavHostControl
         ) {
             composable<Destination.Splash> {
                 LaunchedEffect(Unit) {
+                    // A manual "rescan now" still running (or not yet started) reattaches its own
+                    // ScanProgress screen here instead of falling through to the tabs - the work
+                    // itself survives a killed process fine (WorkManager, its own foreground
+                    // service), but the *screen* showing its progress was only ever reachable via
+                    // this nav graph's own transient back stack, which MIUI backgrounding this app
+                    // long enough to kill the process (a real, reported occurrence) throws away -
+                    // the user came back to what looked like the scan silently having been dropped.
+                    val runningScanWorkId = WorkScheduler.runningOneTimeScanWorkId(app)
+                    if (runningScanWorkId != null) {
+                        navController.navigate(Destination.ScanProgress(runningScanWorkId.toString())) {
+                            popUpTo(Destination.Splash) { inclusive = true }
+                        }
+                        return@LaunchedEffect
+                    }
                     val hasSources = app.smbSourceRepository.observeSources().first().isNotEmpty()
                     if (hasSources) {
                         val hours = app.settingsRepository.rescanIntervalHours.first()
