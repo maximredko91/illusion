@@ -38,6 +38,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringArrayResource
@@ -83,17 +86,25 @@ fun ScanProgressScreen(
     val isScanning = phase != ScanPhase.SUCCEEDED && phase != ScanPhase.FAILED
 
     Scaffold(modifier = modifier) { innerPadding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
-                .padding(24.dp),
-            verticalArrangement = Arrangement.Center,
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            if (isScanning) {
-                ScanIllustration()
-            }
+        Box(modifier = Modifier.fillMaxSize()) {
+            // Purely decorative - a plain flat background made the previous version of this screen
+            // read as empty/placeholder-like during a long scan, per feedback asking for "some
+            // background imagery" here. A soft two-color glow (primary/tertiary, both already
+            // theme- and accent-aware) rather than a photo/illustration asset, since a scan can
+            // start from any of this app's accent colors and light/dark themes - a fixed image
+            // would clash with half of them.
+            ScanBackground()
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(innerPadding)
+                    .padding(24.dp),
+                verticalArrangement = Arrangement.Center,
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                if (isScanning) {
+                    ScanIllustration()
+                }
 
             Text(stringResource(R.string.scan_progress_title))
 
@@ -176,8 +187,36 @@ fun ScanProgressScreen(
             if (isScanning) {
                 ScanTipsCarousel(modifier = Modifier.padding(top = 32.dp))
             }
+            }
         }
     }
+}
+
+/** Two soft, off-center glows behind the scan content - see the call site's own comment for why this is a gradient, not a static image asset. drawBehind (not Modifier.background(Brush)) because the gradient's center/radius need the canvas's actual pixel size, only available inside a DrawScope. */
+@Composable
+private fun ScanBackground(modifier: Modifier = Modifier) {
+    val primary = MaterialTheme.colorScheme.primary
+    val tertiary = MaterialTheme.colorScheme.tertiary
+    androidx.compose.foundation.layout.Spacer(
+        modifier = modifier
+            .fillMaxSize()
+            .drawBehind {
+                drawRect(
+                    Brush.radialGradient(
+                        colors = listOf(primary.copy(alpha = 0.22f), androidx.compose.ui.graphics.Color.Transparent),
+                        center = Offset(size.width * 0.2f, size.height * 0.15f),
+                        radius = size.maxDimension * 0.55f
+                    )
+                )
+                drawRect(
+                    Brush.radialGradient(
+                        colors = listOf(tertiary.copy(alpha = 0.18f), androidx.compose.ui.graphics.Color.Transparent),
+                        center = Offset(size.width * 0.85f, size.height * 0.8f),
+                        radius = size.maxDimension * 0.5f
+                    )
+                )
+            }
+    )
 }
 
 /** Slowly breathing library icon - a scan can take a while on a big share, a plain progress bar on an otherwise empty screen read as the app having frozen. Purely decorative, no data behind it. */
