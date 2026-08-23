@@ -1,6 +1,7 @@
 package com.illusion.app.ui.common
 
 import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -15,6 +16,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Movie
@@ -32,6 +34,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
@@ -117,6 +122,18 @@ fun PosterCard(
                 }
                 if (isCurrent) {
                     Box(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.55f)))
+                    // Perforated top/bottom frame - a deliberately rarer touch than the rating
+                    // badge's strip (this only ever shows on the one "you are here" card in a
+                    // collection row, never a whole dense grid), so it can afford to be a full
+                    // frame rather than a thin edge without reading as visual clutter.
+                    PerforationStrip(
+                        holeColor = Color.Black.copy(alpha = 0.55f),
+                        modifier = Modifier.align(Alignment.TopCenter).fillMaxWidth().height(6.dp)
+                    )
+                    PerforationStrip(
+                        holeColor = Color.Black.copy(alpha = 0.55f),
+                        modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(6.dp)
+                    )
                     Text(
                         stringResource(R.string.details_collection_current),
                         color = Color.White,
@@ -163,26 +180,71 @@ fun PosterCard(
     }
 }
 
+/** Crimson strip in the launcher mark/splash - see ic_mark.xml. Reused here so the brand's own perforation motif shows up in-app, not just on the icon. */
+private val IllusionCrimson = Color(0xFFC2413A)
+private val RatingBadgeBackground = Color.Black.copy(alpha = 0.68f)
+
 @Composable
 fun RatingBadge(rating: Double, modifier: Modifier = Modifier) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = modifier
-            .background(Color.Black.copy(alpha = 0.65f), RoundedCornerShape(6.dp))
-            .padding(horizontal = 6.dp, vertical = 3.dp)
+            .clip(RoundedCornerShape(6.dp))
+            .background(RatingBadgeBackground)
     ) {
-        Icon(
-            Icons.Default.Star,
-            contentDescription = null,
-            tint = Color(0xFFFFC107),
-            modifier = Modifier.size(14.dp)
+        PerforationStrip(
+            holeColor = RatingBadgeBackground,
+            modifier = Modifier.width(5.dp).fillMaxHeight()
         )
-        Text(
-            String.format(Locale.US, "%.1f", rating),
-            color = Color.White,
-            style = MaterialTheme.typography.labelSmall,
-            modifier = Modifier.padding(start = 2.dp)
-        )
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(start = 4.dp, end = 6.dp, top = 3.dp, bottom = 3.dp)
+        ) {
+            Icon(
+                Icons.Default.Star,
+                contentDescription = null,
+                tint = Color(0xFFFFC107),
+                modifier = Modifier.size(14.dp)
+            )
+            Text(
+                String.format(Locale.US, "%.1f", rating),
+                color = Color.White,
+                style = MaterialTheme.typography.labelSmall,
+                modifier = Modifier.padding(start = 2.dp)
+            )
+        }
+    }
+}
+
+/**
+ * A crimson strip with punched rectangular holes down its length - the same "film edge" motif as
+ * the launcher mark (ic_mark.xml: a crimson strip with small dark rectangle cutouts), reused here
+ * at whatever size the caller gives it. [holeColor] should match whatever's actually behind this
+ * strip (the badge/frame's own background) - the holes aren't real transparency, just painted the
+ * same color as their surroundings so they read as cutouts without needing an offscreen compositing
+ * layer for a see-through blend mode, which isn't worth the cost at this size.
+ */
+@Composable
+private fun PerforationStrip(holeColor: Color, modifier: Modifier = Modifier) {
+    Canvas(modifier = modifier) {
+        drawRect(color = IllusionCrimson)
+        val vertical = size.height >= size.width
+        val length = if (vertical) size.height else size.width
+        val thickness = if (vertical) size.width else size.height
+        val holeLength = thickness * 0.55f
+        val holeThickness = thickness * 0.5f
+        val gap = holeLength * 0.85f
+        val holeSize = if (vertical) Size(holeThickness, holeLength) else Size(holeLength, holeThickness)
+        var pos = gap
+        while (pos + holeLength < length) {
+            val topLeft = if (vertical) {
+                Offset((size.width - holeThickness) / 2f, pos)
+            } else {
+                Offset(pos, (size.height - holeThickness) / 2f)
+            }
+            drawRect(color = holeColor, topLeft = topLeft, size = holeSize)
+            pos += holeLength + gap
+        }
     }
 }
 
