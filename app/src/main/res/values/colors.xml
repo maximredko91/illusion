@@ -7,9 +7,16 @@
     <color name="teal_700">#FF018786</color>
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
-    <!-- Matches the dark end of ic_launcher_background's own gradient - the splash screen
-         background can only be a flat color (no gradient/drawable support in the platform API),
-         so this picks the point on that gradient the launcher icon itself already reads well
-         against, keeping the cold-start screen visually continuous with the icon the user just tapped. -->
-    <color name="splash_background">#0A1220</color>
+
+    <!-- Фирменные цвета Иллюзион -->
+    <color name="illusion_crimson">#FFC2413A</color>
+    <color name="illusion_cream">#FFF2E9DC</color>
+    <color name="illusion_black">#FF14100F</color>
+
+    <!-- Иконка: фон НЕ зависит от темы, лончер её не переключает -->
+    <color name="icon_bg">#FF14100F</color>
+
+    <!-- Сплешскрин, светлая тема -->
+    <color name="splash_bg">#FFF4EDE4</color>
+    <color name="illusion_ink_on_bg">#FF1A1512</color>
 </resources>

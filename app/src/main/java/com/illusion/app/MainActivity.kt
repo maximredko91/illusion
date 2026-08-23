@@ -9,7 +9,15 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -20,10 +28,19 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.colorResource
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.em
+import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
+import kotlinx.coroutines.delay
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import com.illusion.app.data.crash.CrashReporter
 import com.illusion.app.ui.navigation.IllusionNavHost
@@ -45,12 +62,15 @@ class MainActivity : ComponentActivity() {
             val accentColor by app.settingsRepository.accentColor.collectAsState(initial = com.illusion.app.domain.model.AccentColor.DEFAULT)
             val themeMode by app.settingsRepository.themeMode.collectAsState(initial = com.illusion.app.domain.model.ThemeMode.SYSTEM)
             IllusionTheme(themeMode = themeMode, accentColor = accentColor) {
-                IllusionNavHost(
-                    app = app,
-                    modifier = Modifier.fillMaxSize()
-                )
-                CrashReportPrompt()
-                NotificationPermissionRequest()
+                Box(modifier = Modifier.fillMaxSize()) {
+                    IllusionNavHost(
+                        app = app,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                    CrashReportPrompt()
+                    NotificationPermissionRequest()
+                    AppSplashOverlay()
+                }
             }
         }
     }
@@ -77,6 +97,49 @@ class MainActivity : ComponentActivity() {
         super.onStop()
         if (PipController.isInPipMode) {
             PipController.onPipClosed?.invoke()
+        }
+    }
+}
+
+/**
+ * Continues the OS splash for a short moment on the Compose side, adding the "ИЛЛЮЗИОН" wordmark
+ * the native splash can't show - androidx core-splashscreen's windowSplashScreenAnimatedIcon only
+ * accepts a vector/animated-vector drawable, and vector drawables have no text support at all, so
+ * the wordmark can't be baked into the OS splash itself the way the mark icon is. A rasterized PNG
+ * branding image was the platform's other option, but that goes soft at higher densities where the
+ * vector mark stays sharp - showing the same background+mark plus real Compose Text instead, right
+ * as the OS splash hands off, reads as one continuous splash while keeping the wordmark vector-sharp.
+ * Static (no re-run of the OS splash's own fade/scale-in) since that already played once.
+ */
+@Composable
+private fun AppSplashOverlay() {
+    var visible by remember { mutableStateOf(true) }
+    LaunchedEffect(Unit) {
+        delay(550)
+        visible = false
+    }
+    AnimatedVisibility(visible = visible, exit = fadeOut(tween(280))) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(colorResource(R.color.splash_bg)),
+            contentAlignment = Alignment.Center
+        ) {
+            Image(
+                painter = painterResource(R.drawable.ic_mark_splash),
+                contentDescription = null
+            )
+            Text(
+                stringResource(R.string.app_name).uppercase(),
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(PaddingValues(bottom = 60.dp)),
+                color = colorResource(R.color.illusion_ink_on_bg),
+                fontFamily = FontFamily.Serif,
+                fontWeight = FontWeight.Medium,
+                fontSize = 20.sp,
+                letterSpacing = 0.22.em
+            )
         }
     }
 }

@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Иллюзион — foreground слой adaptive icon.
+     Знак нарисован в сетке 108x108 и сжат группой до 0.65 (= 52dp по ширине),
+     чтобы целиком попасть в безопасную зону 66dp. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <group
+        android:name="mark"
+        android:pivotX="54"
+        android:pivotY="54"
+        android:scaleX="0.65"
+        android:scaleY="0.65">
+        <path android:fillColor="@color/illusion_crimson" android:pathData="M16,21h6a2,2 0 0 1 2,2v62a2,2 0 0 1 -2,2h-6a2,2 0 0 1 -2,-2V23a2,2 0 0 1 2,-2z"/>
+        <path android:fillColor="@color/illusion_crimson" android:pathData="M86,21h6a2,2 0 0 1 2,2v62a2,2 0 0 1 -2,2h-6a2,2 0 0 1 -2,-2V23a2,2 0 0 1 2,-2z"/>
+        <path android:fillColor="@color/icon_bg" android:pathData="M16.5,25.5h5v7h-5z M16.5,38h5v7h-5z M16.5,50.5h5v7h-5z M16.5,63h5v7h-5z M16.5,75.5h5v7h-5z"/>
+        <path android:fillColor="@color/icon_bg" android:pathData="M86.5,25.5h5v7h-5z M86.5,38h5v7h-5z M86.5,50.5h5v7h-5z M86.5,63h5v7h-5z M86.5,75.5h5v7h-5z"/>
+        <path android:fillColor="@color/illusion_cream" android:pathData="M34,30h9v48h-9z"/>
+        <path android:fillColor="@color/illusion_cream" android:pathData="M65,30h9v48h-9z"/>
+        <path android:fillColor="@color/illusion_cream" android:pathData="M43,78v-15L65,30h9v15L52,78z"/>
+    </group>
+</vector>

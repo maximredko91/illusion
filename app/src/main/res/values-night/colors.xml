@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Сплешскрин, тёмная тема -->
+    <color name="splash_bg">#FF14100F</color>
+    <color name="illusion_ink_on_bg">#FFF2E9DC</color>
+</resources>
