@@ -145,6 +145,7 @@
     <string name="downloads_title">Загрузки</string>
     <string name="downloads_empty">Нет загруженных видео</string>
     <string name="downloads_remove">Удалить загрузку</string>
+    <string name="downloads_resume">Возобновить скачивание</string>
     <string name="downloads_queued">В очереди</string>
     <string name="downloads_progress">Загружается: %1$d%% · %2$s</string>
     <string name="downloads_progress_detailed">Загружается: %1$d%% · %2$s · %3$s</string>

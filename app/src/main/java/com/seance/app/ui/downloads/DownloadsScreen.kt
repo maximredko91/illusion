@@ -20,6 +20,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -151,6 +152,16 @@ fun DownloadsScreen(
                                     progress = { downloadProgressFraction(entry.download) },
                                     modifier = Modifier.fillMaxWidth().padding(top = 4.dp)
                                 )
+                            }
+                        }
+                        if (entry.download.status == DownloadStatus.FAILED) {
+                            val retrySource = remember { MutableInteractionSource() }
+                            IconButton(
+                                onClick = { viewModel.retryDownload(context, entry.download.stableId) },
+                                interactionSource = retrySource,
+                                modifier = Modifier.focusHighlight(retrySource)
+                            ) {
+                                Icon(Icons.Default.Refresh, contentDescription = stringResource(R.string.downloads_resume))
                             }
                         }
                         val removeSource = remember { MutableInteractionSource() }

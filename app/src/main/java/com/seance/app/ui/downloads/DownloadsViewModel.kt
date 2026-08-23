@@ -55,6 +55,11 @@ class DownloadsViewModel(
         viewModelScope.launch { downloadRepository.remove(stableId) }
     }
 
+    /** Re-enqueues a FAILED download - DownloadWorker.resolveVideoUri() reuses the existing partial file and resumes from its length rather than restarting from zero, so this is a real resume, not a redo. */
+    fun retryDownload(context: Context, stableId: String) {
+        WorkScheduler.enqueueDownload(context, stableId)
+    }
+
     companion object {
         fun factory(downloadRepository: DownloadRepository, libraryRepository: LibraryRepository) = viewModelFactory {
             initializer { DownloadsViewModel(downloadRepository, libraryRepository) }
