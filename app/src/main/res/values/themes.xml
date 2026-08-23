@@ -2,4 +2,15 @@
 <resources>
 
     <style name="Theme.Seance" parent="android:Theme.Material.Light.NoActionBar" />
+
+    <!-- MainActivity's launch theme only, swapped for Theme.Seance the moment SplashScreen exits
+         (see MainActivity.installSplashScreen() + postSplashScreenTheme below) - the app had no
+         branded cold-start screen at all before this, just whatever flash the platform default
+         produced. Reuses the launcher icon's own vector + a color sampled from its background
+         gradient (see splash_background's own comment) instead of a separate splash-only asset. -->
+    <style name="Theme.Seance.Splash" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/splash_background</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_launcher_foreground</item>
+        <item name="postSplashScreenTheme">@style/Theme.Seance</item>
+    </style>
 </resources>

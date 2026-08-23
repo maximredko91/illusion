@@ -24,6 +24,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.core.content.ContextCompat
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import com.seance.app.data.crash.CrashReporter
 import com.seance.app.ui.navigation.SeanceNavHost
 import com.seance.app.ui.player.PipController
@@ -31,6 +32,12 @@ import com.seance.app.ui.theme.SeanceTheme
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
+        // Must come before super.onCreate() per the library's own contract - it reads the
+        // Theme.Seance.Splash attributes set on this activity in the manifest and swaps to
+        // Theme.Seance (postSplashScreenTheme) once the splash exits, which happens automatically
+        // on first frame drawn - nothing here needs to hold it open manually, this app has no
+        // synchronous startup work slow enough to be worth stalling on.
+        installSplashScreen()
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         val app = application as SeanceApplication

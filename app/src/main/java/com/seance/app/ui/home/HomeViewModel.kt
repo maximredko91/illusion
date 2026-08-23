@@ -15,12 +15,25 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
+/** [progressFraction] is null when the source WatchProgressEntity has no known duration yet (e.g. probed lazily on first playback) - PosterCard just omits the bar rather than drawing a 0% one, which would misleadingly suggest "not started" for something mid-watch. */
+data class ContinueWatchingItem(val item: MediaItemEntity, val progressFraction: Float?)
+
 class HomeViewModel(
     private val libraryRepository: LibraryRepository,
     watchProgressRepository: WatchProgressRepository
 ) : ViewModel() {
-    val continueWatching: StateFlow<List<MediaItemEntity>> = watchProgressRepository.observeContinueWatching()
-        .map { progressList -> progressList.mapNotNull { libraryRepository.getById(it.mediaItemStableId) } }
+    val continueWatching: StateFlow<List<ContinueWatchingItem>> = watchProgressRepository.observeContinueWatching()
+        .map { progressList ->
+            progressList.mapNotNull { progress ->
+                val item = libraryRepository.getById(progress.mediaItemStableId) ?: return@mapNotNull null
+                val fraction = if (progress.durationMs > 0) {
+                    (progress.positionMs.toFloat() / progress.durationMs).coerceIn(0f, 1f)
+                } else {
+                    null
+                }
+                ContinueWatchingItem(item, fraction)
+            }
+        }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     // Replaces what used to be "Недавно добавленное" - for a library that isn't added to often,

@@ -9,8 +9,10 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -55,7 +57,9 @@ fun PosterCard(
     showRatingBadge: Boolean = false,
     posterAspectRatio: Float = 2f / 3f,
     /** Dims the poster and labels it, e.g. for "which entry in this collection am I on" rows - see MediaRow in DetailsScreen. */
-    isCurrent: Boolean = false
+    isCurrent: Boolean = false,
+    /** 0f-1f watched fraction, drawn as a thin bar along the poster's bottom edge - e.g. Home's "Продолжить просмотр" row. Null omits the bar entirely (no bar reads as "not applicable here", not "0% watched"). */
+    progressFraction: Float? = null
 ) {
     val haptics = LocalHapticFeedback.current
     val interactionSource = remember { MutableInteractionSource() }
@@ -120,6 +124,22 @@ fun PosterCard(
                         textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                         modifier = Modifier.align(Alignment.Center).padding(8.dp)
                     )
+                }
+                if (progressFraction != null) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .fillMaxWidth()
+                            .height(3.dp)
+                            .background(Color.Black.copy(alpha = 0.4f))
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxHeight()
+                                .fillMaxWidth(progressFraction.coerceIn(0f, 1f))
+                                .background(MaterialTheme.colorScheme.primary)
+                        )
+                    }
                 }
             }
             Column(modifier = Modifier.padding(8.dp)) {

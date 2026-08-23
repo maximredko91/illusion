@@ -41,7 +41,7 @@ import com.seance.app.ui.common.posterCardMinWidth
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
-    continueWatching: List<MediaItemEntity>,
+    continueWatching: List<ContinueWatchingItem>,
     randomPicks: List<MediaItemEntity>,
     onRefreshRandomPicks: () -> Unit,
     onOpenSettings: () -> Unit,
@@ -85,8 +85,11 @@ fun HomeScreen(
             if (continueWatching.isNotEmpty()) {
                 MediaCarousel(
                     title = stringResource(R.string.home_continue_watching),
-                    items = continueWatching,
-                    onOpenItem = onOpenItem
+                    items = continueWatching.map { it.item },
+                    onOpenItem = onOpenItem,
+                    progressByStableId = remember(continueWatching) {
+                        continueWatching.mapNotNull { entry -> entry.progressFraction?.let { entry.item.stableId to it } }.toMap()
+                    }
                 )
             }
             MediaCarousel(
@@ -104,7 +107,8 @@ private fun MediaCarousel(
     title: String,
     items: List<MediaItemEntity>,
     onOpenItem: (String) -> Unit,
-    onRefresh: (() -> Unit)? = null
+    onRefresh: (() -> Unit)? = null,
+    progressByStableId: Map<String, Float> = emptyMap()
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(
@@ -129,7 +133,8 @@ private fun MediaCarousel(
                 PosterCard(
                     item = item,
                     onClick = { onOpenItem(item.stableId) },
-                    modifier = Modifier.width(posterCardMinWidth())
+                    modifier = Modifier.width(posterCardMinWidth()),
+                    progressFraction = progressByStableId[item.stableId]
                 )
             }
         }
