@@ -101,13 +101,9 @@ class SettingsRepository(private val context: Context) {
         context.dataStore.edit { it[Keys.DEFAULT_SORT_ORDER] = order.name }
     }
 
-    /** Whether posters/fanart are allowed to hit Coil's memory/disk cache - off skips both so nothing lingers on storage. */
+    /** No UI toggle any more (Settings > Cache dropped it for a plain "clear" action) - kept readable-only since PosterCacheSettings/LibraryScanWorker still gate on it and always see the default. */
     val posterCachingEnabled: Flow<Boolean> = context.dataStore.data.map {
         it[Keys.POSTER_CACHING_ENABLED] ?: true
-    }
-
-    suspend fun setPosterCachingEnabled(value: Boolean) {
-        context.dataStore.edit { it[Keys.POSTER_CACHING_ENABLED] = value }
     }
 
     /** Ceiling for the poster/fanart disk cache, in MB - read once at process start (SeanceApplication.newImageLoader() is a synchronous Coil factory, not a suspend function), so a change here only takes effect after the app restarts. Exposed for users with limited device storage who'd rather cap this than let it grow toward the default 1GB. */

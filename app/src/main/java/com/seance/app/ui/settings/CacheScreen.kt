@@ -17,7 +17,6 @@ import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -39,7 +38,6 @@ import androidx.work.WorkManager
 import com.seance.app.R
 import com.seance.app.ui.common.focusHighlight
 import com.seance.app.ui.common.reject
-import com.seance.app.ui.common.toggle
 import com.seance.app.work.PosterPreloadWorker
 import com.seance.app.work.WorkScheduler
 import kotlinx.coroutines.flow.Flow
@@ -51,23 +49,22 @@ fun CacheScreen(
     cacheSizeBytes: Long?,
     onRefreshCacheSize: () -> Unit,
     onClearCache: () -> Unit,
+    posterCacheSizeBytes: Long?,
+    onClearPosterCache: () -> Unit,
     fanartCacheSizeBytes: Long?,
     onClearFanartCache: () -> Unit,
-    posterCachingEnabled: Flow<Boolean>,
-    onSetPosterCachingEnabled: (Boolean) -> Unit,
     imageCacheLimitMb: Flow<Int>,
     onSetImageCacheLimitMb: (Int) -> Unit,
     onBack: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
-    val cachingEnabled by posterCachingEnabled.collectAsState(initial = true)
     val cacheLimitMb by imageCacheLimitMb.collectAsState(initial = com.seance.app.data.settings.IMAGE_CACHE_LIMIT_MB_DEFAULT)
     val haptics = LocalHapticFeedback.current
-    var showDisableCachingConfirm by remember { mutableStateOf(false) }
     // Clearing the cache used to fire immediately (onClearCache called straight from the button) -
-    // inconsistent with the toggle right below it, which confirms a much less destructive action.
+    // a destructive action deserves a confirm step of its own.
     var showClearCacheConfirm by remember { mutableStateOf(false) }
+    var showClearPosterCacheConfirm by remember { mutableStateOf(false) }
     var showClearFanartCacheConfirm by remember { mutableStateOf(false) }
 
     val preloadWorkInfos by remember(context) {
@@ -78,27 +75,27 @@ fun CacheScreen(
 
     LaunchedEffect(Unit) { onRefreshCacheSize() }
 
-    if (showDisableCachingConfirm) {
+    if (showClearPosterCacheConfirm) {
         AlertDialog(
-            onDismissRequest = { showDisableCachingConfirm = false },
-            title = { Text(stringResource(R.string.settings_poster_cache_disable_title)) },
-            text = { Text(stringResource(R.string.settings_poster_cache_disable_message)) },
+            onDismissRequest = { showClearPosterCacheConfirm = false },
+            title = { Text(stringResource(R.string.settings_poster_cache_clear_confirm_title)) },
+            text = { Text(stringResource(R.string.settings_poster_cache_clear_confirm_message)) },
             confirmButton = {
                 val confirmSource = remember { MutableInteractionSource() }
                 TextButton(
                     onClick = {
                         haptics.reject()
-                        showDisableCachingConfirm = false
-                        onSetPosterCachingEnabled(false)
+                        showClearPosterCacheConfirm = false
+                        onClearPosterCache()
                     },
                     interactionSource = confirmSource,
                     modifier = Modifier.focusHighlight(confirmSource)
-                ) { Text(stringResource(R.string.settings_poster_cache_disable_confirm)) }
+                ) { Text(stringResource(R.string.settings_cache_clear)) }
             },
             dismissButton = {
                 val cancelSource = remember { MutableInteractionSource() }
                 TextButton(
-                    onClick = { showDisableCachingConfirm = false },
+                    onClick = { showClearPosterCacheConfirm = false },
                     interactionSource = cancelSource,
                     modifier = Modifier.focusHighlight(cancelSource)
                 ) {
@@ -217,6 +214,47 @@ fun CacheScreen(
                 ListItem(
                     headlineContent = {
                         Text(
+                            if (posterCacheSizeBytes != null) {
+                                stringResource(R.string.settings_poster_cache_size, formatBytes(posterCacheSizeBytes))
+                            } else {
+                                stringResource(R.string.settings_cache_size_unknown)
+                            }
+                        )
+                    },
+                    supportingContent = {
+                        Text(
+                            when {
+                                preloadRunning -> {
+                                    val processed = preloadInfo?.progress?.getInt(PosterPreloadWorker.KEY_PROCESSED, 0) ?: 0
+                                    val total = preloadInfo?.progress?.getInt(PosterPreloadWorker.KEY_TOTAL, 0) ?: 0
+                                    if (total > 0) {
+                                        stringResource(R.string.settings_poster_preload_progress, processed, total)
+                                    } else {
+                                        stringResource(R.string.settings_poster_preload_starting)
+                                    }
+                                }
+                                preloadInfo?.state == WorkInfo.State.SUCCEEDED -> stringResource(R.string.settings_poster_preload_done)
+                                else -> stringResource(R.string.settings_poster_cache_description)
+                            }
+                        )
+                    },
+                    trailingContent = {
+                        val clearPosterCacheSource = remember { MutableInteractionSource() }
+                        OutlinedButton(
+                            onClick = { showClearPosterCacheConfirm = true },
+                            interactionSource = clearPosterCacheSource,
+                            modifier = Modifier.focusHighlight(clearPosterCacheSource)
+                        ) {
+                            Text(stringResource(R.string.settings_cache_clear))
+                        }
+                    },
+                    colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                    modifier = Modifier.fillMaxWidth()
+                )
+                SettingsDivider()
+                ListItem(
+                    headlineContent = {
+                        Text(
                             if (fanartCacheSizeBytes != null) {
                                 stringResource(R.string.settings_fanart_cache_size, formatBytes(fanartCacheSizeBytes))
                             } else {
@@ -234,43 +272,6 @@ fun CacheScreen(
                         ) {
                             Text(stringResource(R.string.settings_cache_clear))
                         }
-                    },
-                    colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-                    modifier = Modifier.fillMaxWidth()
-                )
-                SettingsDivider()
-                ListItem(
-                    headlineContent = { Text(stringResource(R.string.settings_poster_caching)) },
-                    supportingContent = {
-                        Text(
-                            when {
-                                preloadRunning -> {
-                                    val processed = preloadInfo?.progress?.getInt(PosterPreloadWorker.KEY_PROCESSED, 0) ?: 0
-                                    val total = preloadInfo?.progress?.getInt(PosterPreloadWorker.KEY_TOTAL, 0) ?: 0
-                                    if (total > 0) {
-                                        stringResource(R.string.settings_poster_preload_progress, processed, total)
-                                    } else {
-                                        stringResource(R.string.settings_poster_preload_starting)
-                                    }
-                                }
-                                cachingEnabled && preloadInfo?.state == WorkInfo.State.SUCCEEDED ->
-                                    stringResource(R.string.settings_poster_preload_done)
-                                else -> stringResource(R.string.settings_poster_caching_description)
-                            }
-                        )
-                    },
-                    trailingContent = {
-                        Switch(
-                            checked = cachingEnabled,
-                            onCheckedChange = { enabled ->
-                                haptics.toggle(enabled)
-                                if (enabled) {
-                                    onSetPosterCachingEnabled(true)
-                                } else {
-                                    showDisableCachingConfirm = true
-                                }
-                            }
-                        )
                     },
                     colors = ListItemDefaults.colors(containerColor = Color.Transparent),
                     modifier = Modifier.fillMaxWidth()

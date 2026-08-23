@@ -34,8 +34,28 @@ object CrashReporter {
             appendLine("Android ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT}), ${Build.MANUFACTURER} ${Build.MODEL}")
             appendLine()
         }
-        File(dir, "crash_${System.currentTimeMillis()}.txt").writeText(header + throwable.stackTraceToString())
+        // Captured right here, at the moment of the crash - by the time the user taps "Отправить"
+        // next launch, whatever led up to it (an SMB error, a bad state transition) has long
+        // scrolled out of the log buffer. Appended to the same file, not a separate capture step
+        // later, so there's no window where the log could've already rotated it away.
+        val log = buildString {
+            appendLine()
+            appendLine("--- Последние строки лога ---")
+            append(recentLogcat())
+        }
+        File(dir, "crash_${System.currentTimeMillis()}.txt").writeText(header + throwable.stackTraceToString() + log)
     }
+
+    /**
+     * The app's own recent logcat output - no READ_LOGS permission needed, since Android restricts
+     * an unprivileged app's `logcat` to only the lines its own process emitted (per-UID log
+     * isolation, in effect since Android 4.1). `-d` dumps and exits instead of streaming, `-t`
+     * caps it at the source so this never has to read/discard an unbounded stream.
+     */
+    private fun recentLogcat(maxLines: Int = 400): String = runCatching {
+        val process = ProcessBuilder("logcat", "-d", "-t", maxLines.toString(), "-v", "threadtime").start()
+        process.inputStream.bufferedReader().readText().also { process.waitFor() }
+    }.getOrElse { "(не удалось прочитать лог: ${it.message})" }
 
     /** The most recent unreported crash, if any - null once [clear] has been called for it. */
     fun pendingReport(context: Context): File? =

@@ -1,6 +1,7 @@
 package com.seance.app.ui.scan
 
 import androidx.compose.animation.Crossfade
+import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -18,13 +19,12 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.pager.HorizontalPager
-import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material3.Button
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -33,6 +33,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -68,6 +69,8 @@ private enum class ScanPhase { STARTING, LISTING, INDEXING, SUCCEEDED, FAILED }
 fun ScanProgressScreen(
     workId: String,
     onComplete: () -> Unit,
+    /** Leaves this screen for the library while the scan (a WorkManager job, entirely independent of this screen) keeps running in the background - per feedback, someone who just wants to watch something shouldn't be stuck staring at a progress bar until it finishes. */
+    onDismiss: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -119,7 +122,17 @@ fun ScanProgressScreen(
             // between them, unlike a slide/size transform would. Keyed on `phase` alone, not
             // `progress` - the numbers ticking up within LISTING/INDEXING must NOT restart this
             // fade on every single update.
-            Crossfade(targetState = phase, label = "scanPhase") { currentPhase ->
+            // Default Crossfade duration (300ms) plus an instant, unanimated height jump between
+            // phases of different content (a one-line STARTING text vs. LISTING's two lines vs.
+            // SUCCEEDED's extra button) together still read as an abrupt cut - per feedback.
+            // Slower tween + animateContentSize so the surrounding box resizes smoothly alongside
+            // the fade instead of snapping to the new phase's height the instant it's targeted.
+            Crossfade(
+                targetState = phase,
+                animationSpec = tween(500),
+                modifier = Modifier.animateContentSize(),
+                label = "scanPhase"
+            ) { currentPhase ->
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     if (currentPhase == ScanPhase.INDEXING && progress != null) {
                         LinearProgressIndicator(
@@ -135,29 +148,27 @@ fun ScanProgressScreen(
                             stringResource(R.string.scan_progress_starting),
                             modifier = Modifier.padding(top = 8.dp)
                         )
-                        ScanPhase.LISTING -> {
+                        // `progress` (unlike `currentPhase`) is read live from the enclosing scope,
+                        // not frozen to whatever it was when this branch's fade-out started -
+                        // Crossfade keeps recomposing the outgoing content for the duration of the
+                        // animation, and by then a later recomposition may have already moved
+                        // `progress` on to null (phase advanced past LISTING/INDEXING to SUCCEEDED/
+                        // FAILED). The old `progress!!` here crashed on exactly that transient
+                        // window (real NPE, confirmed via a crash report on-device). Null-safe now -
+                        // worst case is this fading-out text renders one frame blank, never a crash.
+                        ScanPhase.LISTING -> progress?.let { p ->
                             Text(
-                                stringResource(
-                                    R.string.scan_progress_source,
-                                    progress!!.sourceIndex + 1,
-                                    progress.sourceCount,
-                                    progress.currentSourceName
-                                ),
+                                stringResource(R.string.scan_progress_source, p.sourceIndex + 1, p.sourceCount, p.currentSourceName),
                                 modifier = Modifier.padding(top = 8.dp)
                             )
-                            Text(stringResource(R.string.scan_progress_listing, progress.filesScanned))
+                            Text(stringResource(R.string.scan_progress_listing, p.filesScanned))
                         }
-                        ScanPhase.INDEXING -> {
+                        ScanPhase.INDEXING -> progress?.let { p ->
                             Text(
-                                stringResource(
-                                    R.string.scan_progress_source,
-                                    progress!!.sourceIndex + 1,
-                                    progress.sourceCount,
-                                    progress.currentSourceName
-                                ),
+                                stringResource(R.string.scan_progress_source, p.sourceIndex + 1, p.sourceCount, p.currentSourceName),
                                 modifier = Modifier.padding(top = 8.dp)
                             )
-                            Text(stringResource(R.string.scan_progress_files, progress.filesScanned, progress.filesTotal))
+                            Text(stringResource(R.string.scan_progress_files, p.filesScanned, p.filesTotal))
                         }
                         ScanPhase.SUCCEEDED -> {
                             val total = workInfo?.outputData?.getInt(LibraryScanWorker.KEY_TOTAL_INDEXED, 0) ?: 0
@@ -201,6 +212,14 @@ fun ScanProgressScreen(
 
             if (isScanning) {
                 ScanTipsCarousel(modifier = Modifier.padding(top = 32.dp))
+                val dismissSource = remember { MutableInteractionSource() }
+                TextButton(
+                    onClick = onDismiss,
+                    interactionSource = dismissSource,
+                    modifier = Modifier.padding(top = 16.dp).focusHighlight(dismissSource)
+                ) {
+                    Text(stringResource(R.string.scan_progress_dismiss))
+                }
             }
             }
         }
@@ -269,42 +288,38 @@ private fun ScanIllustration(modifier: Modifier = Modifier) {
 
 /**
  * Rotates through a "did you know" tip about the app every few seconds - a scan can take a while
- * with nothing else on screen to read in the meantime. A real HorizontalPager (not just a timed
- * fade) so the user can swipe through tips at their own pace instead of waiting out the auto-
- * advance interval - per feedback that the fixed-timer version felt too fast to actually read.
+ * with nothing else on screen to read in the meantime. Was a swipeable HorizontalPager, replaced
+ * per feedback that its slide transition read as an abrupt "sliding out" rather than a soft
+ * change - a plain Crossfade reads as gentler for an auto-advance nobody is actively dragging
+ * through. Loses manual swipe-between-tips as a result; the 6s interval (long enough to read a
+ * whole tip, per the original feedback that motivated a pace the user controls) is the tradeoff
+ * for that now, not a swipe gesture.
  */
 @Composable
 private fun ScanTipsCarousel(modifier: Modifier = Modifier) {
     val tips = stringArrayResource(R.array.scan_tips)
-    val pagerState = rememberPagerState(pageCount = { tips.size })
+    var currentPage by remember { mutableIntStateOf(0) }
 
     // repeatOnLifecycle (not a plain LaunchedEffect) - backgrounding the app during a scan and
-    // returning left the pager visibly torn between two tips, half of each showing side by side.
-    // A plain LaunchedEffect's coroutine isn't cancelled by the Activity stopping (Compose stays
-    // composed while backgrounded, only the Window stops drawing), so delay()'s real-time timer
-    // kept ticking and animateScrollToPage() got called while there were no frames to animate
-    // across - by the time frames resumed, the pager's internal scroll offset was left mid-flight
-    // in a state the resumed animation didn't cleanly continue from. repeatOnLifecycle cancels
-    // this effect outright on STOP and restarts it fresh on RESUME, and the fresh start snaps to
-    // the current page (no animation) before its first delay - the same fix as the analogous
-    // "resume mid-transition" issues elsewhere in this app's player/details screens.
+    // returning used to leave the old pager visibly torn between two tips (its delay() kept
+    // ticking with no frames to animate across while stopped). Restarting fresh on RESUME avoids
+    // reintroducing that with whatever timer state accumulated while backgrounded.
     val lifecycleOwner = LocalLifecycleOwner.current
     LaunchedEffect(tips, lifecycleOwner) {
         lifecycleOwner.repeatOnLifecycle(Lifecycle.State.RESUMED) {
-            pagerState.scrollToPage(pagerState.currentPage)
             while (isActive) {
                 delay(6000)
-                val nextPage = (pagerState.currentPage + 1) % tips.size
-                pagerState.animateScrollToPage(nextPage)
+                currentPage = (currentPage + 1) % tips.size
             }
         }
     }
 
     Column(modifier = modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
-        // Fixed height (not wrap-content) so the card doesn't resize/jump as the user swipes
-        // between a short tip and a longer one.
-        HorizontalPager(
-            state = pagerState,
+        // Fixed height (not wrap-content) so the card doesn't resize/jump between a short tip and
+        // a longer one.
+        Crossfade(
+            targetState = currentPage,
+            animationSpec = tween(600),
             modifier = Modifier
                 .fillMaxWidth()
                 // Was 110dp with 20dp padding (70dp of actual content height) - the longest tip in
@@ -312,7 +327,8 @@ private fun ScanTipsCarousel(modifier: Modifier = Modifier) {
                 // word at that height. Bumped both the box and the text size down a notch so even
                 // that tip has real margin, not just enough for the tips that happened to be short.
                 .height(130.dp)
-                .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(16.dp))
+                .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(16.dp)),
+            label = "scanTip"
         ) { page ->
             Box(modifier = Modifier.fillMaxSize().padding(16.dp), contentAlignment = Alignment.Center) {
                 Text(
@@ -328,7 +344,7 @@ private fun ScanTipsCarousel(modifier: Modifier = Modifier) {
             modifier = Modifier.padding(top = 12.dp)
         ) {
             repeat(tips.size) { page ->
-                val isCurrent = page == pagerState.currentPage
+                val isCurrent = page == currentPage
                 Box(
                     modifier = Modifier
                         .size(if (isCurrent) 8.dp else 6.dp)

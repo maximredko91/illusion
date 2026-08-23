@@ -319,6 +319,11 @@ private fun SeanceNavGraph(app: SeanceApplication, navController: NavHostControl
                         navController.navigate(Destination.Tabs) {
                             popUpTo(Destination.Tabs) { inclusive = true }
                         }
+                    },
+                    onDismiss = {
+                        navController.navigate(Destination.Tabs) {
+                            popUpTo(Destination.Tabs) { inclusive = true }
+                        }
                     }
                 )
             }
@@ -499,15 +504,16 @@ private fun SeanceNavGraph(app: SeanceApplication, navController: NavHostControl
                     factory = SettingsViewModel.factory(app.smbSourceRepository, app.settingsRepository, app.thumbnailRepository, app.downloadRepository, app.backupManager, app.devAccessStore, app.libraryRepository, app.watchProgressRepository)
                 )
                 val cacheSizeBytes by settingsViewModel.cacheSizeBytes.collectAsState()
+                val posterCacheSizeBytes by settingsViewModel.posterCacheSizeBytes.collectAsState()
                 val fanartCacheSizeBytes by settingsViewModel.fanartCacheSizeBytes.collectAsState()
                 CacheScreen(
                     cacheSizeBytes = cacheSizeBytes,
                     onRefreshCacheSize = { settingsViewModel.refreshCacheSize(context) },
                     onClearCache = { settingsViewModel.clearCache(context) },
+                    posterCacheSizeBytes = posterCacheSizeBytes,
+                    onClearPosterCache = { settingsViewModel.clearPosterCache(context) },
                     fanartCacheSizeBytes = fanartCacheSizeBytes,
                     onClearFanartCache = { settingsViewModel.clearFanartCache(context) },
-                    posterCachingEnabled = settingsViewModel.posterCachingEnabled,
-                    onSetPosterCachingEnabled = { enabled -> settingsViewModel.setPosterCachingEnabled(context, enabled) },
                     imageCacheLimitMb = settingsViewModel.imageCacheLimitMb,
                     onSetImageCacheLimitMb = settingsViewModel::setImageCacheLimitMb,
                     onBack = { navController.popBackStack() }

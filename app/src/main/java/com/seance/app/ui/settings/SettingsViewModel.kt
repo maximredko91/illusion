@@ -55,7 +55,6 @@ class SettingsViewModel(
 
     val requireChargingForHeavyTasks: Flow<Boolean> = settingsRepository.requireChargingForHeavyTasks
     val rescanIntervalHours: Flow<Int> = settingsRepository.rescanIntervalHours
-    val posterCachingEnabled: Flow<Boolean> = settingsRepository.posterCachingEnabled
     val imageCacheLimitMb: Flow<Int> = settingsRepository.imageCacheLimitMb
 
     fun setImageCacheLimitMb(value: Int) {
@@ -128,6 +127,9 @@ class SettingsViewModel(
     private val _fanartCacheSizeBytes = MutableStateFlow<Long?>(null)
     val fanartCacheSizeBytes: StateFlow<Long?> = _fanartCacheSizeBytes.asStateFlow()
 
+    private val _posterCacheSizeBytes = MutableStateFlow<Long?>(null)
+    val posterCacheSizeBytes: StateFlow<Long?> = _posterCacheSizeBytes.asStateFlow()
+
     private val _downloadsSizeBytes = MutableStateFlow<Long?>(null)
     val downloadsSizeBytes: StateFlow<Long?> = _downloadsSizeBytes.asStateFlow()
 
@@ -168,8 +170,9 @@ class SettingsViewModel(
         viewModelScope.launch(Dispatchers.IO) {
             val size = context.cacheDir.walkBottomUp().filter { it.isFile }.sumOf { it.length() }
             _cacheSizeBytes.value = size
-            val fanartDir = context.cacheDir.resolve(com.seance.app.SeanceApplication.FANART_CACHE_DIR_NAME)
-            _fanartCacheSizeBytes.value = fanartDir.walkBottomUp().filter { it.isFile }.sumOf { it.length() }
+            fun subDirSize(name: String) = context.cacheDir.resolve(name).walkBottomUp().filter { it.isFile }.sumOf { it.length() }
+            _fanartCacheSizeBytes.value = subDirSize(com.seance.app.SeanceApplication.FANART_CACHE_DIR_NAME)
+            _posterCacheSizeBytes.value = subDirSize(com.seance.app.SeanceApplication.POSTER_CACHE_DIR_NAME)
         }
     }
 
@@ -191,19 +194,13 @@ class SettingsViewModel(
         }
     }
 
-    /** [enabled] = false clears every cached poster/fanart immediately, not just future ones - the caller must confirm with the user first, this is destructive. */
-    fun setPosterCachingEnabled(context: Context, enabled: Boolean) {
+    /** Clears only the poster disk cache (a subset of the total cache reported above) - the fanart-only counterpart to [clearFanartCache]. */
+    fun clearPosterCache(context: Context) {
         viewModelScope.launch {
-            settingsRepository.setPosterCachingEnabled(enabled)
-            if (enabled) {
-                val requireCharging = settingsRepository.requireChargingForHeavyTasks.first()
-                WorkScheduler.enqueuePosterPreload(context, requireCharging)
-            } else {
-                val imageLoader = SingletonImageLoader.get(context)
-                withContext(Dispatchers.IO) { imageLoader.diskCache?.clear() }
-                imageLoader.memoryCache?.clear()
-                refreshCacheSize(context)
-            }
+            val imageLoader = SingletonImageLoader.get(context)
+            withContext(Dispatchers.IO) { imageLoader.diskCache?.clear() }
+            imageLoader.memoryCache?.clear()
+            refreshCacheSize(context)
         }
     }
 

@@ -67,11 +67,10 @@
     <string name="settings_fanart_cache_description">Фоновые изображения — самые крупные файлы в кеше. Можно очистить только их, не трогая постеры</string>
     <string name="settings_fanart_cache_clear_confirm_title">Очистить кеш фанартов?</string>
     <string name="settings_fanart_cache_clear_confirm_message">Фоновые изображения будут удалены из кеша и при следующем открытии подгрузятся заново с сервера. Постеры не затронуты</string>
-    <string name="settings_poster_caching">Кеширование постеров</string>
-    <string name="settings_poster_caching_description">Хранить загруженные постеры и фоны на устройстве. При отключении все закешированные постеры будут удалены</string>
-    <string name="settings_poster_cache_disable_title">Отключить кеширование постеров?</string>
-    <string name="settings_poster_cache_disable_message">Все постеры и фоны будут удалены из кеша и при следующем открытии библиотеки будут каждый раз подгружаться заново с сервера</string>
-    <string name="settings_poster_cache_disable_confirm">Отключить и очистить</string>
+    <string name="settings_poster_cache_size">Кеш постеров: %1$s</string>
+    <string name="settings_poster_cache_description">Постеры хранятся на устройстве, чтобы библиотека открывалась мгновенно, без подгрузки с сервера</string>
+    <string name="settings_poster_cache_clear_confirm_title">Очистить кеш постеров?</string>
+    <string name="settings_poster_cache_clear_confirm_message">Постеры будут удалены из кеша и при следующем открытии библиотеки подгрузятся заново с сервера</string>
     <string name="settings_poster_preload_starting">Подготовка…</string>
     <string name="settings_poster_preload_progress">Загружено %1$d из %2$d</string>
     <string name="settings_poster_preload_done">Все постеры закешированы</string>
@@ -227,15 +226,16 @@
     <string-array name="scan_tips">
         <item>Во время просмотра можно свернуть видео в маленькое окно (Picture-in-Picture) и продолжить пользоваться телефоном</item>
         <item>Фильмы и серии можно скачать для просмотра без интернета — раздел «Загрузки»</item>
-        <item>Отметьте конец заставки один раз — плеер сам предложит пропустить её в следующих сериях</item>
+        <item>В сериалах можно один раз отметить конец заставки — плеер сам предложит пропустить её в следующих сериях</item>
         <item>Поддерживаются внешние субтитры форматов .srt, .ass и .vtt рядом с видеофайлом</item>
         <item>Есть режим для телевизора с управлением пультом — включается в Настройках</item>
         <item>Библиотеку можно сортировать по году, рейтингу, алфавиту и дате добавления — в любом направлении</item>
         <item>В карточке фильма показываются похожие тайтлы, подобранные по общим жанрам</item>
         <item>Избранное и история просмотра всегда под рукой — иконки на главном экране</item>
         <item>Аудиодорожки и субтитры можно переключить прямо во время просмотра, без остановки</item>
-        <item>Видео можно резче — в Настройках есть GPU-шейдер повышения чёткости</item>
+        <item>Изображение при просмотре можно сделать чётче — в Настройках есть GPU-шейдер повышения резкости</item>
     </string-array>
+    <string name="scan_progress_dismiss">Смотреть, пока сканируется</string>
     <string name="scan_progress_source">Источник %1$d из %2$d: %3$s</string>
     <string name="scan_progress_listing">Поиск файлов… найдено %1$d</string>
     <string name="scan_progress_files">Найдено файлов: %1$d из %2$d</string>

@@ -114,7 +114,7 @@ class SeanceApplication : Application(), Configuration.Provider, SingletonImageL
     }
 
     override fun newImageLoader(context: PlatformContext): ImageLoader =
-        buildImageLoader(context, "coil3_disk_cache")
+        buildImageLoader(context, POSTER_CACHE_DIR_NAME)
 
     // Separate ImageLoader + disk cache directory from the poster one above, purely so Settings >
     // Cache can offer an independent "clear fanart cache" action - fanarts are the bigger files
@@ -158,6 +158,8 @@ class SeanceApplication : Application(), Configuration.Provider, SingletonImageL
             .build()
 
     companion object {
+        /** Coil3's own default disk cache directory name - kept as-is (not renamed) so existing cached entries from before the poster/fanart split carry over rather than being orphaned. */
+        const val POSTER_CACHE_DIR_NAME = "coil3_disk_cache"
         /** Shared with SettingsViewModel, which needs the directory name to measure/clear this cache from Settings > Cache without holding a reference to the ImageLoader itself. */
         const val FANART_CACHE_DIR_NAME = "coil3_disk_cache_fanart"
     }
