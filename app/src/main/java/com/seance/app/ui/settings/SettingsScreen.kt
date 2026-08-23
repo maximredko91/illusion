@@ -512,11 +512,19 @@ fun SettingsScreen(
                                 verticalArrangement = Arrangement.spacedBy(12.dp)
                             ) {
                                 com.seance.app.domain.model.AccentColor.entries.forEach { color ->
-                                    AccentColorSwatch(
-                                        color = color,
-                                        selected = color == currentAccentColor,
-                                        onClick = { onAccentColorChange(color) }
-                                    )
+                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                        AccentColorSwatch(
+                                            color = color,
+                                            selected = color == currentAccentColor,
+                                            onClick = { onAccentColorChange(color) }
+                                        )
+                                        Text(
+                                            accentColorLabel(color),
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            modifier = Modifier.padding(top = 4.dp)
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -1034,6 +1042,18 @@ internal fun SettingsDivider() {
         modifier = Modifier.padding(horizontal = 16.dp),
         color = MaterialTheme.colorScheme.outlineVariant
     )
+}
+
+@Composable
+private fun accentColorLabel(color: com.seance.app.domain.model.AccentColor): String = when (color) {
+    com.seance.app.domain.model.AccentColor.DEFAULT -> stringResource(R.string.accent_color_default)
+    com.seance.app.domain.model.AccentColor.BLUE -> stringResource(R.string.accent_color_blue)
+    com.seance.app.domain.model.AccentColor.GREEN -> stringResource(R.string.accent_color_green)
+    com.seance.app.domain.model.AccentColor.ORANGE -> stringResource(R.string.accent_color_orange)
+    com.seance.app.domain.model.AccentColor.YELLOW -> stringResource(R.string.accent_color_yellow)
+    com.seance.app.domain.model.AccentColor.RED -> stringResource(R.string.accent_color_red)
+    com.seance.app.domain.model.AccentColor.TEAL -> stringResource(R.string.accent_color_teal)
+    com.seance.app.domain.model.AccentColor.PINK -> stringResource(R.string.accent_color_pink)
 }
 
 /** One swatch in the accent-color picker - the swatch shows [AccentColor.lightPrimary] regardless of the active theme (dark or light), since it's a color *choice*, not a themed surface. */

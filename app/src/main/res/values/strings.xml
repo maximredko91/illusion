@@ -127,6 +127,14 @@
     <string name="library_filter_all">Все</string>
     <string name="library_empty">Здесь пока ничего нет</string>
     <string name="library_scroll_to_top">Наверх</string>
+    <string name="accent_color_default">Системный</string>
+    <string name="accent_color_blue">Синий</string>
+    <string name="accent_color_green">Зелёный</string>
+    <string name="accent_color_orange">Оранжевый</string>
+    <string name="accent_color_yellow">Жёлтый</string>
+    <string name="accent_color_red">Красный</string>
+    <string name="accent_color_teal">Бирюзовый</string>
+    <string name="accent_color_pink">Розовый</string>
     <string name="library_empty_filtered">Ничего не найдено по выбранным фильтрам</string>
 
     <string name="favorites_title">Избранное</string>
