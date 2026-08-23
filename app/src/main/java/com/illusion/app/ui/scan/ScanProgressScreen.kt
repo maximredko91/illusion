@@ -8,6 +8,7 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -22,7 +23,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material3.Button
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.Icon
@@ -45,6 +45,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringArrayResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
@@ -71,6 +72,8 @@ fun ScanProgressScreen(
     onComplete: () -> Unit,
     /** Leaves this screen for the library while the scan (a WorkManager job, entirely independent of this screen) keeps running in the background - per feedback, someone who just wants to watch something shouldn't be stuck staring at a progress bar until it finishes. */
     onDismiss: () -> Unit,
+    /** False for the very first scan straight out of onboarding - the library is still empty, so there's nothing to "watch while it scans" yet. */
+    allowDismiss: Boolean = true,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -212,13 +215,15 @@ fun ScanProgressScreen(
 
             if (isScanning) {
                 ScanTipsCarousel(modifier = Modifier.padding(top = 32.dp))
-                val dismissSource = remember { MutableInteractionSource() }
-                TextButton(
-                    onClick = onDismiss,
-                    interactionSource = dismissSource,
-                    modifier = Modifier.padding(top = 16.dp).focusHighlight(dismissSource)
-                ) {
-                    Text(stringResource(R.string.scan_progress_dismiss))
+                if (allowDismiss) {
+                    val dismissSource = remember { MutableInteractionSource() }
+                    TextButton(
+                        onClick = onDismiss,
+                        interactionSource = dismissSource,
+                        modifier = Modifier.padding(top = 16.dp).focusHighlight(dismissSource)
+                    ) {
+                        Text(stringResource(R.string.scan_progress_dismiss))
+                    }
                 }
             }
             }
@@ -253,7 +258,14 @@ private fun ScanBackground(modifier: Modifier = Modifier) {
     )
 }
 
-/** Slowly breathing library icon - a scan can take a while on a big share, a plain progress bar on an otherwise empty screen read as the app having frozen. Purely decorative, no data behind it. */
+/**
+ * Slowly breathing brand mark - a scan can take a while on a big share, a plain progress bar on
+ * an otherwise empty screen read as the app having frozen. Purely decorative, no data behind it.
+ * Was a generic Material "library" icon in a rounded primaryContainer box - swapped for the app's
+ * own perforated-film mark (same drawable as the launcher icon/splash) per feedback that the
+ * stock icon looked out of place next to the rest of the app's branding, and this screen (the app
+ * actively reading through files) is a fitting place for the film motif specifically.
+ */
 @Composable
 private fun ScanIllustration(modifier: Modifier = Modifier) {
     val transition = rememberInfiniteTransition(label = "scanIllustration")
@@ -269,21 +281,14 @@ private fun ScanIllustration(modifier: Modifier = Modifier) {
         animationSpec = infiniteRepeatable(tween(1400, easing = LinearEasing), RepeatMode.Reverse),
         label = "scanIllustrationAlpha"
     )
-    Box(
+    Image(
+        painter = painterResource(R.drawable.ic_mark_splash),
+        contentDescription = null,
         modifier = modifier
             .padding(bottom = 24.dp)
             .size(96.dp)
             .graphicsLayer { scaleX = scale; scaleY = scale; this.alpha = alpha }
-            .background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(24.dp)),
-        contentAlignment = Alignment.Center
-    ) {
-        Icon(
-            Icons.Default.VideoLibrary,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.onPrimaryContainer,
-            modifier = Modifier.size(48.dp)
-        )
-    }
+    )
 }
 
 /**

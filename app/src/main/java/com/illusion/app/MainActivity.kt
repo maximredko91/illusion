@@ -60,7 +60,7 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         val app = application as IllusionApplication
         setContent {
-            val accentColor by app.settingsRepository.accentColor.collectAsState(initial = com.illusion.app.domain.model.AccentColor.DEFAULT)
+            val accentColor by app.settingsRepository.accentColor.collectAsState(initial = com.illusion.app.domain.model.AccentColor.ILLUSION)
             val themeMode by app.settingsRepository.themeMode.collectAsState(initial = com.illusion.app.domain.model.ThemeMode.SYSTEM)
             IllusionTheme(themeMode = themeMode, accentColor = accentColor) {
                 Box(modifier = Modifier.fillMaxSize()) {

@@ -29,7 +29,7 @@ private val LightColorScheme = lightColorScheme(
 fun IllusionTheme(
     themeMode: ThemeMode = ThemeMode.SYSTEM,
     dynamicColor: Boolean = true,
-    accentColor: AccentColor = AccentColor.DEFAULT,
+    accentColor: AccentColor = AccentColor.ILLUSION,
     content: @Composable () -> Unit
 ) {
     val darkTheme = when (themeMode) {

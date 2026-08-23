@@ -22,6 +22,15 @@ enum class AccentColor(
         lightPrimary = Color(0xFF6650a4), lightSecondary = Color(0xFF625b71), lightTertiary = Color(0xFF7D5260),
         darkPrimary = Color(0xFFD0BCFF), darkSecondary = Color(0xFFCCC2DC), darkTertiary = Color(0xFFEFB8C8)
     ),
+    // Пришло из брендинга (иконка/сплэш "Иллюзион", проект "Перфорация" в Claude Design) -
+    // primary = illusion_crimson напрямую (тот же #C2413A, что и в знаке), secondary/tertiary
+    // подобраны в тон, тёплые нейтральные вместо холодных как у остальных пунктов. darkPrimary
+    // осветлён от исходного кримзона (как и у RED/PINK) для контраста на тёмном фоне -
+    // illusion_cream сам по себе слишком светлый/бледный, чтобы служить акцентом текста/иконок.
+    ILLUSION(
+        lightPrimary = Color(0xFFC2413A), lightSecondary = Color(0xFF77574B), lightTertiary = Color(0xFF6B5E3F),
+        darkPrimary = Color(0xFFFFB4A8), darkSecondary = Color(0xFFE7C3B4), darkTertiary = Color(0xFFDBC9A0)
+    ),
     BLUE(
         lightPrimary = Color(0xFF3F5CA9), lightSecondary = Color(0xFF585F71), lightTertiary = Color(0xFF6B5778),
         darkPrimary = Color(0xFFB6C4EB), darkSecondary = Color(0xFFC0C6DC), darkTertiary = Color(0xFFD8BFE3)

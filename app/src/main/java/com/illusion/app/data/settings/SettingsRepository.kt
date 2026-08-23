@@ -138,10 +138,10 @@ class SettingsRepository(private val context: Context) {
         context.dataStore.edit { it[Keys.HAPTICS_ENABLED] = value }
     }
 
-    /** DEFAULT keeps Material You wallpaper-based dynamic color (or the original hardcoded purple scheme below API 31) - any other value overrides the theme with a fixed accent instead. */
+    /** ILLUSION (the app's own brand crimson, matching the launcher icon/splash) is the actual out-of-box default - not AccentColor.DEFAULT, which would let Material You's wallpaper-based dynamic color override the brand on API 31+ and undercut the "one consistent style" the icon/splash rename was for. DEFAULT is still a real selectable option in Settings for anyone who wants dynamic color instead. */
     val accentColor: Flow<AccentColor> = context.dataStore.data.map {
         it[Keys.ACCENT_COLOR]?.let { name -> runCatching { AccentColor.valueOf(name) }.getOrNull() }
-            ?: AccentColor.DEFAULT
+            ?: AccentColor.ILLUSION
     }
 
     suspend fun setAccentColor(color: AccentColor) {

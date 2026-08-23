@@ -55,7 +55,8 @@ sealed interface Destination {
     data class EditSmbSource(val sourceId: Long) : Destination
 
     @Serializable
-    data class ScanProgress(val workId: String) : Destination
+    /** [allowDismiss] is false for the very first scan (straight out of onboarding) - the library is still empty at that point, so "watch while it scans" has nothing to offer yet. Manual rescans from Settings always allow it (there's already a library to browse). */
+    data class ScanProgress(val workId: String, val allowDismiss: Boolean = true) : Destination
 
     /** Developer-only "add media" scraper - only reachable via the hidden password gate in Settings, see DevAccessStore. */
     @Serializable

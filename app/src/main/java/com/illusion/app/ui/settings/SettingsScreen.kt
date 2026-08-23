@@ -146,7 +146,7 @@ fun SettingsScreen(
     val currentPlayerMode by playerMode.collectAsState(initial = com.illusion.app.domain.model.PlayerMode.INTERNAL)
     val hapticsOn by hapticsEnabled.collectAsState(initial = true)
     val predictiveBackOn by predictiveBackEnabled.collectAsState(initial = true)
-    val currentAccentColor by accentColor.collectAsState(initial = com.illusion.app.domain.model.AccentColor.DEFAULT)
+    val currentAccentColor by accentColor.collectAsState(initial = com.illusion.app.domain.model.AccentColor.ILLUSION)
     val currentThemeMode by themeMode.collectAsState(initial = com.illusion.app.domain.model.ThemeMode.SYSTEM)
     val chargingOnly by requireChargingForHeavyTasks.collectAsState(initial = true)
     val rescanHours by rescanIntervalHours.collectAsState(initial = 48)
@@ -1047,6 +1047,7 @@ internal fun SettingsDivider() {
 @Composable
 private fun accentColorLabel(color: com.illusion.app.domain.model.AccentColor): String = when (color) {
     com.illusion.app.domain.model.AccentColor.DEFAULT -> stringResource(R.string.accent_color_default)
+    com.illusion.app.domain.model.AccentColor.ILLUSION -> stringResource(R.string.accent_color_illusion)
     com.illusion.app.domain.model.AccentColor.BLUE -> stringResource(R.string.accent_color_blue)
     com.illusion.app.domain.model.AccentColor.GREEN -> stringResource(R.string.accent_color_green)
     com.illusion.app.domain.model.AccentColor.ORANGE -> stringResource(R.string.accent_color_orange)

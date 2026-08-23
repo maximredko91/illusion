@@ -127,6 +127,7 @@
     <string name="library_empty">Здесь пока ничего нет</string>
     <string name="library_scroll_to_top">Наверх</string>
     <string name="accent_color_default">Системный</string>
+    <string name="accent_color_illusion">Иллюзион</string>
     <string name="accent_color_blue">Синий</string>
     <string name="accent_color_green">Зелёный</string>
     <string name="accent_color_orange">Оранжевый</string>

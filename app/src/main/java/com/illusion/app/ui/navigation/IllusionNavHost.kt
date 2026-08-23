@@ -304,7 +304,7 @@ private fun IllusionNavGraph(app: IllusionApplication, navController: NavHostCon
                     smbSourceRepository = app.smbSourceRepository,
                     settingsRepository = app.settingsRepository,
                     onFinished = { workId ->
-                        navController.navigate(Destination.ScanProgress(workId)) {
+                        navController.navigate(Destination.ScanProgress(workId, allowDismiss = false)) {
                             popUpTo(Destination.Onboarding) { inclusive = true }
                         }
                     }
@@ -315,6 +315,7 @@ private fun IllusionNavGraph(app: IllusionApplication, navController: NavHostCon
                 val route = entry.toRoute<Destination.ScanProgress>()
                 ScanProgressScreen(
                     workId = route.workId,
+                    allowDismiss = route.allowDismiss,
                     onComplete = {
                         navController.navigate(Destination.Tabs) {
                             popUpTo(Destination.Tabs) { inclusive = true }
