@@ -8,8 +8,10 @@ import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import com.seance.app.domain.model.AccentColor
+import com.seance.app.domain.model.ThemeMode
 
 private val DarkColorScheme = darkColorScheme(
     primary = Purple80,
@@ -25,11 +27,16 @@ private val LightColorScheme = lightColorScheme(
 
 @Composable
 fun SeanceTheme(
-    darkTheme: Boolean = isSystemInDarkTheme(),
+    themeMode: ThemeMode = ThemeMode.SYSTEM,
     dynamicColor: Boolean = true,
     accentColor: AccentColor = AccentColor.DEFAULT,
     content: @Composable () -> Unit
 ) {
+    val darkTheme = when (themeMode) {
+        ThemeMode.SYSTEM -> isSystemInDarkTheme()
+        ThemeMode.LIGHT -> false
+        ThemeMode.DARK, ThemeMode.BLACK -> true
+    }
     val colorScheme = when {
         // A user-picked accent overrides Material You/the default purple scheme outright - picking
         // one from Settings is a deliberate override, so it should always win rather than only
@@ -49,6 +56,23 @@ fun SeanceTheme(
 
         darkTheme -> DarkColorScheme
         else -> LightColorScheme
+    }.let {
+        // True AMOLED black rather than Material's usual dark-grey surfaces - only overrides the
+        // background/surface tones, everything else (accent, dynamic color, container colors
+        // derived from them) stays as already computed above.
+        if (themeMode == ThemeMode.BLACK) {
+            it.copy(
+                background = Color.Black,
+                surface = Color.Black,
+                surfaceContainerLowest = Color.Black,
+                surfaceContainerLow = Color(0xFF0A0A0A),
+                surfaceContainer = Color(0xFF0F0F0F),
+                surfaceContainerHigh = Color(0xFF141414),
+                surfaceContainerHighest = Color(0xFF1A1A1A)
+            )
+        } else {
+            it
+        }
     }
 
     MaterialTheme(

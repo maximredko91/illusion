@@ -67,7 +67,12 @@ class SettingsViewModel(
     val hapticsEnabled: Flow<Boolean> = settingsRepository.hapticsEnabled
     val predictiveBackEnabled: Flow<Boolean> = settingsRepository.predictiveBackEnabled
     val accentColor: Flow<com.seance.app.domain.model.AccentColor> = settingsRepository.accentColor
+    val themeMode: Flow<com.seance.app.domain.model.ThemeMode> = settingsRepository.themeMode
     val playerMode: Flow<PlayerMode> = settingsRepository.playerMode
+
+    fun setThemeMode(mode: com.seance.app.domain.model.ThemeMode) {
+        viewModelScope.launch { settingsRepository.setThemeMode(mode) }
+    }
 
     fun setAccentColor(color: com.seance.app.domain.model.AccentColor) {
         viewModelScope.launch { settingsRepository.setAccentColor(color) }

@@ -36,7 +36,8 @@ class MainActivity : ComponentActivity() {
         val app = application as SeanceApplication
         setContent {
             val accentColor by app.settingsRepository.accentColor.collectAsState(initial = com.seance.app.domain.model.AccentColor.DEFAULT)
-            SeanceTheme(accentColor = accentColor) {
+            val themeMode by app.settingsRepository.themeMode.collectAsState(initial = com.seance.app.domain.model.ThemeMode.SYSTEM)
+            SeanceTheme(themeMode = themeMode, accentColor = accentColor) {
                 SeanceNavHost(
                     app = app,
                     modifier = Modifier.fillMaxSize()

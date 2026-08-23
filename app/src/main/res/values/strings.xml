@@ -37,7 +37,7 @@
 
     <string name="settings_title">Настройки</string>
     <string name="settings_category_smb_sources_description">Список подключённых сетевых папок</string>
-    <string name="settings_category_ui_mode_description">Режим экрана, акцентный цвет, тактильный отклик, анимация жеста «назад»</string>
+    <string name="settings_category_ui_mode_description">Тема, режим экрана, акцентный цвет, тактильный отклик, анимация жеста «назад»</string>
     <string name="settings_category_library_description">Сортировка по умолчанию</string>
     <string name="settings_category_scan_description">Пересканирование и расписание</string>
     <string name="settings_category_player_description">Внутренний или внешний плеер</string>
@@ -173,6 +173,11 @@
     <string name="settings_predictive_back">Анимация жеста «назад»</string>
     <string name="settings_predictive_back_description">Плавный анимированный предпросмотр экрана при свайпе назад (Android 13+). Отключите, если анимация подтормаживает на вашем устройстве — возврат назад будет мгновенным, без анимации</string>
     <string name="settings_accent_color">Акцентный цвет</string>
+    <string name="settings_theme_mode">Тема</string>
+    <string name="settings_theme_mode_system">Системная</string>
+    <string name="settings_theme_mode_light">Светлая</string>
+    <string name="settings_theme_mode_dark">Тёмная</string>
+    <string name="settings_theme_mode_black">Чёрная (AMOLED)</string>
     <string name="settings_library_section">Библиотека</string>
     <string name="settings_default_sort_order">Сортировка по умолчанию</string>
     <string name="settings_reset_section">Сброс</string>

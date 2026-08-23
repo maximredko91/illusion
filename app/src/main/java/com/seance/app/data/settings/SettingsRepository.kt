@@ -40,6 +40,7 @@ class SettingsRepository(private val context: Context) {
         val UI_MODE = stringPreferencesKey("ui_mode")
         val HAPTICS_ENABLED = booleanPreferencesKey("haptics_enabled")
         val ACCENT_COLOR = stringPreferencesKey("accent_color")
+        val THEME_MODE = stringPreferencesKey("theme_mode")
         val PLAYER_MODE = stringPreferencesKey("player_mode")
         val PREDICTIVE_BACK_ENABLED = booleanPreferencesKey("predictive_back_enabled")
         val RECENT_SEARCHES = stringPreferencesKey("recent_searches")
@@ -149,6 +150,15 @@ class SettingsRepository(private val context: Context) {
 
     suspend fun setAccentColor(color: AccentColor) {
         context.dataStore.edit { it[Keys.ACCENT_COLOR] = color.name }
+    }
+
+    val themeMode: Flow<com.seance.app.domain.model.ThemeMode> = context.dataStore.data.map {
+        it[Keys.THEME_MODE]?.let { name -> runCatching { com.seance.app.domain.model.ThemeMode.valueOf(name) }.getOrNull() }
+            ?: com.seance.app.domain.model.ThemeMode.SYSTEM
+    }
+
+    suspend fun setThemeMode(mode: com.seance.app.domain.model.ThemeMode) {
+        context.dataStore.edit { it[Keys.THEME_MODE] = mode.name }
     }
 
     /** Which player handles playback - was a one-off "open in external player" action button inside the player itself, moved here as a persistent default per user feedback (choose once, not every time). */

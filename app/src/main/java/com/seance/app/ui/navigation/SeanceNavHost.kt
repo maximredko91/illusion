@@ -442,6 +442,8 @@ private fun SeanceNavGraph(app: SeanceApplication, navController: NavHostControl
                     onPredictiveBackEnabledChange = settingsViewModel::setPredictiveBackEnabled,
                     accentColor = settingsViewModel.accentColor,
                     onAccentColorChange = settingsViewModel::setAccentColor,
+                    themeMode = settingsViewModel.themeMode,
+                    onThemeModeChange = settingsViewModel::setThemeMode,
                     onToggleChargingRequirement = { enabled ->
                         settingsViewModel.setRequireChargingForHeavyTasks(context, enabled)
                     },

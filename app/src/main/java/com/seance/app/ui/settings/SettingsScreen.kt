@@ -109,6 +109,8 @@ fun SettingsScreen(
     onPredictiveBackEnabledChange: (Boolean) -> Unit,
     accentColor: Flow<com.seance.app.domain.model.AccentColor>,
     onAccentColorChange: (com.seance.app.domain.model.AccentColor) -> Unit,
+    themeMode: Flow<com.seance.app.domain.model.ThemeMode>,
+    onThemeModeChange: (com.seance.app.domain.model.ThemeMode) -> Unit,
     onToggleChargingRequirement: (Boolean) -> Unit,
     onRescanIntervalChange: (Int) -> Unit,
     onRescanNow: () -> Unit,
@@ -145,6 +147,7 @@ fun SettingsScreen(
     val hapticsOn by hapticsEnabled.collectAsState(initial = true)
     val predictiveBackOn by predictiveBackEnabled.collectAsState(initial = true)
     val currentAccentColor by accentColor.collectAsState(initial = com.seance.app.domain.model.AccentColor.DEFAULT)
+    val currentThemeMode by themeMode.collectAsState(initial = com.seance.app.domain.model.ThemeMode.SYSTEM)
     val chargingOnly by requireChargingForHeavyTasks.collectAsState(initial = true)
     val rescanHours by rescanIntervalHours.collectAsState(initial = 48)
     val downloadsFolder by downloadsFolderUri.collectAsState(initial = null)
@@ -413,6 +416,13 @@ fun SettingsScreen(
 
                     "ui_mode" -> {
                         SettingsGroup {
+                            ListItem(
+                                headlineContent = { Text(stringResource(R.string.settings_theme_mode)) },
+                                trailingContent = { ThemeModeMenu(currentThemeMode, onThemeModeChange) },
+                                colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                            SettingsDivider()
                             val phoneRowSource = remember { MutableInteractionSource() }
                             ListItem(
                                 headlineContent = { Text(stringResource(R.string.settings_ui_mode_phone)) },
@@ -1119,6 +1129,41 @@ private fun RescanIntervalMenu(hours: Int, onChange: (Int) -> Unit) {
 @Composable
 private fun rescanLabel(hours: Int): String =
     if (hours <= 0) stringResource(R.string.settings_rescan_off) else stringResource(R.string.settings_rescan_hours, hours)
+
+@Composable
+private fun ThemeModeMenu(current: com.seance.app.domain.model.ThemeMode, onChange: (com.seance.app.domain.model.ThemeMode) -> Unit) {
+    var expanded by remember { mutableStateOf(false) }
+    val haptics = LocalHapticFeedback.current
+    Box {
+        val triggerSource = remember { MutableInteractionSource() }
+        OutlinedButton(onClick = { expanded = true }, interactionSource = triggerSource, modifier = Modifier.focusHighlight(triggerSource)) {
+            Text(themeModeLabel(current))
+        }
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            com.seance.app.domain.model.ThemeMode.entries.forEach { mode ->
+                val itemSource = remember { MutableInteractionSource() }
+                DropdownMenuItem(
+                    text = { Text(themeModeLabel(mode)) },
+                    onClick = {
+                        haptics.segmentTick()
+                        onChange(mode)
+                        expanded = false
+                    },
+                    interactionSource = itemSource,
+                    modifier = Modifier.focusHighlight(itemSource)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun themeModeLabel(mode: com.seance.app.domain.model.ThemeMode): String = when (mode) {
+    com.seance.app.domain.model.ThemeMode.SYSTEM -> stringResource(R.string.settings_theme_mode_system)
+    com.seance.app.domain.model.ThemeMode.LIGHT -> stringResource(R.string.settings_theme_mode_light)
+    com.seance.app.domain.model.ThemeMode.DARK -> stringResource(R.string.settings_theme_mode_dark)
+    com.seance.app.domain.model.ThemeMode.BLACK -> stringResource(R.string.settings_theme_mode_black)
+}
 
 @Composable
 private fun PlayerModeMenu(current: com.seance.app.domain.model.PlayerMode, onChange: (com.seance.app.domain.model.PlayerMode) -> Unit) {
