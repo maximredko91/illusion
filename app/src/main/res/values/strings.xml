@@ -61,6 +61,8 @@
     <string name="settings_cache_clear_confirm_message">Все временные файлы будут удалены. Постеры и фоны, если кеширование включено, подгрузятся заново с сервера при следующем открытии.</string>
     <string name="settings_charging_only">Фоновые задачи только при зарядке</string>
     <string name="settings_charging_only_description">Генерация превью-кадров для перемотки и фоновое пересканирование библиотеки — не будут запускаться от батареи</string>
+    <string name="settings_image_cache_limit">Лимит кеша изображений</string>
+    <string name="settings_image_cache_limit_description">Максимальный размер кеша постеров и фанартов на устройстве. Изменение применится после перезапуска приложения. Уменьшите, если места на устройстве мало</string>
     <string name="settings_poster_caching">Кеширование постеров</string>
     <string name="settings_poster_caching_description">Хранить загруженные постеры и фоны на устройстве. При отключении все закешированные постеры будут удалены</string>
     <string name="settings_poster_cache_disable_title">Отключить кеширование постеров?</string>
@@ -227,6 +229,10 @@
     <string name="scan_notification_result_success_text">Найдено видео: %1$d</string>
     <string name="scan_notification_result_partial_text">Найдено видео: %1$d. Не всё удалось просканировать: %2$s</string>
     <string name="scan_notification_result_failed_title">Не удалось выполнить сканирование</string>
+
+    <string name="download_notification_channel_name">Загрузки</string>
+    <string name="download_progress_starting">Подготовка…</string>
+    <string name="download_progress_percent">Загружено %1$d%%</string>
 
     <string name="settings_add_source">Добавить источник</string>
     <string name="settings_no_sources">Источники не добавлены</string>

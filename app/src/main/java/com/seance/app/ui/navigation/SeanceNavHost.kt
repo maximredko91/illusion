@@ -489,6 +489,8 @@ private fun SeanceNavGraph(app: SeanceApplication, navController: NavHostControl
                     onClearCache = { settingsViewModel.clearCache(context) },
                     posterCachingEnabled = settingsViewModel.posterCachingEnabled,
                     onSetPosterCachingEnabled = { enabled -> settingsViewModel.setPosterCachingEnabled(context, enabled) },
+                    imageCacheLimitMb = settingsViewModel.imageCacheLimitMb,
+                    onSetImageCacheLimitMb = settingsViewModel::setImageCacheLimitMb,
                     onBack = { navController.popBackStack() }
                 )
             }

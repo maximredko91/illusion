@@ -56,6 +56,11 @@ class SettingsViewModel(
     val requireChargingForHeavyTasks: Flow<Boolean> = settingsRepository.requireChargingForHeavyTasks
     val rescanIntervalHours: Flow<Int> = settingsRepository.rescanIntervalHours
     val posterCachingEnabled: Flow<Boolean> = settingsRepository.posterCachingEnabled
+    val imageCacheLimitMb: Flow<Int> = settingsRepository.imageCacheLimitMb
+
+    fun setImageCacheLimitMb(value: Int) {
+        viewModelScope.launch { settingsRepository.setImageCacheLimitMb(value) }
+    }
     val downloadsFolderUri: Flow<String?> = settingsRepository.downloadsFolderUri
     val uiMode: Flow<UiMode?> = settingsRepository.uiMode
     val defaultSortOrder: Flow<SortOrder> = settingsRepository.defaultSortOrder

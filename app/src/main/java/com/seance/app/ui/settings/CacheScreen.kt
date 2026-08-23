@@ -53,11 +53,14 @@ fun CacheScreen(
     onClearCache: () -> Unit,
     posterCachingEnabled: Flow<Boolean>,
     onSetPosterCachingEnabled: (Boolean) -> Unit,
+    imageCacheLimitMb: Flow<Int>,
+    onSetImageCacheLimitMb: (Int) -> Unit,
     onBack: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
     val cachingEnabled by posterCachingEnabled.collectAsState(initial = true)
+    val cacheLimitMb by imageCacheLimitMb.collectAsState(initial = com.seance.app.data.settings.IMAGE_CACHE_LIMIT_MB_DEFAULT)
     val haptics = LocalHapticFeedback.current
     var showDisableCachingConfirm by remember { mutableStateOf(false) }
     // Clearing the cache used to fire immediately (onClearCache called straight from the button) -
@@ -214,7 +217,43 @@ fun CacheScreen(
                     colors = ListItemDefaults.colors(containerColor = Color.Transparent),
                     modifier = Modifier.fillMaxWidth()
                 )
+                SettingsDivider()
+                ListItem(
+                    headlineContent = { Text(stringResource(R.string.settings_image_cache_limit)) },
+                    supportingContent = { Text(stringResource(R.string.settings_image_cache_limit_description)) },
+                    trailingContent = { ImageCacheLimitMenu(cacheLimitMb, onSetImageCacheLimitMb) },
+                    colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                    modifier = Modifier.fillMaxWidth()
+                )
             }
         }
     }
 }
+
+@androidx.compose.runtime.Composable
+private fun ImageCacheLimitMenu(currentMb: Int, onChange: (Int) -> Unit) {
+    var expanded by remember { mutableStateOf(false) }
+    val options = listOf(256, 512, 1024, 2048)
+    androidx.compose.foundation.layout.Box {
+        val triggerSource = remember { MutableInteractionSource() }
+        OutlinedButton(onClick = { expanded = true }, interactionSource = triggerSource, modifier = Modifier.focusHighlight(triggerSource)) {
+            Text(imageCacheLimitLabel(currentMb))
+        }
+        androidx.compose.material3.DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            options.forEach { option ->
+                val itemSource = remember { MutableInteractionSource() }
+                androidx.compose.material3.DropdownMenuItem(
+                    text = { Text(imageCacheLimitLabel(option)) },
+                    onClick = {
+                        onChange(option)
+                        expanded = false
+                    },
+                    interactionSource = itemSource,
+                    modifier = Modifier.focusHighlight(itemSource)
+                )
+            }
+        }
+    }
+}
+
+private fun imageCacheLimitLabel(mb: Int): String = if (mb >= 1024) "${mb / 1024} ГБ" else "$mb МБ"

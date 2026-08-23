@@ -23,6 +23,9 @@ private const val SUBTITLE_TEXT_COLOR_DEFAULT = -0x1 // android.graphics.Color.W
 /** Matches [com.seance.app.ui.player.SharpenEffect]'s own default `amount` param - kept in sync manually since the effect class can't depend on this module. */
 const val SHARPEN_AMOUNT_DEFAULT = 0.4f
 
+/** Default poster/fanart disk cache ceiling, in MB - read once at process start by SeanceApplication.newImageLoader(). 1GB comfortably fits a large library's posters+fanarts without relying on Coil's own 250MB default cap (too small - see the cache-growth fix this setting was added alongside). */
+const val IMAGE_CACHE_LIMIT_MB_DEFAULT = 1024
+
 class SettingsRepository(private val context: Context) {
     private object Keys {
         val REQUIRE_CHARGING_FOR_HEAVY_TASKS = booleanPreferencesKey("require_charging_for_heavy_tasks")
@@ -32,6 +35,7 @@ class SettingsRepository(private val context: Context) {
         val SHARPEN_AMOUNT = floatPreferencesKey("player_sharpen_amount")
         val SEEK_DURATION_SECONDS = intPreferencesKey("player_seek_duration_seconds")
         val POSTER_CACHING_ENABLED = booleanPreferencesKey("poster_caching_enabled")
+        val IMAGE_CACHE_LIMIT_MB = intPreferencesKey("image_cache_limit_mb")
         val DOWNLOADS_FOLDER_URI = stringPreferencesKey("downloads_folder_uri")
         val UI_MODE = stringPreferencesKey("ui_mode")
         val HAPTICS_ENABLED = booleanPreferencesKey("haptics_enabled")
@@ -103,6 +107,13 @@ class SettingsRepository(private val context: Context) {
 
     suspend fun setPosterCachingEnabled(value: Boolean) {
         context.dataStore.edit { it[Keys.POSTER_CACHING_ENABLED] = value }
+    }
+
+    /** Ceiling for the poster/fanart disk cache, in MB - read once at process start (SeanceApplication.newImageLoader() is a synchronous Coil factory, not a suspend function), so a change here only takes effect after the app restarts. Exposed for users with limited device storage who'd rather cap this than let it grow toward the default 1GB. */
+    val imageCacheLimitMb: Flow<Int> = context.dataStore.data.map { it[Keys.IMAGE_CACHE_LIMIT_MB] ?: IMAGE_CACHE_LIMIT_MB_DEFAULT }
+
+    suspend fun setImageCacheLimitMb(value: Int) {
+        context.dataStore.edit { it[Keys.IMAGE_CACHE_LIMIT_MB] = value }
     }
 
     /** null = use the default public Downloads/Seans location (see [com.seance.app.data.download.DownloadStorage]). */

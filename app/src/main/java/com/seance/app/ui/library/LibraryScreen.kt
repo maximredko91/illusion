@@ -276,7 +276,12 @@ fun LibraryScreen(
                         else -> LazyVerticalGrid(
                             columns = posterGridColumns(),
                             state = gridState,
-                            flingBehavior = com.seance.app.ui.common.rememberSmoothFlingBehavior(),
+                            // Was a custom FlingBehavior damping initial velocity to ~70% (meant to
+                            // feel "softer") - reverted per feedback: damping velocity roughly
+                            // squares the lost distance (spline decay), so a fling that used to
+                            // carry across a couple rows now died almost immediately, reading as
+                            // "the grid got heavy, I have to swipe hard to get anywhere" rather
+                            // than smoother. Platform default fling is the correct baseline here.
                             modifier = Modifier.fillMaxSize().focusGroup(),
                             contentPadding = PaddingValues(8.dp)
                         ) {

@@ -6,6 +6,7 @@ import coil3.ImageLoader
 import coil3.PlatformContext
 import coil3.SingletonImageLoader
 import coil3.request.crossfade
+import okio.Path.Companion.toOkioPath
 import com.seance.app.data.backup.BackupManager
 import com.seance.app.data.crash.CrashReporter
 import com.seance.app.data.image.PosterCacheSettings
@@ -34,6 +35,7 @@ import com.seance.app.work.SeanceWorkerFactory
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 class SeanceApplication : Application(), Configuration.Provider, SingletonImageLoader.Factory {
@@ -116,6 +118,26 @@ class SeanceApplication : Application(), Configuration.Provider, SingletonImageL
             .components {
                 add(SmbImageFetcher.Factory(smbImagePool))
                 add(PosterCachePolicyInterceptor())
+            }
+            // Coil's own default disk cache caps at 250MB regardless of how much free space the
+            // device actually has - confirmed on-device this library's posters+fanarts alone
+            // filled that cap (251MB, 1169 files) while the device had 300+GB free, silently
+            // evicting older/larger entries (fanarts especially, being the bigger files) and
+            // making them "vanish offline" even though poster caching was on. User-configurable
+            // (Settings > Cache) for anyone on constrained device storage who'd rather cap this
+            // low than let it grow toward the 1GB default - same directory name Coil3 uses by
+            // default so existing cached entries carry over rather than being orphaned.
+            //
+            // newImageLoader() is a synchronous Coil callback, not suspend, so this reads the
+            // setting's current value once via runBlocking (consistent with this class's existing
+            // pattern of wiring singletons eagerly in onCreate) - a later change to the setting
+            // only takes effect after the app restarts and Coil rebuilds this ImageLoader fresh.
+            .diskCache {
+                val limitMb = kotlinx.coroutines.runBlocking { settingsRepository.imageCacheLimitMb.first() }
+                coil3.disk.DiskCache.Builder()
+                    .directory(context.cacheDir.resolve("coil3_disk_cache").toOkioPath())
+                    .maxSizeBytes(limitMb.toLong() * 1024 * 1024)
+                    .build()
             }
             // Posters stream in one-by-one over SMB as each fetch completes, popping in with no
             // transition of their own - a crossfade turns that into a soft fade instead of a hard

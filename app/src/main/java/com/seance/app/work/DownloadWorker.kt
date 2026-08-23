@@ -3,8 +3,10 @@ package com.seance.app.work
 import android.content.Context
 import android.net.Uri
 import androidx.work.CoroutineWorker
+import androidx.work.ForegroundInfo
 import androidx.work.WorkerParameters
 import androidx.work.workDataOf
+import com.seance.app.R
 import com.seance.app.data.download.DownloadStorage
 import com.seance.app.data.local.entity.DownloadEntity
 import com.seance.app.data.local.entity.DownloadStatus
@@ -31,9 +33,27 @@ class DownloadWorker(
     private val settingsRepository: SettingsRepository
 ) : CoroutineWorker(context, params) {
 
+    // Set as soon as the item is known, read by getForegroundInfo() - which WorkManager can call
+    // before doWork() has reached that point (speculatively negotiating foreground eligibility),
+    // hence the blank fallback rather than a lateinit that would crash on that early call.
+    private var currentTitle: String = ""
+
+    override suspend fun getForegroundInfo(): ForegroundInfo =
+        DownloadNotifications.progressForegroundInfo(
+            applicationContext,
+            currentTitle.ifBlank { applicationContext.getString(R.string.download_notification_channel_name) },
+            percent = null
+        )
+
     override suspend fun doWork(): Result {
         val stableId = inputData.getString(KEY_STABLE_ID) ?: return Result.failure()
         val item = libraryRepository.getById(stableId) ?: return Result.failure()
+        currentTitle = item.title
+        // Runs as a real foreground service for the whole download, not just a plain background
+        // CoroutineWorker - see DownloadNotifications' own KDoc for why a large file over SMB
+        // needs this (Android's background-execution time limit otherwise silently kills the
+        // worker partway through, which read as "download speed drops to 0 and never resumes").
+        setForeground(getForegroundInfo())
         val info = sourceRepository.connectionInfoById(item.sourceId)
             ?: return failWith(stableId, null, item.sizeBytes, "Источник SMB недоступен")
 
@@ -151,6 +171,10 @@ class DownloadWorker(
                         setProgress(workDataOf(KEY_DOWNLOADED to position, KEY_TOTAL to totalBytes))
                         downloadRepository.getForItem(stableId)?.let { entity ->
                             downloadRepository.upsert(entity.copy(downloadedBytes = position, updatedAt = now))
+                        }
+                        if (totalBytes > 0) {
+                            val percent = (position * 100 / totalBytes).toInt().coerceIn(0, 100)
+                            setForeground(DownloadNotifications.progressForegroundInfo(applicationContext, currentTitle, percent))
                         }
                     }
                 }
