@@ -630,6 +630,12 @@ private fun TabsHost(app: SeanceApplication, navController: NavHostController) {
                 key = category.name,
                 factory = LibraryViewModel.factory(app.libraryRepository, app.settingsRepository, category)
             )
+            // This branch is only composed while `category` is the active tab (Crossfade disposes
+            // it on switch, recomposing fresh on return) - LaunchedEffect(category) firing on every
+            // fresh entry into composition is exactly "reset sort/filters each time this tab is
+            // navigated to", per feedback. The ViewModel itself is still cached by key across
+            // switches (so items/scroll don't refetch/reset), only its filter state gets cleared.
+            LaunchedEffect(category) { libraryViewModel.resetFilters() }
             val items by libraryViewModel.items.collectAsState()
             val isLoading by libraryViewModel.isLoading.collectAsState()
             val sortOrder by libraryViewModel.sortOrder.collectAsState()

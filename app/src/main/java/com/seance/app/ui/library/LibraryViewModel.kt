@@ -132,6 +132,18 @@ class LibraryViewModel(
         _yearFilter.value = year
     }
 
+    /** Called each time the user navigates to this tab (see TabsHost) - per feedback, sort/genre/year should start fresh on every visit rather than carrying over whatever was picked last time. */
+    fun resetFilters() {
+        _genreFilter.value = null
+        _yearFilter.value = null
+        userOverrodeSortOrder = false
+        viewModelScope.launch {
+            val default = settingsRepository.defaultSortOrder.first()
+            _sortOrder.value = default
+            _sortAscending.value = default.defaultAscending
+        }
+    }
+
     companion object {
         fun factory(libraryRepository: LibraryRepository, settingsRepository: SettingsRepository, category: Category) = viewModelFactory {
             initializer { LibraryViewModel(libraryRepository, settingsRepository, category) }

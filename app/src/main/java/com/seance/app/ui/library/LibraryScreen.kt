@@ -191,11 +191,11 @@ fun LibraryScreen(
                 title = {
                     if (isLandscape) {
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                            Text(categoryTitle(category))
+                            Text(categoryTitle(category), maxLines = 1, overflow = TextOverflow.Ellipsis)
                             sortFilterRow()
                         }
                     } else {
-                        Text(categoryTitle(category))
+                        Text(categoryTitle(category), maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                 },
                 actions = {
