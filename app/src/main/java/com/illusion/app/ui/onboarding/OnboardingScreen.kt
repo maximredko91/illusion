@@ -1,6 +1,7 @@
 package com.illusion.app.ui.onboarding
 
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.ui.Alignment
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -110,7 +111,7 @@ private fun UiModeChoiceStep(
     Scaffold(topBar = { TopAppBar(title = { Text(stringResource(R.string.onboarding_ui_mode_title)) }) }) { innerPadding ->
         Column(
             modifier = Modifier.fillMaxSize().padding(innerPadding).padding(24.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically)
         ) {
             Text(stringResource(R.string.onboarding_ui_mode_description))
             val phoneSource = remember { MutableInteractionSource() }
