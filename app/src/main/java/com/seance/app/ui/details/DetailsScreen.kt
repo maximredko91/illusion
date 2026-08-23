@@ -799,19 +799,26 @@ private fun DetailsContent(
 
         // Same backdrop treatment as the tagline/studio/audio/subtitles card above it (per
         // feedback) - a plain Text here previously had no visual container of its own at all.
-        Text(
-            item.plot?.takeIf { it.isNotBlank() } ?: stringResource(R.string.details_no_description),
-            style = MaterialTheme.typography.bodyMedium,
-            // Was Justify - stretches word spacing to fill the line width, and on a narrow phone
-            // column a short last line of a paragraph (e.g. 3-4 words) got visibly wide gaps
-            // between words to fill it out. Plain Start reads more naturally at this width.
-            textAlign = TextAlign.Start,
+        Column(
             modifier = Modifier
                 .padding(horizontal = 16.dp, vertical = 8.dp)
                 .fillMaxWidth()
                 .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f), RoundedCornerShape(12.dp))
                 .padding(12.dp)
-        )
+        ) {
+            Text(
+                stringResource(R.string.details_description_label),
+                style = MaterialTheme.typography.bodySmall,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.padding(bottom = 4.dp)
+            )
+            Text(
+                item.plot?.takeIf { it.isNotBlank() } ?: stringResource(R.string.details_no_description),
+                style = MaterialTheme.typography.bodyMedium,
+                textAlign = TextAlign.Justify
+            )
+        }
 
         if (episodes.isNotEmpty()) {
             EpisodeList(episodes, downloads, onPlay, onDownloadSeason, onDownloadEpisode, onRemoveEpisodeDownload, onRemoveSeasonDownloads)

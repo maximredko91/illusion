@@ -322,6 +322,7 @@
     <string name="details_similar">Похожие</string>
     <string name="details_not_found">Не удалось найти этот элемент библиотеки</string>
     <string name="details_no_description">Без описания</string>
+    <string name="details_description_label">Описание</string>
     <string name="details_audio_tracks">Озвучка: %1$s</string>
     <string name="details_audio_tracks_label">"Озвучка: "</string>
     <string name="details_subtitles_label">Субтитры: </string>
