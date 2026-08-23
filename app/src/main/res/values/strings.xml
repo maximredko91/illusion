@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">Сеанс</string>
+    <string name="app_name">Иллюзион</string>
     <string name="exit_confirm_message">Нажмите ещё раз "назад" для выхода</string>
     <string name="player_open_external">Открыть во внешнем плеере</string>
     <string name="player_open_external_no_app">Не найдено приложение для открытия видео</string>
@@ -172,7 +172,7 @@
     <string name="details_download_remove_confirm_action">Удалить</string>
     <string name="details_download_error_generic">Не удалось скачать: %1$s</string>
 
-    <string name="onboarding_title">Настройка приложения «Сеанс»</string>
+    <string name="onboarding_title">Настройка приложения «Иллюзион»</string>
     <string name="onboarding_ui_mode_title">Выбор интерфейса</string>
     <string name="onboarding_ui_mode_description">На чём будете смотреть? Это можно поменять позже в настройках.</string>
     <string name="onboarding_ui_mode_phone">Телефон или планшет</string>

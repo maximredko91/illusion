@@ -15,36 +15,36 @@ val localProperties = Properties().apply {
     val file = rootProject.file("local.properties")
     if (file.exists()) file.inputStream().use { load(it) }
 }
-val ffmpegExtensionAar = localProperties.getProperty("seance.ffmpegExtension.aarPath")
+val ffmpegExtensionAar = localProperties.getProperty("illusion.ffmpegExtension.aarPath")
     ?.let { file(it) }
     ?.takeIf { it.exists() }
 
 // TMDB API key for the developer-only "add media" scraper (data/tmdb/TmdbClient.kt) - a free key
 // from https://www.themoviedb.org/settings/api, kept out of version control the same way as the
 // ffmpeg extension path above. Empty string if unset; TmdbClient treats that as "feature disabled."
-val tmdbApiKey = localProperties.getProperty("seance.tmdb.apiKey") ?: ""
+val tmdbApiKey = localProperties.getProperty("illusion.tmdb.apiKey") ?: ""
 
 // Fixed developer password for the "add media" gate (data/security/DevAccessStore.kt) - kept out
 // of version control the same way as the keys above, so it survives an app uninstall/data-clear
 // (the in-app-generated password does not, since it lives in this install's EncryptedSharedPreferences).
 // Empty string if unset; DevAccessStore falls back to its normal generate-and-show-once behavior.
-val devAccessPassword = localProperties.getProperty("seance.devAccess.password") ?: ""
+val devAccessPassword = localProperties.getProperty("illusion.devAccess.password") ?: ""
 
 android {
-    namespace = "com.seance.app"
+    namespace = "com.illusion.app"
     compileSdk {
         version = release(37)
     }
 
     defaultConfig {
-        applicationId = "com.seance.app"
+        applicationId = "com.illusion.app"
         minSdk = 26
         targetSdk = 37
         // Bump versionCode with every build installed for testing, and versionName's alphaN
         // suffix when it's a meaningfully new build - lets Settings show which exact build is on
         // a device instead of guessing from install timestamps.
-        versionCode = 63
-        versionName = "0.1.0-alpha62"
+        versionCode = 64
+        versionName = "0.1.0-alpha63"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("String", "TMDB_API_KEY", "\"$tmdbApiKey\"")

@@ -68,7 +68,7 @@ echo
 echo "Готово. Если сборка прошла успешно, AAR должен лежать примерно тут:"
 echo "  $AAR_PATH"
 echo
-echo "Дальше в проекте \"Сеанс\": пропишите путь к этому файлу в local.properties как"
-echo "  seance.ffmpegExtension.aarPath=$AAR_PATH"
+echo "Дальше в проекте \"Иллюзион\": пропишите путь к этому файлу в local.properties как"
+echo "  illusion.ffmpegExtension.aarPath=$AAR_PATH"
 echo "(см. закомментированный пример в gradle.properties) и пересоберите приложение —"
 echo "app/build.gradle.kts подключит его автоматически, если файл существует."

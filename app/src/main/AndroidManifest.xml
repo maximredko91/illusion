@@ -32,7 +32,7 @@
     <uses-feature android:name="android.software.leanback" android:required="false" />
 
     <application
-        android:name=".SeanceApplication"
+        android:name=".IllusionApplication"
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"
@@ -41,8 +41,8 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:enableOnBackInvokedCallback="true"
-        android:theme="@style/Theme.Seance">
-        <!-- SeanceApplication supplies a custom WorkerFactory (see Configuration.Provider) - the
+        android:theme="@style/Theme.Illusion">
+        <!-- IllusionApplication supplies a custom WorkerFactory (see Configuration.Provider) - the
              default WorkManager auto-initializer must be removed or it silently wins, leaving
              LibraryScanWorker/ThumbnailGenerationWorker to be built via the no-arg default
              factory, which fails since they take injected dependencies, not a bare constructor. -->
@@ -72,7 +72,7 @@
             android:name=".MainActivity"
             android:exported="true"
             android:label="@string/app_name"
-            android:theme="@style/Theme.Seance.Splash"
+            android:theme="@style/Theme.Illusion.Splash"
             android:windowSoftInputMode="adjustResize"
             android:supportsPictureInPicture="true"
             android:windowLayoutInDisplayCutoutMode="always"

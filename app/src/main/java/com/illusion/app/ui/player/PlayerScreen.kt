@@ -1,0 +1,853 @@
+package com.illusion.app.ui.player
+
+import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
+import android.media.AudioManager
+import android.view.WindowManager
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.displayCutout
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
+import androidx.lifecycle.viewmodel.compose.viewModel
+import android.util.Rational
+import androidx.media3.ui.AspectRatioFrameLayout
+import androidx.media3.ui.CaptionStyleCompat
+import androidx.media3.ui.PlayerView
+import androidx.media3.ui.SubtitleView
+import androidx.compose.ui.graphics.toArgb
+import com.illusion.app.R
+import com.illusion.app.data.player.SmbDataSourceFactory
+import com.illusion.app.data.repository.DownloadRepository
+import com.illusion.app.data.repository.LibraryRepository
+import com.illusion.app.data.repository.ThumbnailRepository
+import com.illusion.app.data.repository.WatchProgressRepository
+import com.illusion.app.ui.common.focusHighlight
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
+import kotlin.math.abs
+import kotlin.math.roundToInt
+
+private enum class DragMode { NONE, SEEK, BRIGHTNESS, VOLUME }
+
+/** Brightness/volume drags only trigger within this fraction of the screen width from each edge -
+ * the middle stays neutral so it doesn't fight with taps/drags meant for the center controls. */
+private const val EDGE_ZONE_FRACTION = 0.3f
+
+/** Brightness/volume drags reach their full 0-100% swing over this fraction of the screen height,
+ * not the full height - dividing by the whole screen height (tried first) meant covering the full
+ * range required dragging your thumb literally up to the physical top/bottom edge of the display,
+ * which is awkward to reach and easy to have swallowed by system gesture areas up there. Scaling
+ * against a shorter effective range makes the same 0-100% swing reachable from a comfortable
+ * middle stretch of the screen instead. */
+private const val VERTICAL_GESTURE_RANGE_FRACTION = 0.55f
+
+/** No tap/double-tap/hold/drag gesture starts within this distance of either screen edge - matches
+ * the same reasoning as Details' fanart hit-region fix (a touch that close to the bezel is an easy
+ * accidental hit, and it's also where the OS's own edge-swipe-back gesture lives). */
+private val EDGE_DEAD_ZONE = 32.dp
+
+/** How often a held press re-fires the seek step while holdToSeek is active. */
+private const val HOLD_SEEK_INTERVAL_MS = 400L
+
+@Composable
+fun PlayerScreen(
+    stableId: String,
+    isTrailer: Boolean = false,
+    libraryRepository: LibraryRepository,
+    watchProgressRepository: WatchProgressRepository,
+    thumbnailRepository: ThumbnailRepository,
+    settingsRepository: com.illusion.app.data.settings.SettingsRepository,
+    smbDataSourceFactory: SmbDataSourceFactory,
+    downloadRepository: DownloadRepository,
+    smbSourceRepository: com.illusion.app.data.repository.SmbSourceRepository,
+    credentialStore: com.illusion.app.data.smb.SmbCredentialStore,
+    onBack: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val context = LocalContext.current
+    val viewModel: PlayerViewModel = viewModel(
+        factory = PlayerViewModel.factory(
+            libraryRepository,
+            watchProgressRepository,
+            thumbnailRepository,
+            settingsRepository,
+            smbDataSourceFactory,
+            downloadRepository,
+            smbSourceRepository,
+            credentialStore,
+            context
+        )
+    )
+    LaunchedEffect(stableId, isTrailer) { viewModel.load(stableId, playTrailer = isTrailer) }
+    val uiState by viewModel.state.collectAsState()
+    // Collected (not read as a plain viewModel.player property access) so this composition
+    // actually recomposes when reloadPlayer() swaps in a fresh ExoPlayer instance - a plain
+    // property read wouldn't be observed by Compose's snapshot system.
+    val currentPlayer by viewModel.playerState.collectAsState()
+    val noExternalAppMessage = stringResource(R.string.player_open_external_no_app)
+
+    // Settings' "external player" choice (see SettingsRepository.playerMode) is applied once by
+    // PlayerViewModel.load() itself - this screen's only job when that fires is to hand the OS the
+    // intent and get out of the way, since there's no internal playback to show for this session.
+    LaunchedEffect(Unit) {
+        viewModel.launchExternalPlayer.collect { intent ->
+            runCatching { context.startActivity(intent) }.onFailure {
+                android.widget.Toast.makeText(context, noExternalAppMessage, android.widget.Toast.LENGTH_SHORT).show()
+            }
+            onBack()
+        }
+    }
+
+    KeepImmersiveFullscreen()
+    KeepScreenOn()
+
+    var controlsVisible by remember { mutableStateOf(true) }
+    var isLocked by remember { mutableStateOf(false) }
+    var showAudioDialog by remember { mutableStateOf(false) }
+    var showSubtitleDialog by remember { mutableStateOf(false) }
+    var showSpeedDialog by remember { mutableStateOf(false) }
+    var resizeMode by remember { mutableStateOf(AspectRatioFrameLayout.RESIZE_MODE_FIT) }
+    var resizeModeLabel by remember { mutableStateOf<String?>(null) }
+    var showAspectRatioBlockedDialog by remember { mutableStateOf(false) }
+    var playerViewRef by remember { mutableStateOf<PlayerView?>(null) }
+
+    val fitLabel = stringResource(R.string.player_aspect_ratio_fit)
+    val zoomLabel = stringResource(R.string.player_aspect_ratio_zoom)
+    val fillLabel = stringResource(R.string.player_aspect_ratio_fill)
+    fun cycleResizeMode() {
+        // Cycling the mode itself is harmless even when tainted (it just never has a visible
+        // effect - see PlayerViewModel.init), but showing the normal Fit/Zoom/Fill label instead
+        // of an explanation would look like the tap silently did nothing.
+        if (uiState.aspectRatioLockedBySharpen) {
+            showAspectRatioBlockedDialog = true
+            return
+        }
+        resizeMode = when (resizeMode) {
+            AspectRatioFrameLayout.RESIZE_MODE_FIT -> AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+            AspectRatioFrameLayout.RESIZE_MODE_ZOOM -> AspectRatioFrameLayout.RESIZE_MODE_FILL
+            else -> AspectRatioFrameLayout.RESIZE_MODE_FIT
+        }
+        resizeModeLabel = when (resizeMode) {
+            AspectRatioFrameLayout.RESIZE_MODE_FIT -> fitLabel
+            AspectRatioFrameLayout.RESIZE_MODE_ZOOM -> zoomLabel
+            else -> fillLabel
+        }
+    }
+    if (showAspectRatioBlockedDialog) {
+        AlertDialog(
+            onDismissRequest = { showAspectRatioBlockedDialog = false },
+            title = { Text(stringResource(R.string.player_aspect_ratio_blocked_title)) },
+            text = { Text(stringResource(R.string.player_aspect_ratio_blocked_message)) },
+            confirmButton = {
+                val reloadSource = remember { MutableInteractionSource() }
+                TextButton(
+                    onClick = {
+                        showAspectRatioBlockedDialog = false
+                        viewModel.reloadPlayer()
+                    },
+                    interactionSource = reloadSource,
+                    modifier = Modifier.focusHighlight(reloadSource)
+                ) { Text(stringResource(R.string.player_aspect_ratio_blocked_reload)) }
+            },
+            dismissButton = {
+                val closeSource = remember { MutableInteractionSource() }
+                TextButton(
+                    onClick = { showAspectRatioBlockedDialog = false },
+                    interactionSource = closeSource,
+                    modifier = Modifier.focusHighlight(closeSource)
+                ) { Text(stringResource(R.string.player_close)) }
+            }
+        )
+    }
+    LaunchedEffect(resizeModeLabel) {
+        if (resizeModeLabel != null) {
+            delay(800)
+            resizeModeLabel = null
+        }
+    }
+
+    // AspectRatioFrameLayout's own measure pass usually re-scales the video surface on rotation,
+    // but when playback is paused (no new decoder frames arriving) that relayout can be missed -
+    // force one explicitly so a paused frame isn't left stretched to the pre-rotation size.
+    val configuration = LocalConfiguration.current
+    LaunchedEffect(configuration.orientation) {
+        playerViewRef?.requestLayout()
+    }
+
+    // Any interaction with the controls themselves (dragging the seek bar, tapping subtitle/
+    // audio/speed icons, ...) needs to restart this countdown - previously it only keyed on
+    // controlsVisible/isPlaying, neither of which change for most control interactions, so the
+    // controls could fade out mid-interaction (e.g. while still dragging the seek bar).
+    // interactionTick is bumped from each control's own callback below (see bumpInteraction) -
+    // a full-screen non-consuming pointerInput sibling was tried first and dropped, since it sat
+    // in front of GestureLayer in the same Box and silently broke its brightness/volume/seek
+    // swipe gestures even though it never called .consume() itself.
+    var interactionTick by remember { mutableIntStateOf(0) }
+    fun bumpInteraction() { interactionTick++ }
+    LaunchedEffect(controlsVisible, uiState.isPlaying, interactionTick) {
+        if (controlsVisible && uiState.isPlaying) {
+            delay(3500)
+            controlsVisible = false
+        }
+    }
+
+    DisposableEffect(Unit) {
+        PipController.isPlayerActive = true
+        // See PipController.onPipClosed's own KDoc - some OEM skins don't finish() the activity
+        // when the PiP window's close button is tapped, so this is the fallback that actually
+        // stops playback in that case instead of leaving audio running with nothing visible.
+        PipController.onPipClosed = { viewModel.player.pause() }
+        onDispose {
+            PipController.isPlayerActive = false
+            PipController.onPipClosed = null
+        }
+    }
+    LaunchedEffect(uiState.videoAspectRatio) {
+        val ratio = uiState.videoAspectRatio
+        if (ratio > 0f) {
+            // PictureInPictureParams requires the ratio to stay within [1/2.39, 2.39].
+            val clamped = ratio.coerceIn(1f / 2.39f, 2.39f)
+            PipController.aspectRatio = Rational((clamped * 1000).toInt(), 1000)
+        }
+    }
+    val isInPip = PipController.isInPipMode
+
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .background(Color.Black)
+    ) {
+        AndroidView(
+            factory = { ctx -> PlayerView(ctx).apply { useController = false }.also { playerViewRef = it } },
+            update = { view ->
+                view.player = currentPlayer
+                view.resizeMode = resizeMode
+                // backgroundAlpha is the per-glyph "подложка" directly behind the text - windowColor
+                // (the larger padded box around the whole cue) is left fully transparent since that's
+                // not what "opacity" here refers to. edgeType/edgeColor stay Media3's own defaults.
+                val backgroundAlpha = (uiState.subtitleBackgroundOpacity * 255 / 100).coerceIn(0, 255)
+                val backgroundColor = (backgroundAlpha shl 24) or 0x000000
+                view.subtitleView?.setStyle(
+                    CaptionStyleCompat(
+                        uiState.subtitleTextColor,
+                        backgroundColor,
+                        Color.Transparent.toArgb(),
+                        CaptionStyleCompat.EDGE_TYPE_OUTLINE,
+                        Color.Black.toArgb(),
+                        null
+                    )
+                )
+                view.subtitleView?.setFractionalTextSize(
+                    SubtitleView.DEFAULT_TEXT_SIZE_FRACTION * (uiState.subtitleTextSizePercent / 100f)
+                )
+            },
+            modifier = Modifier.fillMaxSize()
+        )
+
+        if (!isInPip) {
+            GestureLayer(
+                enabled = !isLocked,
+                seekDurationMs = uiState.seekDurationMs,
+                currentPositionMs = uiState.currentPositionMs,
+                doubleTapSeekEnabled = uiState.doubleTapSeekEnabled,
+                swipeSeekEnabled = uiState.swipeSeekEnabled,
+                holdToSeekEnabled = uiState.holdToSeekEnabled,
+                onSingleTap = { controlsVisible = !controlsVisible },
+                onDoubleTapSeek = viewModel::seekBy,
+                onSeekByCommit = viewModel::seekBy,
+                modifier = Modifier.fillMaxSize()
+            )
+        }
+
+        if (!isInPip) {
+            resizeModeLabel?.let { label ->
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    LabelToast(label, modifier = Modifier.align(Alignment.Center))
+                }
+            }
+        }
+
+        // Centered on the CenterTransportControls play/pause button below when controls are
+        // visible, since that Box's center (excluding the top/bottom bars' height) isn't the
+        // same point as the screen's true center - the gap between the two is small in portrait
+        // but very noticeable in landscape, where the bars eat a much bigger share of the
+        // available height. Only falls back to true screen center when there's no play button
+        // shown to line up with.
+        if (uiState.isLoading && uiState.error == null && (isInPip || !controlsVisible || isLocked)) {
+            CircularProgressIndicator(
+                modifier = Modifier.align(Alignment.Center),
+                color = Color.White
+            )
+        }
+
+        if (!isInPip) {
+            AnimatedVisibility(
+                visible = uiState.showSkipIntro,
+                enter = fadeIn() + slideInVertically(initialOffsetY = { it / 2 }),
+                exit = fadeOut() + slideOutVertically(targetOffsetY = { it / 2 }),
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(24.dp)
+            ) {
+                SkipIntroBanner(onSkip = viewModel::skipIntro)
+            }
+
+            if (isLocked) {
+                LockedOverlay(onUnlock = { isLocked = false; controlsVisible = true })
+            }
+            AnimatedVisibility(
+                visible = controlsVisible && !isLocked,
+                enter = fadeIn(),
+                exit = fadeOut()
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .windowInsetsPadding(WindowInsets.safeDrawing)
+                ) {
+                    TopGradientBar(
+                        title = uiState.title,
+                        episodeLabel = uiState.episodeLabel,
+                        onBack = onBack,
+                        onOpenSubtitles = { bumpInteraction(); showSubtitleDialog = true },
+                        onOpenAudioTracks = { bumpInteraction(); showAudioDialog = true },
+                        onCycleAspectRatio = { bumpInteraction(); cycleResizeMode() },
+                        onOpenSettings = { bumpInteraction(); showSpeedDialog = true },
+                        sharpenEnabled = uiState.sharpenEnabled,
+                        onToggleSharpen = { bumpInteraction(); viewModel.setSharpenEnabled(!uiState.sharpenEnabled) }
+                    )
+                    Box(modifier = Modifier.fillMaxSize().weight(1f), contentAlignment = Alignment.Center) {
+                        if (uiState.isLoading && uiState.error == null && !isLocked) {
+                            CircularProgressIndicator(color = Color.White)
+                        }
+                        CenterTransportControls(
+                            isPlaying = uiState.isPlaying,
+                            onTogglePlayPause = { bumpInteraction(); viewModel.togglePlayPause() }
+                        )
+                    }
+                    BottomGradientBar(
+                        currentPositionMs = uiState.currentPositionMs,
+                        durationMs = uiState.durationMs,
+                        bufferedPositionMs = uiState.bufferedPositionMs,
+                        thumbnailFrames = uiState.thumbnailFrames,
+                        hasNextEpisode = uiState.hasNextEpisode,
+                        isLocked = isLocked,
+                        onSeekTo = { position -> bumpInteraction(); viewModel.seekTo(position) },
+                        onNextEpisode = { bumpInteraction(); viewModel.playNext() },
+                        onToggleLock = { bumpInteraction(); isLocked = true; controlsVisible = false }
+                    )
+                }
+            }
+
+            uiState.error?.let { message ->
+                ErrorOverlay(message = message, onRetry = viewModel::retry)
+            }
+        }
+
+        if (uiState.awaitingPlayerModeChoice) {
+            AlertDialog(
+                onDismissRequest = onBack,
+                title = { Text(stringResource(R.string.player_mode_ask_title)) },
+                confirmButton = {
+                    val externalSource = remember { MutableInteractionSource() }
+                    TextButton(
+                        onClick = { viewModel.choosePlayerMode(external = true) },
+                        interactionSource = externalSource,
+                        modifier = Modifier.focusHighlight(externalSource)
+                    ) { Text(stringResource(R.string.player_mode_ask_external)) }
+                },
+                dismissButton = {
+                    val internalSource = remember { MutableInteractionSource() }
+                    TextButton(
+                        onClick = { viewModel.choosePlayerMode(external = false) },
+                        interactionSource = internalSource,
+                        modifier = Modifier.focusHighlight(internalSource)
+                    ) { Text(stringResource(R.string.player_mode_ask_internal)) }
+                }
+            )
+        }
+
+        // Stays mounted at all times (not gated behind `if (showSpeedDialog)` like the other
+        // dialogs below) so its slide-in/out animation actually has something to animate - see the
+        // KDoc on PlayerSettingsPanel itself.
+        PlayerSettingsPanel(
+            visible = showSpeedDialog && !isInPip,
+            currentSpeed = uiState.playbackSpeed,
+            videoFormatSummary = viewModel.currentVideoFormatSummary(),
+            sharpenEnabled = uiState.sharpenEnabled,
+            onSharpenEnabledChange = viewModel::setSharpenEnabled,
+            sharpenAmount = uiState.sharpenAmount,
+            onSharpenAmountChange = viewModel::setSharpenAmount,
+            onResetSharpenAmount = viewModel::resetSharpenAmount,
+            aspectRatioLockedBySharpen = uiState.aspectRatioLockedBySharpen,
+            onReloadPlayer = viewModel::reloadPlayer,
+            showTechnicalInfo = uiState.showTechnicalInfo,
+            onShowTechnicalInfoChange = viewModel::setShowTechnicalInfo,
+            subtitleTextColor = uiState.subtitleTextColor,
+            onSubtitleTextColorChange = viewModel::setSubtitleTextColor,
+            subtitleBackgroundOpacity = uiState.subtitleBackgroundOpacity,
+            onSubtitleBackgroundOpacityChange = viewModel::setSubtitleBackgroundOpacity,
+            subtitleTextSizePercent = uiState.subtitleTextSizePercent,
+            onSubtitleTextSizePercentChange = viewModel::setSubtitleTextSizePercent,
+            onResetSubtitleStyle = viewModel::resetSubtitleStyle,
+            seekDurationSeconds = (uiState.seekDurationMs / 1000L).toInt(),
+            onSeekDurationSecondsChange = viewModel::setSeekDurationSeconds,
+            doubleTapSeekEnabled = uiState.doubleTapSeekEnabled,
+            onDoubleTapSeekEnabledChange = viewModel::setDoubleTapSeekEnabled,
+            swipeSeekEnabled = uiState.swipeSeekEnabled,
+            onSwipeSeekEnabledChange = viewModel::setSwipeSeekEnabled,
+            holdToSeekEnabled = uiState.holdToSeekEnabled,
+            onHoldToSeekEnabledChange = viewModel::setHoldToSeekEnabled,
+            canMarkIntro = uiState.canMarkIntro,
+            introMarkedEndMs = uiState.introMarkedEndMs,
+            onMarkIntroEnd = { viewModel.markIntroEnd(); showSpeedDialog = false },
+            onClearIntroMarkers = { viewModel.clearIntroMarkers(); showSpeedDialog = false },
+            onSelect = { speed -> viewModel.setPlaybackSpeed(speed); showSpeedDialog = false },
+            onDismiss = { showSpeedDialog = false }
+        )
+    }
+
+    if (showAudioDialog && !isInPip) {
+        TrackSelectionDialog(
+            title = stringResource(R.string.player_audio_tracks_title),
+            tracks = uiState.audioTracks,
+            allowOff = false,
+            onSelect = { option -> option?.let(viewModel::selectAudioTrack); showAudioDialog = false },
+            onDismiss = { showAudioDialog = false }
+        )
+    }
+    if (showSubtitleDialog && !isInPip) {
+        TrackSelectionDialog(
+            title = stringResource(R.string.player_subtitles_title),
+            tracks = uiState.subtitleTracks,
+            allowOff = true,
+            onSelect = { option -> viewModel.selectSubtitleTrack(option); showSubtitleDialog = false },
+            onDismiss = { showSubtitleDialog = false }
+        )
+    }
+}
+
+@Composable
+private fun LockedOverlay(onUnlock: () -> Unit) {
+    Box(modifier = Modifier.fillMaxSize()) {
+        val unlockSource = remember { MutableInteractionSource() }
+        IconButton(
+            onClick = onUnlock,
+            interactionSource = unlockSource,
+            modifier = Modifier.align(Alignment.BottomEnd).padding(24.dp).focusHighlight(unlockSource, color = Color.White)
+        ) {
+            Icon(Icons.Default.Lock, contentDescription = stringResource(R.string.player_unlock), tint = Color.White)
+        }
+    }
+}
+
+@Composable
+private fun KeepImmersiveFullscreen() {
+    val view = LocalView.current
+    DisposableEffect(Unit) {
+        val activity = view.context.findActivity()
+        val window = activity?.window
+        val controller = window?.let { WindowCompat.getInsetsController(it, view) }
+        controller?.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        controller?.hide(WindowInsetsCompat.Type.systemBars())
+        onDispose {
+            controller?.show(WindowInsetsCompat.Type.systemBars())
+        }
+    }
+}
+
+@Composable
+private fun KeepScreenOn() {
+    val view = LocalView.current
+    DisposableEffect(Unit) {
+        val activity = view.context.findActivity()
+        activity?.window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        onDispose {
+            activity?.window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        }
+    }
+}
+
+private fun Context.findActivity(): Activity? {
+    var ctx = this
+    while (ctx is ContextWrapper) {
+        if (ctx is Activity) return ctx
+        ctx = ctx.baseContext
+    }
+    return null
+}
+
+@Composable
+private fun GestureLayer(
+    enabled: Boolean,
+    seekDurationMs: Long,
+    currentPositionMs: Long,
+    doubleTapSeekEnabled: Boolean,
+    swipeSeekEnabled: Boolean,
+    holdToSeekEnabled: Boolean,
+    onSingleTap: () -> Unit,
+    onDoubleTapSeek: (Long) -> Unit,
+    onSeekByCommit: (Long) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    if (!enabled) {
+        Box(modifier = modifier)
+        return
+    }
+
+    val context = LocalContext.current
+    val activity = remember(context) { context.findActivity() }
+    val audioManager = remember(context) {
+        context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+    }
+    val scope = rememberCoroutineScope()
+
+    var showVolume by remember { mutableStateOf(false) }
+    var showBrightness by remember { mutableStateOf(false) }
+    var volumeFraction by remember { mutableFloatStateOf(0f) }
+    var brightnessFraction by remember { mutableFloatStateOf(0.5f) }
+    var volumeHideJob: Job? by remember { mutableStateOf<Job?>(null) }
+    var brightnessHideJob: Job? by remember { mutableStateOf<Job?>(null) }
+
+    fun pulseVolume() {
+        showVolume = true
+        volumeHideJob?.cancel()
+        volumeHideJob = scope.launch {
+            delay(800)
+            showVolume = false
+        }
+    }
+
+    fun pulseBrightness() {
+        showBrightness = true
+        brightnessHideJob?.cancel()
+        brightnessHideJob = scope.launch {
+            delay(800)
+            showBrightness = false
+        }
+    }
+
+    var seekToastText by remember { mutableStateOf<String?>(null) }
+    var seekToastAlignment by remember { mutableStateOf(Alignment.Center) }
+    var seekToastHideJob: Job? by remember { mutableStateOf<Job?>(null) }
+
+    // Landscape on some devices has a real display-cutout (front camera) on one side - the same
+    // mirror-both-sides approach DetailsScreen already uses for its own safe-area padding, so the
+    // brightness/volume pills stay visually centered regardless of which physical edge the cutout
+    // is actually on. Zero in portrait.
+    val cutoutInsets = WindowInsets.displayCutout
+    val gestureIndicatorDensity = androidx.compose.ui.platform.LocalDensity.current
+    val gestureIndicatorLayoutDirection = androidx.compose.ui.platform.LocalLayoutDirection.current
+    val cutoutHorizontalDp = with(gestureIndicatorDensity) {
+        maxOf(
+            cutoutInsets.getLeft(gestureIndicatorDensity, gestureIndicatorLayoutDirection),
+            cutoutInsets.getRight(gestureIndicatorDensity, gestureIndicatorLayoutDirection)
+        ).toDp()
+    }
+    // 24dp was flush enough against the raw screen edge to feel cramped there, doubly so once a
+    // cutout is added on top - 40dp base gives the pill some breathing room even with no cutout.
+    val gestureIndicatorEdgePadding = 40.dp + cutoutHorizontalDp
+
+    fun showSeekToast(text: String, alignment: Alignment, autoHideMs: Long?) {
+        seekToastText = text
+        seekToastAlignment = alignment
+        seekToastHideJob?.cancel()
+        seekToastHideJob = if (autoHideMs != null) {
+            scope.launch {
+                delay(autoHideMs)
+                seekToastText = null
+            }
+        } else {
+            null
+        }
+    }
+
+    Box(modifier = modifier) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            // Excludes a strip at each edge from every gesture below (tap/double-tap/hold/drag) -
+            // same idea as Details' fanart hit-region fix: a swipe that starts right at the physical
+            // bezel is easy to land by accident (and competes with the OS's own edge-swipe-back
+            // gesture there), so nothing in this player should react to a touch that starts that
+            // close to the edge.
+            // Vertical too, not just horizontal - a swipe down from the very top edge is meant to
+            // open the system notification shade, but without this the vertical brightness/volume
+            // drag detector (active in the left/right EDGE_ZONE_FRACTION thirds) claimed it first
+            // since the shade's own gesture-recognition strip is thin and this Box sat right under it.
+            .padding(horizontal = EDGE_DEAD_ZONE, vertical = EDGE_DEAD_ZONE)
+            .pointerInput(Unit, doubleTapSeekEnabled, holdToSeekEnabled) {
+                detectTapGestures(
+                    onPress = { offset ->
+                        if (!holdToSeekEnabled) return@detectTapGestures
+                        val forward = offset.x >= size.width / 2f
+                        var holdTickJob: Job? = null
+                        val armJob = scope.launch {
+                            delay(viewConfiguration.longPressTimeoutMillis)
+                            holdTickJob = scope.launch {
+                                while (isActive) {
+                                    onDoubleTapSeek(if (forward) seekDurationMs else -seekDurationMs)
+                                    val seconds = seekDurationMs / 1000
+                                    showSeekToast(
+                                        text = "${if (forward) "+" else "-"}$seconds сек",
+                                        alignment = if (forward) Alignment.CenterEnd else Alignment.CenterStart,
+                                        autoHideMs = HOLD_SEEK_INTERVAL_MS + 150
+                                    )
+                                    delay(HOLD_SEEK_INTERVAL_MS)
+                                }
+                            }
+                        }
+                        tryAwaitRelease()
+                        armJob.cancel()
+                        holdTickJob?.cancel()
+                    },
+                    // No-op, not omitted - passing this makes detectTapGestures treat a long hold as
+                    // consumed once past the long-press timeout, instead of still firing onTap the
+                    // moment the finger eventually lifts (which would toggle the controls visibility
+                    // right as a hold-seek gesture ends).
+                    onLongPress = {},
+                    onTap = { onSingleTap() },
+                    onDoubleTap = { offset ->
+                        if (!doubleTapSeekEnabled) return@detectTapGestures
+                        val forward = offset.x >= size.width / 2f
+                        onDoubleTapSeek(if (forward) seekDurationMs else -seekDurationMs)
+                        val seconds = seekDurationMs / 1000
+                        showSeekToast(
+                            text = "${if (forward) "+" else "-"}$seconds сек",
+                            alignment = if (forward) Alignment.CenterEnd else Alignment.CenterStart,
+                            autoHideMs = 600
+                        )
+                    }
+                )
+            }
+            .pointerInput(activity, swipeSeekEnabled) {
+                var mode = DragMode.NONE
+                var startX = 0f
+                var accumulatedDx = 0f
+                var accumulatedDy = 0f
+                var dragStartVolume = 0
+                var dragStartBrightness = 0f
+                val maxVolume = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
+
+                detectDragGestures(
+                    onDragStart = { offset ->
+                        mode = DragMode.NONE
+                        startX = offset.x
+                        accumulatedDx = 0f
+                        accumulatedDy = 0f
+                        dragStartVolume = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)
+                        dragStartBrightness = activity?.let { currentBrightness(it) } ?: 0.5f
+                    },
+                    onDrag = { change, dragAmount ->
+                        change.consume()
+                        accumulatedDx += dragAmount.x
+                        accumulatedDy += dragAmount.y
+                        if (mode == DragMode.NONE) {
+                            if (abs(accumulatedDx) > 24f || abs(accumulatedDy) > 24f) {
+                                val edgeZone = size.width * EDGE_ZONE_FRACTION
+                                val isHorizontalDrag = abs(accumulatedDx) > abs(accumulatedDy)
+                                mode = if (isHorizontalDrag) {
+                                    // A horizontal drag is never reinterpreted as brightness/volume
+                                    // even when swipe-seek is off - it just does nothing, rather than
+                                    // falling through to the vertical-only edge checks below.
+                                    if (swipeSeekEnabled) DragMode.SEEK else DragMode.NONE
+                                } else if (startX <= edgeZone) {
+                                    DragMode.BRIGHTNESS
+                                } else if (startX >= size.width - edgeZone) {
+                                    DragMode.VOLUME
+                                } else {
+                                    // Middle of the screen - not an edge zone, so a vertical drag here
+                                    // adjusts neither brightness nor volume (avoids accidental changes
+                                    // from taps/drags meant for the center controls).
+                                    DragMode.NONE
+                                }
+                            }
+                        }
+                        when (mode) {
+                            DragMode.VOLUME -> {
+                                val fraction = -accumulatedDy / (size.height * VERTICAL_GESTURE_RANGE_FRACTION)
+                                val newVolume = (dragStartVolume + fraction * maxVolume).roundToInt().coerceIn(0, maxVolume)
+                                audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, newVolume, 0)
+                                volumeFraction = if (maxVolume > 0) newVolume.toFloat() / maxVolume else 0f
+                                pulseVolume()
+                            }
+                            DragMode.BRIGHTNESS -> {
+                                val fraction = -accumulatedDy / (size.height * VERTICAL_GESTURE_RANGE_FRACTION)
+                                val newBrightness = (dragStartBrightness + fraction).coerceIn(0.02f, 1f)
+                                activity?.let { setBrightness(it, newBrightness) }
+                                brightnessFraction = newBrightness
+                                pulseBrightness()
+                            }
+                            DragMode.SEEK -> {
+                                val deltaMs = (accumulatedDx / size.width * 120_000f).toLong()
+                                val targetMs = (currentPositionMs + deltaMs).coerceAtLeast(0)
+                                val sign = if (deltaMs >= 0) "+" else "-"
+                                showSeekToast(
+                                    text = "${formatTime(targetMs)}  $sign${formatTime(abs(deltaMs))}",
+                                    alignment = Alignment.Center,
+                                    autoHideMs = null
+                                )
+                            }
+                            DragMode.NONE -> Unit
+                        }
+                    },
+                    onDragEnd = {
+                        if (mode == DragMode.SEEK) {
+                            val deltaMs = (accumulatedDx / size.width * 120_000f).toLong()
+                            onSeekByCommit(deltaMs)
+                            showSeekToast(seekToastText.orEmpty(), Alignment.Center, autoHideMs = 400)
+                        }
+                        mode = DragMode.NONE
+                    }
+                )
+            }
+    )
+
+        // Was a hard if/else snap (found by this session's audit) - every other transient overlay
+        // on this same screen (controls, skip-intro banner) already fades, so these two stood out
+        // as the last instant show/hide left in the player. Attached to the OUTER box (not the
+        // edge-inset gesture box above) so they stay aligned to the real screen edges regardless of
+        // EDGE_DEAD_ZONE.
+        AnimatedVisibility(
+            visible = showBrightness,
+            enter = fadeIn(),
+            exit = fadeOut(),
+            modifier = Modifier.align(Alignment.CenterStart).padding(start = gestureIndicatorEdgePadding)
+        ) {
+            GestureIndicator(label = "Яркость", fraction = brightnessFraction)
+        }
+        AnimatedVisibility(
+            visible = showVolume,
+            enter = fadeIn(),
+            exit = fadeOut(),
+            modifier = Modifier.align(Alignment.CenterEnd).padding(end = gestureIndicatorEdgePadding)
+        ) {
+            GestureIndicator(label = "Громкость", fraction = volumeFraction)
+        }
+        seekToastText?.let { text ->
+            LabelToast(
+                text,
+                modifier = Modifier
+                    .align(seekToastAlignment)
+                    .padding(horizontal = 96.dp)
+            )
+        }
+    }
+}
+
+@Composable
+private fun LabelToast(label: String, modifier: Modifier = Modifier) {
+    Column(
+        modifier = modifier
+            .clip(RoundedCornerShape(12.dp))
+            .background(Color.Black.copy(alpha = 0.6f))
+            .padding(16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(label, color = Color.White)
+    }
+}
+
+/** A vertical capsule HUD for volume/brightness, positioned at a screen edge so the two never overlap. */
+@Composable
+private fun GestureIndicator(label: String, fraction: Float, modifier: Modifier = Modifier) {
+    Column(
+        modifier = modifier,
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        Text(
+            text = label,
+            color = Color.White.copy(alpha = 0.85f),
+            style = MaterialTheme.typography.labelSmall
+        )
+        Box(
+            modifier = Modifier
+                .width(28.dp)
+                .height(96.dp)
+                .clip(RoundedCornerShape(14.dp))
+                .background(Color.Black.copy(alpha = 0.3f)),
+            contentAlignment = Alignment.BottomCenter
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .fillMaxHeight(fraction.coerceIn(0f, 1f))
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(Color.White.copy(alpha = 0.75f))
+            )
+        }
+        Text(
+            text = "${(fraction * 100).roundToInt()}%",
+            color = Color.White.copy(alpha = 0.85f),
+            style = MaterialTheme.typography.labelSmall
+        )
+    }
+}
+
+private fun currentBrightness(activity: Activity): Float {
+    val value = activity.window.attributes.screenBrightness
+    return if (value in 0f..1f) value else 0.5f
+}
+
+private fun setBrightness(activity: Activity, value: Float) {
+    val attrs = activity.window.attributes
+    attrs.screenBrightness = value
+    activity.window.attributes = attrs
+}

@@ -22,5 +22,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "Seance"
+rootProject.name = "Illusion"
 include(":app")
