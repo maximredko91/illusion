@@ -4,16 +4,19 @@
     <style name="Theme.Illusion" parent="android:Theme.Material.Light.NoActionBar" />
 
     <!-- MainActivity's launch theme only, swapped for Theme.Illusion the moment SplashScreen exits
-         (see MainActivity.installSplashScreen() + postSplashScreenTheme below). Design spec
-         "Перфорация": the animated mark fades/scales in (splash_icon_anim.xml) against
-         splash_bg (day/night variants in values / values-night). No
+         (see MainActivity.installSplashScreen() + postSplashScreenTheme below). Static mark (no
+         splash_icon_anim.xml scale/fade) against splash_bg (day/night variants in values /
+         values-night) - the OS splash's own fade/scale-in animation had no guaranteed way to
+         finish before Compose's AppSplashOverlay took over (the OS dismisses on first frame
+         drawn, which can land mid-animation), and the two sides re-animating independently read
+         as the icon visibly jumping in size - per feedback. A static icon on both sides removes
+         the animation entirely, so there's nothing left to fall out of sync. No
          windowSplashScreenBrandingImage - vector drawables can't render text, and a rasterized
-         wordmark PNG would go soft at higher densities; the spec's own recommendation is to skip
-         it here and show "ИЛЛЮЗИОН" as real text on the app's first screen instead if wanted. -->
+         wordmark PNG would go soft at higher densities; "ИЛЛЮЗИОН" is shown as real Compose Text
+         instead, right as this hands off (see AppSplashOverlay in MainActivity). -->
     <style name="Theme.Illusion.Splash" parent="Theme.SplashScreen">
         <item name="windowSplashScreenBackground">@color/splash_bg</item>
-        <item name="windowSplashScreenAnimatedIcon">@drawable/splash_icon_anim</item>
-        <item name="windowSplashScreenAnimationDuration">500</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_mark_splash</item>
         <item name="postSplashScreenTheme">@style/Theme.Illusion</item>
     </style>
 </resources>

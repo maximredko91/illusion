@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Знак для сплешскрина: canvas 288dp, видимая часть — внутренние 2/3.
-     Группа "mark" анимируется из splash_icon_anim.xml (её pivot — центр). -->
+<!-- Знак для сплешскрина: canvas 288dp, видимая часть — внутренние 2/3. Статичный (без
+     анимации) - используется как есть и в системном сплэше, и в Compose-оверлее ниже, чтобы
+     не было рассинхронизации между двумя независимыми анимациями. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="288dp"
     android:height="288dp"

@@ -11,9 +11,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.EnterTransition
-import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -107,26 +105,24 @@ class MainActivity : ComponentActivity() {
 /**
  * Continues the OS splash for a short moment on the Compose side, adding the "ИЛЛЮЗИОН" wordmark
  * the native splash can't show - androidx core-splashscreen's windowSplashScreenAnimatedIcon only
- * accepts a vector/animated-vector drawable, and vector drawables have no text support at all, so
- * the wordmark can't be baked into the OS splash itself the way the mark icon is. A rasterized PNG
- * branding image was the platform's other option, but that goes soft at higher densities where the
- * vector mark stays sharp - showing the same background+mark plus real Compose Text instead, right
- * as the OS splash hands off, reads as one continuous splash while keeping the wordmark vector-sharp.
- * Static (no re-run of the OS splash's own fade/scale-in) since that already played once.
+ * accepts a vector drawable, and vector drawables have no text support at all, so the wordmark
+ * can't be baked into the OS splash itself the way the mark icon is. A rasterized PNG branding
+ * image was the platform's other option, but that goes soft at higher densities where the vector
+ * mark stays sharp - showing the same background+mark plus real Compose Text instead, right as the
+ * OS splash hands off, reads as one continuous splash while keeping the wordmark vector-sharp.
+ * Everything here is static (no entrance animation on the icon or the wordmark) and so is the OS
+ * splash's own icon (@drawable/ic_mark_splash, not wrapped in an animated-vector) - two independent
+ * animations with no shared clock kept landing out of step with each other (the icon visibly
+ * jumping in size at the handoff, per feedback) since the OS splash dismisses on first frame drawn,
+ * which can land mid-animation. Nothing to fall out of sync once nothing moves.
  */
 @Composable
 private fun AppSplashOverlay() {
     var visible by remember { mutableStateOf(true) }
     LaunchedEffect(Unit) {
-        delay(550)
+        delay(650)
         visible = false
     }
-    // enter = None on the outer visibility - the default (fadeIn + expandIn) re-animated the
-    // whole box, including the icon, the instant this composable mounted, which visibly restarted
-    // the icon's appearance right after the OS splash had already finished animating it in - read
-    // as two separate steps snapping together instead of one continuous reveal. With no re-entrance
-    // here, this box's first Compose frame is already at full opacity/scale, picking up exactly
-    // where the OS splash left off; only the wordmark (which the OS splash never had) fades in.
     AnimatedVisibility(visible = visible, enter = EnterTransition.None, exit = fadeOut(tween(280))) {
         Box(
             modifier = Modifier
@@ -138,25 +134,17 @@ private fun AppSplashOverlay() {
                 painter = painterResource(R.drawable.ic_mark_splash),
                 contentDescription = null
             )
-            var wordmarkVisible by remember { mutableStateOf(false) }
-            LaunchedEffect(Unit) { wordmarkVisible = true }
-            AnimatedVisibility(
-                visible = wordmarkVisible,
-                enter = fadeIn(tween(240)),
-                exit = ExitTransition.None,
+            Text(
+                stringResource(R.string.app_name).uppercase(),
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
-                    .padding(PaddingValues(bottom = 60.dp))
-            ) {
-                Text(
-                    stringResource(R.string.app_name).uppercase(),
-                    color = colorResource(R.color.illusion_ink_on_bg),
-                    fontFamily = FontFamily.Serif,
-                    fontWeight = FontWeight.Medium,
-                    fontSize = 20.sp,
-                    letterSpacing = 0.22.em
-                )
-            }
+                    .padding(PaddingValues(bottom = 60.dp)),
+                color = colorResource(R.color.illusion_ink_on_bg),
+                fontFamily = FontFamily.Serif,
+                fontWeight = FontWeight.Medium,
+                fontSize = 20.sp,
+                letterSpacing = 0.22.em
+            )
         }
     }
 }
