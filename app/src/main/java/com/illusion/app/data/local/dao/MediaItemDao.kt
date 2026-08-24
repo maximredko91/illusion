@@ -58,10 +58,16 @@ interface MediaItemDao {
     fun observeRecentlyAdded(limit: Int = 20): Flow<List<MediaItemEntity>>
 
     // Title/originalTitle matches are ranked first (rankMatch = 0), everything else (plot, actors,
-    // seriesStableId - kept broad on purpose so a search still finds a title by a remembered plot
-    // detail or actor name) sorts after, alphabetically within each group. Without this, a query
-    // that happens to appear mid-word in some unrelated item's plot (e.g. "престиж" inside
-    // "престижные казино") ranked identically to an actual title match.
+    // seriesStableId, genre - kept broad on purpose so a search still finds a title by a
+    // remembered plot detail, actor name, or genre) sorts after, alphabetically within each group.
+    // Without this, a query that happens to appear mid-word in some unrelated item's plot (e.g.
+    // "престиж" inside "престижные казино") ranked identically to an actual title match.
+    //
+    // :translatedGenre - some .nfo sources write genre in English ("Action"), others in Russian
+    // ("Боевик"), with no normalization between them (see GenreTranslation.kt) - a Russian query
+    // like "боевик" is resolved to its English equivalent by the caller and passed here too, so it
+    // still matches English-tagged items. Null when the query isn't a known genre synonym at all,
+    // in which case this OR branch is simply never true for any row.
     @Query(
         """
         SELECT *, CASE WHEN title LIKE '%' || :query || '%' OR originalTitle LIKE '%' || :query || '%' THEN 0 ELSE 1 END AS rankMatch
@@ -71,10 +77,12 @@ interface MediaItemDao {
            OR plot LIKE '%' || :query || '%'
            OR actors LIKE '%' || :query || '%'
            OR seriesStableId LIKE '%' || :query || '%'
+           OR genres LIKE '%' || :query || '%'
+           OR (:translatedGenre IS NOT NULL AND genres LIKE '%' || :translatedGenre || '%')
         ORDER BY rankMatch, title
         """
     )
-    fun search(query: String): Flow<List<MediaItemEntity>>
+    fun search(query: String, translatedGenre: String?): Flow<List<MediaItemEntity>>
 
     @Query("SELECT * FROM media_items WHERE seriesStableId = :seriesStableId ORDER BY seasonNumber, episodeNumber")
     fun observeEpisodes(seriesStableId: String): Flow<List<MediaItemEntity>>

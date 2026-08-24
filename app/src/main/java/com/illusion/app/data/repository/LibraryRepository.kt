@@ -53,7 +53,8 @@ class LibraryRepository(private val dao: MediaItemDao) {
     fun observeByCollection(collectionName: String): Flow<List<MediaItemEntity>> =
         dao.observeByCollection(collectionName)
 
-    fun search(query: String): Flow<List<MediaItemEntity>> = dao.search(query)
+    fun search(query: String): Flow<List<MediaItemEntity>> =
+        dao.search(query, com.illusion.app.domain.model.russianGenreToEnglish(query))
 
     suspend fun getById(stableId: String): MediaItemEntity? = dao.getById(stableId)
 
