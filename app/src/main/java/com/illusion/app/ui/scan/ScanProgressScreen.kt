@@ -130,10 +130,16 @@ fun ScanProgressScreen(
             // SUCCEEDED's extra button) together still read as an abrupt cut - per feedback.
             // Slower tween + animateContentSize so the surrounding box resizes smoothly alongside
             // the fade instead of snapping to the new phase's height the instant it's targeted.
+            // alignment = Center (not the default TopStart) - the outer Column centers this whole
+            // Crossfade horizontally based on its current (animating) width every frame, while
+            // animateContentSize's own default TopStart anchor keeps the content pinned to its
+            // OWN top-left corner as that width shrinks/grows - those two competing centerings
+            // made the SUCCEEDED text visibly slide in from the left edge instead of just fading,
+            // per feedback. Matching alignments removes the conflict.
             Crossfade(
                 targetState = phase,
                 animationSpec = tween(500),
-                modifier = Modifier.animateContentSize(),
+                modifier = Modifier.animateContentSize(alignment = Alignment.Center),
                 label = "scanPhase"
             ) { currentPhase ->
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
