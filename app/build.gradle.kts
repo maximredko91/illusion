@@ -43,8 +43,8 @@ android {
         // Bump versionCode with every build installed for testing, and versionName's alphaN
         // suffix when it's a meaningfully new build - lets Settings show which exact build is on
         // a device instead of guessing from install timestamps.
-        versionCode = 65
-        versionName = "0.1.0-alpha64"
+        versionCode = 66
+        versionName = "0.1.0-alpha65"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("String", "TMDB_API_KEY", "\"$tmdbApiKey\"")
@@ -112,6 +112,11 @@ dependencies {
     implementation(libs.smbj)
     implementation(libs.androidx.security.crypto)
     implementation(libs.okhttp)
+
+    // On-device EN->RU translation for freeform .nfo <tag> values (data/translation/TagTranslator.kt) -
+    // model downloads once (needs network), then runs fully offline, same one-time-network shape
+    // as this app's only other online touchpoint (TmdbClient).
+    implementation("com.google.mlkit:translate:17.0.3")
 
     ffmpegExtensionAar?.let { implementation(files(it)) }
 
