@@ -472,6 +472,7 @@ private fun IllusionNavGraph(app: IllusionApplication, navController: NavHostCon
                 val sources by settingsViewModel.sources.collectAsState()
                 val cacheSizeBytes by settingsViewModel.cacheSizeBytes.collectAsState()
                 val downloadsSizeBytes by settingsViewModel.downloadsSizeBytes.collectAsState()
+                val recoveredDownloadsCount by settingsViewModel.recoveredDownloadsCount.collectAsState()
                 val pendingImportSources by settingsViewModel.pendingImportSources.collectAsState()
                 val backupMessage by settingsViewModel.backupMessage.collectAsState()
                 val isScanRunning by remember(context) { WorkScheduler.isOneTimeScanRunning(context) }.collectAsState(initial = false)
@@ -530,6 +531,9 @@ private fun IllusionNavGraph(app: IllusionApplication, navController: NavHostCon
                     downloadsSizeBytes = downloadsSizeBytes,
                     onRefreshDownloadsSize = { settingsViewModel.refreshDownloadsSize() },
                     onClearDownloads = { settingsViewModel.clearAllDownloads() },
+                    onRecoverDownloads = { uri -> settingsViewModel.recoverDownloads(uri) },
+                    recoveredDownloadsCount = recoveredDownloadsCount,
+                    onDismissRecoveredDownloadsMessage = { settingsViewModel.dismissRecoveredDownloadsMessage() },
                     onExportBackup = { uri -> settingsViewModel.exportBackup(context, uri) },
                     onImportBackup = { uri -> settingsViewModel.importBackup(context, uri) },
                     pendingImportSources = pendingImportSources,

@@ -59,7 +59,17 @@ data class MediaItemEntity(
     val imdbId: String? = null,
     val tmdbId: String? = null,
     /** Kodi's separate freeform <tag> field - distinct from [genres], often left in whatever language the scraper that wrote them used. */
-    val tags: List<String> = emptyList()
+    val tags: List<String> = emptyList(),
+    /**
+     * True only for a synthetic row created by [com.illusion.app.data.repository.DownloadRepository.recoverOrphanedDownloads] -
+     * a video file found sitting in the default downloads folder with no matching library row
+     * (app data cleared, or reinstalled, while the downloaded file itself survived). Has no real
+     * NAS source (sourceId is a sentinel, filePath is the local content:// Uri) and only enough
+     * metadata (title/year guessed from the folder name) to show up in Downloads and be playable -
+     * excluded from every ordinary library browse query (see MediaItemDao) so it never shows up
+     * in Home/Library/Search looking like a real, fully-scanned title.
+     */
+    val isOrphanedDownload: Boolean = false
 )
 
 /** True if any sidecar subtitle file follows the "forced" naming convention (e.g. "Movie.forced.srt") - the file itself isn't parsed, just its name. */

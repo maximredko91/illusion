@@ -147,6 +147,16 @@ fun DownloadsScreen(
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
+                            // Recovered after a data clear/reinstall (DownloadRepository.recoverOrphanedDownloads) -
+                            // title/year are only a guess from the folder name, no poster/plot/genres exist for it,
+                            // so it's worth being upfront that this isn't a normal library entry.
+                            if (entry.item.isOrphanedDownload) {
+                                Text(
+                                    stringResource(R.string.downloads_recovered),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
                             if (entry.download.status == DownloadStatus.DOWNLOADING || entry.download.status == DownloadStatus.QUEUED) {
                                 LinearProgressIndicator(
                                     progress = { downloadProgressFraction(entry.download) },

@@ -331,6 +331,22 @@ class SettingsViewModel(
         viewModelScope.launch { _downloadsSizeBytes.value = downloadRepository.totalSizeBytes() }
     }
 
+    private val _recoveredDownloadsCount = MutableStateFlow<Int?>(null)
+    /** Null = no result to show yet; a value (including 0) is shown once, then dismissed. */
+    val recoveredDownloadsCount: StateFlow<Int?> = _recoveredDownloadsCount.asStateFlow()
+
+    /** User just picked a folder via the system picker in response to "Восстановить загрузки" - see DownloadRepository.recoverOrphanedDownloads's own KDoc for why this is manual rather than automatic. */
+    fun recoverDownloads(treeUri: Uri) {
+        viewModelScope.launch {
+            _recoveredDownloadsCount.value = downloadRepository.recoverOrphanedDownloads(libraryRepository, treeUri)
+            refreshDownloadsSize()
+        }
+    }
+
+    fun dismissRecoveredDownloadsMessage() {
+        _recoveredDownloadsCount.value = null
+    }
+
     fun clearAllDownloads() {
         viewModelScope.launch {
             downloadRepository.removeAll()

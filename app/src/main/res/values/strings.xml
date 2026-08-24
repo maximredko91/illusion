@@ -92,6 +92,10 @@
     <string name="settings_downloads_choose_folder">Выбрать папку</string>
     <string name="settings_downloads_size">Скачано: %1$s</string>
     <string name="settings_downloads_clear">Удалить все загрузки</string>
+    <string name="settings_downloads_recover_description">Если данные приложения были очищены или оно переустановлено, но скачанные файлы остались на устройстве, укажите папку с ними (обычно Download/Illusion), чтобы вернуть их в список загрузок</string>
+    <string name="settings_downloads_recover_action">Восстановить загрузки</string>
+    <string name="settings_downloads_recover_none">В выбранной папке не нашлось новых файлов</string>
+    <string name="settings_downloads_recover_result">Восстановлено файлов: %1$d</string>
     <string name="settings_backup">Резервное копирование</string>
     <string name="settings_version">Версия %1$s (%2$d)</string>
     <string name="settings_backup_export">Экспорт</string>
@@ -177,6 +181,7 @@
 
     <string name="downloads_title">Загрузки</string>
     <string name="downloads_empty">Нет загруженных видео</string>
+    <string name="downloads_recovered">Восстановлено после очистки данных</string>
     <string name="downloads_remove">Удалить загрузку</string>
     <string name="downloads_resume">Возобновить скачивание</string>
     <string name="downloads_queued">В очереди</string>

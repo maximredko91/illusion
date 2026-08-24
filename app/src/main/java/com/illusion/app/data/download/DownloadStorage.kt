@@ -148,4 +148,40 @@ object DownloadStorage {
         val ext = fileName.substringAfterLast('.', "").lowercase()
         return MimeTypeMap.getSingleton().getMimeTypeFromExtension(ext) ?: "application/octet-stream"
     }
+
+    /** One video file found while walking a user-picked folder tree - see [listFilesUnderTree]. */
+    data class FoundFile(val uri: Uri, val displayName: String, val parentFolderName: String?, val sizeBytes: Long)
+
+    /**
+     * Recursively walks a SAF folder tree the user just picked via [Intent.ACTION_OPEN_DOCUMENT_TREE]
+     * (see the "Восстановить загрузки" action in Settings), for
+     * [com.illusion.app.data.repository.DownloadRepository.recoverOrphanedDownloads] to diff against
+     * the `downloads` table and find files with no matching row - the app's data was cleared, or it
+     * was reinstalled, while the downloaded files themselves survived.
+     *
+     * Deliberately NOT automatic (no MediaStore.Downloads query at app startup, the way this was
+     * first built) - confirmed on a real device that an app can't see `Downloads`-collection rows it
+     * didn't create in its *current* install/data generation via MediaStore, even holding
+     * READ_MEDIA_VIDEO; only MANAGE_EXTERNAL_STORAGE ("all files access") bridges that gap, and that
+     * permission is heavyweight enough (Play Store scrutinizes it, most OEM skins gate it behind
+     * their own settings screen not even reachable via ADB) that it isn't worth taking on for this
+     * one recovery flow. A SAF folder grant sidesteps the whole ownership question - it's an
+     * explicit user-directed permission, not tied to who created the files.
+     */
+    fun listFilesUnderTree(context: Context, treeUri: Uri): List<FoundFile> {
+        val root = DocumentFile.fromTreeUri(context, treeUri) ?: return emptyList()
+        val results = mutableListOf<FoundFile>()
+        fun walk(dir: DocumentFile, parentName: String?) {
+            dir.listFiles().forEach { child ->
+                if (child.isDirectory) {
+                    walk(child, child.name)
+                } else {
+                    val name = child.name ?: return@forEach
+                    results += FoundFile(child.uri, name, parentName, child.length())
+                }
+            }
+        }
+        walk(root, null)
+        return results
+    }
 }

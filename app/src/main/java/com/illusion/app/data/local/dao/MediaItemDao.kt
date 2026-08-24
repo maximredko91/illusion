@@ -42,7 +42,7 @@ interface MediaItemDao {
     // already used per-column.
     @Query(
         """
-        SELECT * FROM media_items WHERE category = :category
+        SELECT * FROM media_items WHERE category = :category AND isOrphanedDownload = 0
         ORDER BY
             CASE WHEN :sort = 'YEAR' AND :ascending THEN year END ASC,
             CASE WHEN :sort = 'YEAR' AND NOT :ascending THEN year END DESC,
@@ -54,7 +54,7 @@ interface MediaItemDao {
     )
     fun observeByCategory(category: Category, sort: String, ascending: Boolean): Flow<List<MediaItemEntity>>
 
-    @Query("SELECT * FROM media_items ORDER BY dateAdded DESC LIMIT :limit")
+    @Query("SELECT * FROM media_items WHERE isOrphanedDownload = 0 ORDER BY dateAdded DESC LIMIT :limit")
     fun observeRecentlyAdded(limit: Int = 20): Flow<List<MediaItemEntity>>
 
     // Title/originalTitle matches are ranked first (rankMatch = 0), everything else (plot, actors,
@@ -72,7 +72,8 @@ interface MediaItemDao {
         """
         SELECT *, CASE WHEN title LIKE '%' || :query || '%' OR originalTitle LIKE '%' || :query || '%' THEN 0 ELSE 1 END AS rankMatch
         FROM media_items
-        WHERE title LIKE '%' || :query || '%'
+        WHERE isOrphanedDownload = 0 AND (
+           title LIKE '%' || :query || '%'
            OR originalTitle LIKE '%' || :query || '%'
            OR plot LIKE '%' || :query || '%'
            OR actors LIKE '%' || :query || '%'
@@ -80,6 +81,7 @@ interface MediaItemDao {
            OR genres LIKE '%' || :query || '%'
            OR tags LIKE '%' || :query || '%'
            OR (:translatedGenre IS NOT NULL AND genres LIKE '%' || :translatedGenre || '%')
+        )
         ORDER BY rankMatch, title
         """
     )
@@ -88,10 +90,10 @@ interface MediaItemDao {
     @Query("SELECT * FROM media_items WHERE seriesStableId = :seriesStableId ORDER BY seasonNumber, episodeNumber")
     fun observeEpisodes(seriesStableId: String): Flow<List<MediaItemEntity>>
 
-    @Query("SELECT * FROM media_items WHERE collectionName = :collectionName")
+    @Query("SELECT * FROM media_items WHERE collectionName = :collectionName AND isOrphanedDownload = 0")
     fun observeByCollection(collectionName: String): Flow<List<MediaItemEntity>>
 
-    @Query("SELECT * FROM media_items WHERE category = :category")
+    @Query("SELECT * FROM media_items WHERE category = :category AND isOrphanedDownload = 0")
     suspend fun getByCategory(category: Category): List<MediaItemEntity>
 
     /**
@@ -108,7 +110,11 @@ interface MediaItemDao {
     @RawQuery
     suspend fun getByCategoryMatchingAnyGenre(query: SupportSQLiteQuery): List<MediaItemEntity>
 
-    @Query("SELECT * FROM media_items")
+    // Excludes orphaned-download recovery rows (see MediaItemEntity.isOrphanedDownload) - this
+    // powers Home's random picks and several other broad "everything in the library" scans, none
+    // of which a metadata-less recovered row should ever appear in. [getById] deliberately has no
+    // such filter - Downloads/Player still need to find it by id directly.
+    @Query("SELECT * FROM media_items WHERE isOrphanedDownload = 0")
     suspend fun getAll(): List<MediaItemEntity>
 
     @Query("SELECT * FROM media_items WHERE sourceId = :sourceId")

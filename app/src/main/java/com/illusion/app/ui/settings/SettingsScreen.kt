@@ -131,6 +131,9 @@ fun SettingsScreen(
     downloadsSizeBytes: Long?,
     onRefreshDownloadsSize: () -> Unit,
     onClearDownloads: () -> Unit,
+    onRecoverDownloads: (android.net.Uri) -> Unit,
+    recoveredDownloadsCount: Int?,
+    onDismissRecoveredDownloadsMessage: () -> Unit,
     onExportBackup: (android.net.Uri) -> Unit,
     onImportBackup: (android.net.Uri) -> Unit,
     pendingImportSources: List<BackupSource>,
@@ -179,6 +182,13 @@ fun SettingsScreen(
     val noFileAppMessage = stringResource(R.string.settings_downloads_no_file_app)
     val folderPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
         if (uri != null) onPickDownloadsFolder(uri)
+    }
+    // Separate from folderPicker above - this one doesn't change where new downloads are saved, it
+    // just points at a folder (typically Download/Illusion) to scan once for files a data clear or
+    // reinstall orphaned. See DownloadRepository.recoverOrphanedDownloads's KDoc for why this has to
+    // be a manual folder pick rather than an automatic scan.
+    val recoverFolderPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
+        if (uri != null) onRecoverDownloads(uri)
     }
     val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
         if (uri != null) onExportBackup(uri)
@@ -884,6 +894,45 @@ fun SettingsScreen(
                                     ) {
                                         Text(stringResource(R.string.settings_downloads_clear))
                                     }
+                                }
+                            }
+                            SettingsDivider()
+                            // Manual recovery for files a data clear/reinstall orphaned - the user
+                            // points at their real Downloads/Illusion folder (or wherever they see
+                            // it via a file manager) once via the system picker; nothing runs
+                            // automatically at startup (see this button's onClick / the repository
+                            // function's own KDoc for why an automatic scan doesn't actually work).
+                            Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp)) {
+                                Text(
+                                    stringResource(R.string.settings_downloads_recover_description),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Row(modifier = Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.End) {
+                                    val recoverSource = remember { MutableInteractionSource() }
+                                    OutlinedButton(
+                                        onClick = { recoverFolderPicker.launch(DownloadStorage.pickerInitialUri()) },
+                                        interactionSource = recoverSource,
+                                        modifier = Modifier.focusHighlight(recoverSource)
+                                    ) {
+                                        Text(stringResource(R.string.settings_downloads_recover_action))
+                                    }
+                                }
+                                if (recoveredDownloadsCount != null) {
+                                    LaunchedEffect(recoveredDownloadsCount) {
+                                        kotlinx.coroutines.delay(4000)
+                                        onDismissRecoveredDownloadsMessage()
+                                    }
+                                    Text(
+                                        if (recoveredDownloadsCount > 0) {
+                                            stringResource(R.string.settings_downloads_recover_result, recoveredDownloadsCount)
+                                        } else {
+                                            stringResource(R.string.settings_downloads_recover_none)
+                                        },
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.padding(top = 8.dp)
+                                    )
                                 }
                             }
                         }
