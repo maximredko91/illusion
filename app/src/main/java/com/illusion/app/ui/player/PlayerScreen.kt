@@ -247,12 +247,20 @@ fun PlayerScreen(
         }
     }
 
+    // Gated on readyForInternalPlayback (not unconditional on entering this screen) - otherwise
+    // PlayerMode.EXTERNAL's brief async hand-off window flagged isPlayerActive = true too, and
+    // backgrounding the app to launch the external app's Intent made onUserLeaveHint think a real
+    // internal playback session was in progress and enter PiP for a player showing nothing.
+    LaunchedEffect(uiState.readyForInternalPlayback) {
+        if (uiState.readyForInternalPlayback) {
+            PipController.isPlayerActive = true
+            // See PipController.onPipClosed's own KDoc - some OEM skins don't finish() the activity
+            // when the PiP window's close button is tapped, so this is the fallback that actually
+            // stops playback in that case instead of leaving audio running with nothing visible.
+            PipController.onPipClosed = { viewModel.player.pause() }
+        }
+    }
     DisposableEffect(Unit) {
-        PipController.isPlayerActive = true
-        // See PipController.onPipClosed's own KDoc - some OEM skins don't finish() the activity
-        // when the PiP window's close button is tapped, so this is the fallback that actually
-        // stops playback in that case instead of leaving audio running with nothing visible.
-        PipController.onPipClosed = { viewModel.player.pause() }
         onDispose {
             PipController.isPlayerActive = false
             PipController.onPipClosed = null
@@ -273,6 +281,11 @@ fun PlayerScreen(
             .fillMaxSize()
             .background(Color.Black)
     ) {
+        // Gated on readyForInternalPlayback rather than always rendered: for PlayerMode.EXTERNAL,
+        // this whole subtree (video surface, spinner, PiP eligibility below) used to exist for the
+        // brief async window before load() hands off to the external app, visibly flashing as if
+        // internal playback had started - see PlayerUiState.readyForInternalPlayback's own KDoc.
+        if (uiState.readyForInternalPlayback) {
         AndroidView(
             factory = { ctx -> PlayerView(ctx).apply { useController = false }.also { playerViewRef = it } },
             update = { view ->
@@ -398,6 +411,7 @@ fun PlayerScreen(
             uiState.error?.let { message ->
                 ErrorOverlay(message = message, onRetry = viewModel::retry)
             }
+        }
         }
 
         if (uiState.awaitingPlayerModeChoice) {

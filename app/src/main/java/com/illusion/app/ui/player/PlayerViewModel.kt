@@ -73,6 +73,8 @@ data class PlayerUiState(
     val isLoading: Boolean = true,
     /** True while PlayerMode.ASK is waiting on the user to pick internal vs. external for this one playback - see PlayerViewModel.load(). */
     val awaitingPlayerModeChoice: Boolean = false,
+    /** False until [PlayerViewModel.playItem] actually commits to internal playback - stays false for the entire PlayerMode.EXTERNAL hand-off window (settings/SMB-credential lookups are async, so this screen briefly exists before that decision resolves). PlayerScreen gates the video surface, loading spinner, and PiP eligibility on this so that window doesn't visibly flash as if internal playback had started, and so backgrounding the app to launch the external app's Intent doesn't trigger PiP for a player that's never going to play anything. */
+    val readyForInternalPlayback: Boolean = false,
     val title: String = "",
     val episodeLabel: String? = null,
     val isPlaying: Boolean = false,
@@ -210,18 +212,37 @@ class PlayerViewModel(
         })
     }
 
-    init {
-        attachListeners(player)
-        // Both start AND bind: a purely-bound (never started) service is denied FGS-start
-        // eligibility by Android 12+'s background-start restrictions - MediaSessionService's
-        // internal startForeground() call for the notification silently no-ops in that case (no
-        // crash, no log - it was only caught by dumpsys showing startForegroundCount=0). The
-        // session/notification becomes active within milliseconds of binding, well inside the ~5s
-        // startForegroundService() grace window, regardless of how long the stream itself takes to
-        // start buffering.
+    private var playbackServiceStarted = false
+
+    /**
+     * Both start AND bind: a purely-bound (never started) service is denied FGS-start eligibility
+     * by Android 12+'s background-start restrictions - MediaSessionService's internal
+     * startForeground() call for the notification silently no-ops in that case (no crash, no log -
+     * it was only caught by dumpsys showing startForegroundCount=0). The session/notification
+     * becomes active within milliseconds of binding, well inside the ~5s startForegroundService()
+     * grace window, regardless of how long the stream itself takes to start buffering.
+     *
+     * Deliberately NOT called unconditionally from init - only from [playItem], which fires
+     * exclusively on an actual internal-playback path (PlayerMode.INTERNAL, the ASK/EXTERNAL
+     * fallback when no external app is available, or a trailer, which always plays internally).
+     * Starting it eagerly for every PlayerScreen composition used to also fire it for
+     * PlayerMode.EXTERNAL, where [load] immediately hands off to another app and this screen pops
+     * itself via onBack() - the bound player then never actually plays anything, so
+     * MediaSessionService never gets a reason to call its own startForeground(), and Android kills
+     * the process ~5s later with ForegroundServiceDidNotStartInTimeException once the OS gets
+     * around to enforcing it (observed on-device as a crash right after returning from an external
+     * player, not immediately on launch).
+     */
+    private fun ensurePlaybackServiceStarted() {
+        if (playbackServiceStarted) return
+        playbackServiceStarted = true
         val serviceIntent = Intent(appContext, com.illusion.app.data.player.PlaybackService::class.java)
         androidx.core.content.ContextCompat.startForegroundService(appContext, serviceIntent)
         appContext.bindService(serviceIntent, playbackServiceConnection, Context.BIND_AUTO_CREATE)
+    }
+
+    init {
+        attachListeners(player)
 
         viewModelScope.launch {
             // Calling setVideoEffects() at all - even with an empty list - permanently switches
@@ -407,6 +428,8 @@ class PlayerViewModel(
     /** Actually hands [item] to the current player - shared by [load] (fresh navigation into the
      * player) and [reloadPlayer] (same item, same [player] instance identity swapped out under it). */
     private suspend fun playItem(item: MediaItemEntity, startPositionMs: Long, autoPlay: Boolean) {
+        ensurePlaybackServiceStarted()
+        _state.update { it.copy(readyForInternalPlayback = true) }
         val download = completedDownload(item.stableId)
         val uri = download?.let { Uri.parse(it.contentUri) } ?: SmbMediaUri.build(item.sourceId, item.filePath, item.sizeBytes)
         val subtitleConfigs = if (download != null && download.subtitles.isNotEmpty()) {
@@ -568,13 +591,14 @@ class PlayerViewModel(
 
     /** Intent to hand [item] off to an external video player app - null if there's no compatible app or its SMB source no longer exists. */
     private suspend fun resolveExternalPlayerIntent(item: MediaItemEntity): Intent? {
+        val packageName = settingsRepository.externalPlayerPackage.first()
         val download = completedDownload(item.stableId)
         if (download != null) {
-            return ExternalPlayer.forDownload(download.contentUri, item.title)
+            return ExternalPlayer.forDownload(download.contentUri, item.title, packageName)
         }
         val source = smbSourceRepository.getById(item.sourceId) ?: return null
         val password = credentialStore.getPassword(source.id)
-        return ExternalPlayer.forSmbSource(source, password, item.filePath, item.title)
+        return ExternalPlayer.forSmbSource(source, password, item.filePath, item.title, packageName)
     }
 
     private suspend fun loadThumbnailFrames(stableId: String) {
@@ -892,9 +916,11 @@ class PlayerViewModel(
                 watchProgressRepository.updateProgress(item.stableId, position, duration, watched, System.currentTimeMillis())
             }
         }
-        playbackService?.detachPlayer()
-        runCatching { appContext.unbindService(playbackServiceConnection) }
-        appContext.stopService(Intent(appContext, com.illusion.app.data.player.PlaybackService::class.java))
+        if (playbackServiceStarted) {
+            playbackService?.detachPlayer()
+            runCatching { appContext.unbindService(playbackServiceConnection) }
+            appContext.stopService(Intent(appContext, com.illusion.app.data.player.PlaybackService::class.java))
+        }
         player.release()
     }
 

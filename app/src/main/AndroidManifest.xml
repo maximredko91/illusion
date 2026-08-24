@@ -31,6 +31,17 @@
     <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
     <uses-feature android:name="android.software.leanback" android:required="false" />
 
+    <!-- Android 11+ (API 30+) hides other apps from PackageManager queries by default (package
+         visibility) regardless of any runtime permission - without this, InstalledPlayerApps'
+         queryIntentActivities call would silently return an empty list on a real device even
+         with VLC/MX Player installed, making the external-player picker in Settings look broken. -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:mimeType="video/*" />
+        </intent>
+    </queries>
+
     <application
         android:name=".IllusionApplication"
         android:allowBackup="true"

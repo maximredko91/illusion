@@ -105,6 +105,8 @@ fun SettingsScreen(
     rescanIntervalHours: Flow<Int>,
     playerMode: Flow<com.illusion.app.domain.model.PlayerMode>,
     onPlayerModeChange: (com.illusion.app.domain.model.PlayerMode) -> Unit,
+    externalPlayerPackage: Flow<String?>,
+    onExternalPlayerPackageChange: (String?) -> Unit,
     cacheSizeBytes: Long?,
     onRefreshCacheSize: () -> Unit,
     onOpenCache: () -> Unit,
@@ -159,6 +161,7 @@ fun SettingsScreen(
     val currentUiMode by uiMode.collectAsState(initial = null)
     val currentDefaultSortOrder by defaultSortOrder.collectAsState(initial = SortOrder.RATING)
     val currentPlayerMode by playerMode.collectAsState(initial = com.illusion.app.domain.model.PlayerMode.INTERNAL)
+    val currentExternalPlayerPackage by externalPlayerPackage.collectAsState(initial = null)
     val hapticsOn by hapticsEnabled.collectAsState(initial = true)
     val predictiveBackOn by predictiveBackEnabled.collectAsState(initial = true)
     val currentAccentColor by accentColor.collectAsState(initial = com.illusion.app.domain.model.AccentColor.ILLUSION)
@@ -823,6 +826,28 @@ fun SettingsScreen(
                                 colors = ListItemDefaults.colors(containerColor = Color.Transparent),
                                 modifier = Modifier.fillMaxWidth()
                             )
+                            // Only relevant once external playback can actually happen - hidden for
+                            // PlayerMode.INTERNAL rather than shown-but-disabled, since it has no
+                            // effect at all in that mode.
+                            if (currentPlayerMode != com.illusion.app.domain.model.PlayerMode.INTERNAL) {
+                                ListItem(
+                                    headlineContent = {
+                                        Column {
+                                            Text(stringResource(R.string.settings_external_player_app))
+                                            Text(
+                                                stringResource(R.string.settings_external_player_app_description),
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+                                    },
+                                    trailingContent = {
+                                        ExternalPlayerAppMenu(currentExternalPlayerPackage, onExternalPlayerPackageChange)
+                                    },
+                                    colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                            }
                         }
                     }
 
@@ -1441,6 +1466,50 @@ private fun PlayerModeMenu(current: com.illusion.app.domain.model.PlayerMode, on
                     onClick = {
                         haptics.segmentTick()
                         onChange(mode)
+                        expanded = false
+                    },
+                    interactionSource = itemSource,
+                    modifier = Modifier.focusHighlight(itemSource)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ExternalPlayerAppMenu(currentPackage: String?, onChange: (String?) -> Unit) {
+    var expanded by remember { mutableStateOf(false) }
+    val haptics = LocalHapticFeedback.current
+    val context = LocalContext.current
+    // Scanned once per composition rather than observed live - installed apps don't change while
+    // this menu is open, and re-querying PackageManager on every recomposition would be wasteful.
+    val apps = remember { com.illusion.app.data.player.InstalledPlayerApps.list(context) }
+    val systemLabel = stringResource(R.string.settings_external_player_app_system)
+    val currentLabel = apps.find { it.packageName == currentPackage }?.label ?: systemLabel
+    Box {
+        val triggerSource = remember { MutableInteractionSource() }
+        OutlinedButton(onClick = { expanded = true }, interactionSource = triggerSource, modifier = Modifier.focusHighlight(triggerSource)) {
+            Text(currentLabel)
+        }
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            val defaultSource = remember { MutableInteractionSource() }
+            DropdownMenuItem(
+                text = { Text(systemLabel) },
+                onClick = {
+                    haptics.segmentTick()
+                    onChange(null)
+                    expanded = false
+                },
+                interactionSource = defaultSource,
+                modifier = Modifier.focusHighlight(defaultSource)
+            )
+            apps.forEach { app ->
+                val itemSource = remember { MutableInteractionSource() }
+                DropdownMenuItem(
+                    text = { Text(app.label) },
+                    onClick = {
+                        haptics.segmentTick()
+                        onChange(app.packageName)
                         expanded = false
                     },
                     interactionSource = itemSource,

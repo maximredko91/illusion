@@ -42,6 +42,7 @@ class SettingsRepository(private val context: Context) {
         val ACCENT_COLOR = stringPreferencesKey("accent_color")
         val THEME_MODE = stringPreferencesKey("theme_mode")
         val PLAYER_MODE = stringPreferencesKey("player_mode")
+        val EXTERNAL_PLAYER_PACKAGE = stringPreferencesKey("external_player_package")
         val PREDICTIVE_BACK_ENABLED = booleanPreferencesKey("predictive_back_enabled")
         val DEEPL_API_KEY = stringPreferencesKey("deepl_api_key")
         val RECENT_SEARCHES = stringPreferencesKey("recent_searches")
@@ -166,6 +167,15 @@ class SettingsRepository(private val context: Context) {
 
     suspend fun setPlayerMode(mode: PlayerMode) {
         context.dataStore.edit { it[Keys.PLAYER_MODE] = mode.name }
+    }
+
+    /** Package name of the specific external player app to hand playback to, chosen from InstalledPlayerApps' scan - null means let Android decide (its own disambiguation dialog if more than one app matches, or launch the sole match directly), which was this setting's implicit default before it existed. */
+    val externalPlayerPackage: Flow<String?> = context.dataStore.data.map { it[Keys.EXTERNAL_PLAYER_PACKAGE] }
+
+    suspend fun setExternalPlayerPackage(packageName: String?) {
+        context.dataStore.edit {
+            if (packageName == null) it.remove(Keys.EXTERNAL_PLAYER_PACKAGE) else it[Keys.EXTERNAL_PLAYER_PACKAGE] = packageName
+        }
     }
 
     /** Tap the left/right half of the video twice to skip back/forward by [seekDurationSeconds]. */

@@ -95,6 +95,12 @@ class SettingsViewModel(
         viewModelScope.launch { settingsRepository.setPlayerMode(mode) }
     }
 
+    val externalPlayerPackage: Flow<String?> = settingsRepository.externalPlayerPackage
+
+    fun setExternalPlayerPackage(packageName: String?) {
+        viewModelScope.launch { settingsRepository.setExternalPlayerPackage(packageName) }
+    }
+
     fun setDefaultSortOrder(order: SortOrder) {
         viewModelScope.launch { settingsRepository.setDefaultSortOrder(order) }
     }

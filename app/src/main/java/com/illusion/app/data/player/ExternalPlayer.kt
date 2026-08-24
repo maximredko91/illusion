@@ -18,14 +18,27 @@ import com.illusion.app.data.local.entity.SmbSourceEntity
  * this app already holding those same credentials to stream it itself.
  */
 object ExternalPlayer {
-    fun forDownload(contentUri: String, title: String): Intent =
+    /**
+     * [packageName] pins the Intent to one specific app (the user's Settings choice, see
+     * InstalledPlayerApps) so it launches directly - null leaves it implicit, which makes Android
+     * show its own disambiguation dialog when more than one app matches, or launch the sole match
+     * directly.
+     */
+    fun forDownload(contentUri: String, title: String, packageName: String? = null): Intent =
         Intent(Intent.ACTION_VIEW).apply {
             setDataAndType(Uri.parse(contentUri), "video/*")
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
             putExtra("title", title)
+            packageName?.let { setPackage(it) }
         }
 
-    fun forSmbSource(source: SmbSourceEntity, password: String?, filePath: String, title: String): Intent {
+    fun forSmbSource(
+        source: SmbSourceEntity,
+        password: String?,
+        filePath: String,
+        title: String,
+        packageName: String? = null
+    ): Intent {
         val encodedPath = filePath
             .trimStart('/')
             .split('/')
@@ -36,6 +49,7 @@ object ExternalPlayer {
             setDataAndType(Uri.parse(url), "video/*")
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             putExtra("title", title)
+            packageName?.let { setPackage(it) }
         }
     }
 }

@@ -490,6 +490,8 @@ private fun IllusionNavGraph(app: IllusionApplication, navController: NavHostCon
                     rescanIntervalHours = settingsViewModel.rescanIntervalHours,
                     playerMode = settingsViewModel.playerMode,
                     onPlayerModeChange = settingsViewModel::setPlayerMode,
+                    externalPlayerPackage = settingsViewModel.externalPlayerPackage,
+                    onExternalPlayerPackageChange = settingsViewModel::setExternalPlayerPackage,
                     cacheSizeBytes = cacheSizeBytes,
                     onRefreshCacheSize = { settingsViewModel.refreshCacheSize(context) },
                     onOpenCache = { navController.navigate(Destination.Cache) },
