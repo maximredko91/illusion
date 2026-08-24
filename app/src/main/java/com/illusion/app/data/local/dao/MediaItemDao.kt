@@ -78,6 +78,7 @@ interface MediaItemDao {
            OR actors LIKE '%' || :query || '%'
            OR seriesStableId LIKE '%' || :query || '%'
            OR genres LIKE '%' || :query || '%'
+           OR tags LIKE '%' || :query || '%'
            OR (:translatedGenre IS NOT NULL AND genres LIKE '%' || :translatedGenre || '%')
         ORDER BY rankMatch, title
         """

@@ -98,6 +98,7 @@ import com.illusion.app.ui.person.PersonScreen
 import com.illusion.app.ui.player.PlayerScreen
 import com.illusion.app.ui.scan.ScanProgressScreen
 import com.illusion.app.ui.search.SearchScreen
+import com.illusion.app.ui.search.TagsScreen
 import com.illusion.app.ui.settings.CacheScreen
 import com.illusion.app.ui.settings.SettingsScreen
 import com.illusion.app.ui.settings.SettingsViewModel
@@ -374,16 +375,33 @@ private fun IllusionNavGraph(app: IllusionApplication, navController: NavHostCon
                     onBack = { navController.popBackStack() }
                 )
             }
-            composable<Destination.Search> {
+            composable<Destination.Search> { entry ->
                 CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides this) {
+                    val search = entry.toRoute<Destination.Search>()
                     SearchScreen(
                         libraryRepository = app.libraryRepository,
                         settingsRepository = app.settingsRepository,
+                        initialQuery = search.initialQuery,
                         onOpenItem = { stableId -> navController.navigate(Destination.Details(stableId)) },
                         onOpenSettings = { navController.navigate(Destination.Settings) },
                         onOpenFavorites = { navController.navigate(Destination.Favorites) },
                         onOpenHistory = { navController.navigate(Destination.History) },
-                        onOpenDownloads = { navController.navigate(Destination.Downloads) }
+                        onOpenDownloads = { navController.navigate(Destination.Downloads) },
+                        onOpenTags = { navController.navigate(Destination.Tags) }
+                    )
+                }
+            }
+            composable<Destination.Tags> {
+                CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides this) {
+                    TagsScreen(
+                        libraryRepository = app.libraryRepository,
+                        translationRepository = app.tagTranslationRepository,
+                        onSelectTag = { tag ->
+                            navController.navigate(Destination.Search(tag)) {
+                                popUpTo(Destination.Search()) { inclusive = true }
+                            }
+                        },
+                        onBack = { navController.popBackStack() }
                     )
                 }
             }
@@ -449,15 +467,24 @@ private fun IllusionNavGraph(app: IllusionApplication, navController: NavHostCon
             composable<Destination.Settings> {
                 val context = LocalContext.current
                 val settingsViewModel: SettingsViewModel = viewModel(
-                    factory = SettingsViewModel.factory(app.smbSourceRepository, app.settingsRepository, app.thumbnailRepository, app.downloadRepository, app.backupManager, app.devAccessStore, app.libraryRepository, app.watchProgressRepository)
+                    factory = SettingsViewModel.factory(app.smbSourceRepository, app.settingsRepository, app.thumbnailRepository, app.downloadRepository, app.backupManager, app.devAccessStore, app.libraryRepository, app.watchProgressRepository, app.tagTranslationRepository)
                 )
                 val sources by settingsViewModel.sources.collectAsState()
                 val cacheSizeBytes by settingsViewModel.cacheSizeBytes.collectAsState()
                 val downloadsSizeBytes by settingsViewModel.downloadsSizeBytes.collectAsState()
                 val pendingImportSources by settingsViewModel.pendingImportSources.collectAsState()
                 val backupMessage by settingsViewModel.backupMessage.collectAsState()
+                val isScanRunning by remember(context) { WorkScheduler.isOneTimeScanRunning(context) }.collectAsState(initial = false)
+                val scanCoroutineScope = rememberCoroutineScope()
+                val deeplUpgradeState by settingsViewModel.deeplUpgradeState.collectAsState()
                 SettingsScreen(
                     sources = sources,
+                    deeplApiKey = settingsViewModel.deeplApiKey,
+                    onDeeplApiKeyChange = settingsViewModel::setDeeplApiKey,
+                    deeplUpgradeState = deeplUpgradeState,
+                    onUpgradeTagsToDeepL = settingsViewModel::upgradeTagsToDeepL,
+                    onCancelTagsUpgrade = settingsViewModel::cancelTagsUpgrade,
+                    onDismissDeeplUpgradeState = settingsViewModel::dismissDeeplUpgradeState,
                     requireChargingForHeavyTasks = settingsViewModel.requireChargingForHeavyTasks,
                     rescanIntervalHours = settingsViewModel.rescanIntervalHours,
                     playerMode = settingsViewModel.playerMode,
@@ -484,6 +511,19 @@ private fun IllusionNavGraph(app: IllusionApplication, navController: NavHostCon
                     onRescanNow = {
                         val workId = WorkScheduler.enqueueOneTimeScan(context)
                         navController.navigate(Destination.ScanProgress(workId.toString()))
+                    },
+                    onRescanForceNow = {
+                        val workId = WorkScheduler.enqueueOneTimeScan(context, force = true)
+                        navController.navigate(Destination.ScanProgress(workId.toString()))
+                    },
+                    isScanRunning = isScanRunning,
+                    onOpenRunningScan = {
+                        scanCoroutineScope.launch {
+                            val workId = WorkScheduler.runningOneTimeScanWorkId(context)
+                            if (workId != null) {
+                                navController.navigate(Destination.ScanProgress(workId.toString()))
+                            }
+                        }
                     },
                     downloadsFolderUri = settingsViewModel.downloadsFolderUri,
                     onPickDownloadsFolder = { uri -> settingsViewModel.setDownloadsFolderUri(context, uri) },
@@ -515,7 +555,7 @@ private fun IllusionNavGraph(app: IllusionApplication, navController: NavHostCon
             composable<Destination.Cache> {
                 val context = LocalContext.current
                 val settingsViewModel: SettingsViewModel = viewModel(
-                    factory = SettingsViewModel.factory(app.smbSourceRepository, app.settingsRepository, app.thumbnailRepository, app.downloadRepository, app.backupManager, app.devAccessStore, app.libraryRepository, app.watchProgressRepository)
+                    factory = SettingsViewModel.factory(app.smbSourceRepository, app.settingsRepository, app.thumbnailRepository, app.downloadRepository, app.backupManager, app.devAccessStore, app.libraryRepository, app.watchProgressRepository, app.tagTranslationRepository)
                 )
                 val cacheSizeBytes by settingsViewModel.cacheSizeBytes.collectAsState()
                 val posterCacheSizeBytes by settingsViewModel.posterCacheSizeBytes.collectAsState()
@@ -666,7 +706,7 @@ private fun TabsHost(
                 onOpenFavorites = { navController.navigate(Destination.Favorites) },
                 onOpenHistory = { navController.navigate(Destination.History) },
                 onOpenDownloads = { navController.navigate(Destination.Downloads) },
-                onOpenSearch = { navController.navigate(Destination.Search) },
+                onOpenSearch = { navController.navigate(Destination.Search()) },
                 onOpenItem = { stableId -> navController.navigate(Destination.Details(stableId)) }
             )
         } else {
@@ -717,7 +757,7 @@ private fun TabsHost(
                 onOpenFavorites = { navController.navigate(Destination.Favorites) },
                 onOpenHistory = { navController.navigate(Destination.History) },
                 onOpenDownloads = { navController.navigate(Destination.Downloads) },
-                onOpenSearch = { navController.navigate(Destination.Search) },
+                onOpenSearch = { navController.navigate(Destination.Search()) },
                 onCategoryChange = { newCategory -> selectedCategory = newCategory }
             )
         }

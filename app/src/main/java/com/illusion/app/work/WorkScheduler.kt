@@ -11,7 +11,9 @@ import androidx.work.WorkManager
 import androidx.work.workDataOf
 import java.util.UUID
 import java.util.concurrent.TimeUnit
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 
 object WorkScheduler {
     private const val PERIODIC_SCAN_WORK_NAME = "library_scan_periodic"
@@ -41,14 +43,15 @@ object WorkScheduler {
         WorkManager.getInstance(context).cancelUniqueWork(PERIODIC_SCAN_WORK_NAME)
     }
 
-    /** Runs a scan right away (e.g. after onboarding or adding a source) and returns its work id so the UI can observe progress. */
-    fun enqueueOneTimeScan(context: Context): UUID {
+    /** Runs a scan right away (e.g. after onboarding or adding a source) and returns its work id so the UI can observe progress. [force] bypasses the unchanged-file fast path - see LibraryScanner.scanAll's own KDoc. */
+    fun enqueueOneTimeScan(context: Context, force: Boolean = false): UUID {
         val constraints = Constraints.Builder()
             .setRequiredNetworkType(NetworkType.CONNECTED)
             .build()
 
         val request = OneTimeWorkRequestBuilder<LibraryScanWorker>()
             .setConstraints(constraints)
+            .setInputData(workDataOf(LibraryScanWorker.KEY_FORCE to force))
             .build()
 
         val workManager = WorkManager.getInstance(context)
@@ -73,6 +76,11 @@ object WorkScheduler {
         val infos = WorkManager.getInstance(context).getWorkInfosForUniqueWorkFlow(ONE_TIME_SCAN_WORK_NAME).first()
         return infos.firstOrNull { !it.state.isFinished }?.id
     }
+
+    /** Live version of [runningOneTimeScanWorkId] - lets a screen like Settings reflect "a scan is already running" (and disable/relabel its own "rescan now" button) instead of showing a plain idle button that silently no-ops (REPLACE just restarts the same work) while one is already in flight underneath, with no indication anywhere that it's happening. */
+    fun isOneTimeScanRunning(context: Context): Flow<Boolean> =
+        WorkManager.getInstance(context).getWorkInfosForUniqueWorkFlow(ONE_TIME_SCAN_WORK_NAME)
+            .map { infos -> infos.any { !it.state.isFinished } }
 
     /** Generates scrubbing-preview sprites for any library items that don't have one yet. Slow - honors the charging-only setting. */
     fun enqueueThumbnailGeneration(context: Context, requireCharging: Boolean) {

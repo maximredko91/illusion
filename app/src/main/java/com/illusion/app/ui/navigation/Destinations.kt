@@ -19,7 +19,11 @@ sealed interface Destination {
     data object Tabs : Destination
 
     @Serializable
-    data object Search : Destination
+    data class Search(val initialQuery: String? = null) : Destination
+
+    /** Full, sortable/filterable tag browser - Search's own inline chip row only surfaces the top N most common tags (a large library can have thousands of distinct freeform <tag> values, too many to dump unranked into a chip row). Reached from Search, picking a tag navigates back to Search with it pre-filled. */
+    @Serializable
+    data object Tags : Destination
 
     @Serializable
     data class Details(val stableId: String) : Destination

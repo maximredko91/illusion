@@ -18,6 +18,9 @@ import com.illusion.app.data.repository.ThumbnailRepository
 import com.illusion.app.data.repository.WatchProgressRepository
 import com.illusion.app.data.security.DevAccessStore
 import com.illusion.app.data.settings.SettingsRepository
+import com.illusion.app.data.translation.DeepLUpgradeProgress
+import com.illusion.app.data.translation.DeepLUpgradeResult
+import com.illusion.app.data.translation.TagTranslationRepository
 import com.illusion.app.domain.model.PlayerMode
 import com.illusion.app.domain.model.SortOrder
 import com.illusion.app.domain.model.UiMode
@@ -34,6 +37,16 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
+/** UI-facing wrapper over DeepLUpgradeResult, plus the states the underlying suspend call itself doesn't have a case for (idle before the user has ever pressed the button, while it's running with live progress, and cancelled). */
+sealed interface DeeplUpgradeUiState {
+    object Idle : DeeplUpgradeUiState
+    data class InProgress(val done: Int, val total: Int) : DeeplUpgradeUiState
+    data class Done(val count: Int) : DeeplUpgradeUiState
+    object AlreadyUpToDate : DeeplUpgradeUiState
+    object NoApiKey : DeeplUpgradeUiState
+    object Cancelled : DeeplUpgradeUiState
+}
+
 class SettingsViewModel(
     private val smbSourceRepository: SmbSourceRepository,
     private val settingsRepository: SettingsRepository,
@@ -42,7 +55,8 @@ class SettingsViewModel(
     private val backupManager: BackupManager,
     private val devAccessStore: DevAccessStore,
     private val libraryRepository: LibraryRepository,
-    private val watchProgressRepository: WatchProgressRepository
+    private val watchProgressRepository: WatchProgressRepository,
+    private val tagTranslationRepository: TagTranslationRepository
 ) : ViewModel() {
     fun hasDevPassword(): Boolean = devAccessStore.hasPassword
     fun generateDevPassword(): String = devAccessStore.generatePassword()
@@ -324,6 +338,45 @@ class SettingsViewModel(
         }
     }
 
+    val deeplApiKey: Flow<String?> = settingsRepository.deeplApiKey
+
+    fun setDeeplApiKey(value: String?) {
+        viewModelScope.launch { settingsRepository.setDeeplApiKey(value) }
+    }
+
+    private val _deeplUpgradeState = MutableStateFlow<DeeplUpgradeUiState>(DeeplUpgradeUiState.Idle)
+    val deeplUpgradeState: StateFlow<DeeplUpgradeUiState> = _deeplUpgradeState.asStateFlow()
+
+    private var deeplUpgradeJob: kotlinx.coroutines.Job? = null
+
+    /** Manual, button-triggered from Settings only - see TagTranslationRepository's own KDoc for why this is never run automatically after a scan. Cancellable via [cancelTagsUpgrade] - a library with thousands of tags can take several minutes even batched, and the user should never be stuck watching it with no way out. */
+    fun upgradeTagsToDeepL() {
+        deeplUpgradeJob = viewModelScope.launch {
+            _deeplUpgradeState.value = DeeplUpgradeUiState.InProgress(0, 0)
+            try {
+                val result = tagTranslationRepository.upgradeAllToDeepL { progress ->
+                    _deeplUpgradeState.value = DeeplUpgradeUiState.InProgress(progress.done, progress.total)
+                }
+                _deeplUpgradeState.value = when (result) {
+                    is DeepLUpgradeResult.Upgraded -> DeeplUpgradeUiState.Done(result.count)
+                    DeepLUpgradeResult.AlreadyUpToDate -> DeeplUpgradeUiState.AlreadyUpToDate
+                    DeepLUpgradeResult.NoApiKey -> DeeplUpgradeUiState.NoApiKey
+                }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                _deeplUpgradeState.value = DeeplUpgradeUiState.Cancelled
+                throw e
+            }
+        }
+    }
+
+    fun cancelTagsUpgrade() {
+        deeplUpgradeJob?.cancel()
+    }
+
+    fun dismissDeeplUpgradeState() {
+        _deeplUpgradeState.value = DeeplUpgradeUiState.Idle
+    }
+
     companion object {
         fun factory(
             smbSourceRepository: SmbSourceRepository,
@@ -333,7 +386,8 @@ class SettingsViewModel(
             backupManager: BackupManager,
             devAccessStore: DevAccessStore,
             libraryRepository: LibraryRepository,
-            watchProgressRepository: WatchProgressRepository
+            watchProgressRepository: WatchProgressRepository,
+            tagTranslationRepository: TagTranslationRepository
         ) = viewModelFactory {
             initializer {
                 SettingsViewModel(
@@ -344,7 +398,8 @@ class SettingsViewModel(
                     backupManager,
                     devAccessStore,
                     libraryRepository,
-                    watchProgressRepository
+                    watchProgressRepository,
+                    tagTranslationRepository
                 )
             }
         }

@@ -53,11 +53,22 @@ class LibraryScanner(
      * now it's classified via [classifySmbError] (the same mapping [SmbClient.testConnection]
      * uses) and returned so the caller can surface it instead of a generic "scan failed".
      */
-    suspend fun scanAll(onProgress: suspend (ScanProgress) -> Unit = {}): ScanResult = withContext(Dispatchers.IO) {
+    /**
+     * [force] skips the per-file "unchanged since last scan" fast path (see [toMediaItem]) even
+     * when neither the video's own size/lastModified nor the sidecar .nfo's lastModified changed -
+     * a normal rescan only ever re-hashes/re-parses files that actually changed on the NAS, which
+     * means a metadata field added to this app's own parsing (e.g. MediaItemEntity.tags) stays
+     * empty for every already-indexed file forever, since nothing about those files themselves
+     * ever changes just because the app now reads one more tag from the same .nfo. Confirmed via a
+     * real on-device DB check: a full manual rescan indexed all 3233 items and populated zero
+     * tags, because every single one took the unchanged fast path. This is the deliberate escape
+     * hatch for that - re-parses every .nfo regardless of whether anything on disk moved.
+     */
+    suspend fun scanAll(force: Boolean = false, onProgress: suspend (ScanProgress) -> Unit = {}): ScanResult = withContext(Dispatchers.IO) {
         val sources = sourceRepository.getEnabledSources()
         val errors = mutableListOf<SourceScanError>()
         val total = sources.foldIndexed(0) { index, sum, source ->
-            val outcome = runCatching { scanSource(source, index, sources.size, onProgress) }
+            val outcome = runCatching { scanSource(source, index, sources.size, force, onProgress) }
             outcome.exceptionOrNull()?.let { errors += SourceScanError(source.displayName, classifySmbError(it)) }
             sum + outcome.getOrDefault(0)
         }
@@ -68,6 +79,7 @@ class LibraryScanner(
         source: SmbSourceEntity,
         sourceIndex: Int,
         sourceCount: Int,
+        force: Boolean,
         onProgress: suspend (ScanProgress) -> Unit
     ): Int {
         val info = sourceRepository.connectionInfo(source) ?: return 0
@@ -112,7 +124,7 @@ class LibraryScanner(
                 videoFiles.map { file ->
                     async {
                         val item = withConnection(pool) { connection ->
-                            toMediaItem(source, connection, file, subtitleFiles, imageFiles, trailerFiles, filesByPath, existingByPath, showNfoCache)
+                            toMediaItem(source, connection, file, subtitleFiles, imageFiles, trailerFiles, filesByPath, existingByPath, showNfoCache, force)
                         }
                         onProgress(
                             ScanProgress(
@@ -178,7 +190,8 @@ class LibraryScanner(
         trailerFiles: List<SmbFileRef>,
         filesByPath: Map<String, SmbFileRef>,
         existingByPath: Map<String, MediaItemEntity>,
-        showNfoCache: ConcurrentHashMap<String, NfoMetadata?>
+        showNfoCache: ConcurrentHashMap<String, NfoMetadata?>,
+        force: Boolean = false
     ): MediaItemEntity {
         val nfoPath = file.path.substringBeforeLast('.', file.path) + ".nfo"
         // Already part of this walk's listing - no need to ask the server again whether it exists.
@@ -276,7 +289,8 @@ class LibraryScanner(
         // fanart/trailer/subtitles...) are always recomputed fresh regardless, since those can
         // change (a poster or trailer added, say) without the video file itself changing at all.
         val previous = existingByPath[file.path]
-        val unchanged = previous != null &&
+        val unchanged = !force &&
+            previous != null &&
             previous.sizeBytes == file.sizeBytes &&
             previous.lastModified == file.lastModified &&
             previous.nfoLastModified == nfoRef?.lastModified
@@ -327,6 +341,7 @@ class LibraryScanner(
             originalTitle = showMetadata?.originalTitle ?: metadata?.originalTitle,
             year = metadata?.year ?: showMetadata?.year,
             genres = metadata?.genres?.takeIf { it.isNotEmpty() } ?: showMetadata?.genres ?: emptyList(),
+            tags = metadata?.tags ?: emptyList(),
             rating = metadata?.rating ?: showMetadata?.rating,
             country = metadata?.country ?: showMetadata?.country,
             runtimeMinutes = metadata?.runtimeMinutes,

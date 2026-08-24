@@ -26,7 +26,8 @@ class LibraryScanWorker(
 
     override suspend fun doWork(): Result {
         setForeground(getForegroundInfo())
-        val result = scanner.scanAll { progress ->
+        val force = inputData.getBoolean(KEY_FORCE, false)
+        val result = scanner.scanAll(force = force) { progress ->
             setProgress(progress.toData())
             setForeground(ScanNotifications.progressForegroundInfo(applicationContext, progress.toNotificationText(applicationContext)))
         }
@@ -73,5 +74,7 @@ class LibraryScanWorker(
         const val KEY_TOTAL_INDEXED = "total_indexed"
         const val KEY_ERROR = "error"
         const val KEY_PARTIAL_ERROR = "partial_error"
+        /** Input key - see LibraryScanner.scanAll's own KDoc for what this actually does and why it exists. */
+        const val KEY_FORCE = "force"
     }
 }

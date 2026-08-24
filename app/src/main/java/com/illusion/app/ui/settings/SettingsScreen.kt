@@ -27,6 +27,7 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Backup
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.Download
@@ -49,9 +50,11 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Button
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.OutlinedTextField
@@ -92,6 +95,12 @@ private val RESCAN_OPTIONS = listOf(0, 6, 12, 24, 48)
 @Composable
 fun SettingsScreen(
     sources: List<SmbSourceEntity>,
+    deeplApiKey: Flow<String?>,
+    onDeeplApiKeyChange: (String?) -> Unit,
+    deeplUpgradeState: DeeplUpgradeUiState,
+    onUpgradeTagsToDeepL: () -> Unit,
+    onCancelTagsUpgrade: () -> Unit,
+    onDismissDeeplUpgradeState: () -> Unit,
     requireChargingForHeavyTasks: Flow<Boolean>,
     rescanIntervalHours: Flow<Int>,
     playerMode: Flow<com.illusion.app.domain.model.PlayerMode>,
@@ -114,6 +123,9 @@ fun SettingsScreen(
     onToggleChargingRequirement: (Boolean) -> Unit,
     onRescanIntervalChange: (Int) -> Unit,
     onRescanNow: () -> Unit,
+    onRescanForceNow: () -> Unit,
+    isScanRunning: Boolean,
+    onOpenRunningScan: () -> Unit,
     downloadsFolderUri: Flow<String?>,
     onPickDownloadsFolder: (android.net.Uri?) -> Unit,
     downloadsSizeBytes: Long?,
@@ -539,38 +551,215 @@ fun SettingsScreen(
                                 modifier = Modifier.fillMaxWidth()
                             )
                         }
-                    }
-
-                    "scan" -> {
                         SettingsGroup {
+                            val currentDeeplKey by deeplApiKey.collectAsState(initial = null)
+                            var keyDraft by remember(currentDeeplKey) { mutableStateOf(currentDeeplKey ?: "") }
+                            // Once a key is saved, the field itself goes away in favor of a plain
+                            // "активирован" line - per feedback, leaving the raw key sitting in an
+                            // always-visible text field read as unfinished/insecure once it's
+                            // actually in use. "Изменить" brings the field back for editing.
+                            var editingKey by remember(currentDeeplKey) { mutableStateOf(currentDeeplKey.isNullOrBlank()) }
                             ListItem(
-                                // Folded into headlineContent - see the "player" branch's own
-                                // ListItem below for why (ListItem top-aligns trailing content
-                                // whenever supportingContent is present).
                                 headlineContent = {
                                     Column {
-                                        Text(stringResource(R.string.settings_rescan_now))
+                                        Text(stringResource(R.string.settings_tag_translation))
                                         Text(
-                                            stringResource(R.string.settings_rescan_now_description),
+                                            stringResource(R.string.settings_tag_translation_description),
                                             style = MaterialTheme.typography.bodyMedium,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            modifier = Modifier.padding(top = 4.dp)
                                         )
-                                    }
-                                },
-                                trailingContent = {
-                                    val rescanNowSource = remember { MutableInteractionSource() }
-                                    OutlinedButton(
-                                        onClick = onRescanNow,
-                                        enabled = sources.isNotEmpty(),
-                                        interactionSource = rescanNowSource,
-                                        modifier = Modifier.focusHighlight(rescanNowSource)
-                                    ) {
-                                        Text(stringResource(R.string.settings_rescan_now_action))
                                     }
                                 },
                                 colors = ListItemDefaults.colors(containerColor = Color.Transparent),
                                 modifier = Modifier.fillMaxWidth()
                             )
+                            if (editingKey) {
+                                OutlinedTextField(
+                                    value = keyDraft,
+                                    onValueChange = { keyDraft = it },
+                                    label = { Text(stringResource(R.string.settings_deepl_api_key_label)) },
+                                    singleLine = true,
+                                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
+                                )
+                                val saveSource = remember { MutableInteractionSource() }
+                                TextButton(
+                                    onClick = {
+                                        onDeeplApiKeyChange(keyDraft)
+                                        if (keyDraft.isNotBlank()) editingKey = false
+                                    },
+                                    interactionSource = saveSource,
+                                    modifier = Modifier.padding(horizontal = 16.dp).focusHighlight(saveSource)
+                                ) {
+                                    Text(stringResource(R.string.action_save))
+                                }
+                            } else {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)
+                                ) {
+                                    Icon(
+                                        Icons.Default.CheckCircle,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                    Text(
+                                        stringResource(R.string.settings_deepl_api_key_active),
+                                        modifier = Modifier.padding(start = 8.dp).weight(1f)
+                                    )
+                                    val changeSource = remember { MutableInteractionSource() }
+                                    TextButton(
+                                        onClick = { editingKey = true },
+                                        interactionSource = changeSource,
+                                        modifier = Modifier.focusHighlight(changeSource)
+                                    ) {
+                                        Text(stringResource(R.string.action_change))
+                                    }
+                                }
+                            }
+                            val isInProgress = deeplUpgradeState is DeeplUpgradeUiState.InProgress
+                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(16.dp)) {
+                                val upgradeSource = remember { MutableInteractionSource() }
+                                Button(
+                                    onClick = onUpgradeTagsToDeepL,
+                                    enabled = !currentDeeplKey.isNullOrBlank() && !isInProgress,
+                                    interactionSource = upgradeSource,
+                                    modifier = Modifier.focusHighlight(upgradeSource)
+                                ) {
+                                    Text(stringResource(R.string.settings_tag_translation_upgrade_action))
+                                }
+                                if (isInProgress) {
+                                    val cancelSource = remember { MutableInteractionSource() }
+                                    TextButton(
+                                        onClick = onCancelTagsUpgrade,
+                                        interactionSource = cancelSource,
+                                        modifier = Modifier.padding(start = 8.dp).focusHighlight(cancelSource)
+                                    ) {
+                                        Text(stringResource(R.string.action_cancel))
+                                    }
+                                }
+                            }
+                            if (deeplUpgradeState is DeeplUpgradeUiState.InProgress) {
+                                val state = deeplUpgradeState
+                                Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+                                    if (state.total > 0) {
+                                        LinearProgressIndicator(
+                                            progress = { state.done.toFloat() / state.total },
+                                            modifier = Modifier.fillMaxWidth()
+                                        )
+                                        Text(
+                                            stringResource(R.string.settings_tag_translation_progress, state.done, state.total),
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            modifier = Modifier.padding(top = 4.dp)
+                                        )
+                                    } else {
+                                        LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                                    }
+                                }
+                            }
+                            val upgradeMessage = when (val state = deeplUpgradeState) {
+                                is DeeplUpgradeUiState.Done -> stringResource(R.string.settings_tag_translation_done, state.count)
+                                DeeplUpgradeUiState.AlreadyUpToDate -> stringResource(R.string.settings_tag_translation_already_done)
+                                DeeplUpgradeUiState.NoApiKey -> stringResource(R.string.settings_tag_translation_no_key)
+                                DeeplUpgradeUiState.Cancelled -> stringResource(R.string.settings_tag_translation_cancelled)
+                                else -> null
+                            }
+                            if (upgradeMessage != null) {
+                                LaunchedEffect(upgradeMessage) {
+                                    kotlinx.coroutines.delay(4000)
+                                    onDismissDeeplUpgradeState()
+                                }
+                                Text(
+                                    upgradeMessage,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                                )
+                            }
+                        }
+                    }
+
+                    "scan" -> {
+                        SettingsGroup {
+                            if (isScanRunning) {
+                                // A scan already running underneath, silently - tapping "Сканировать"
+                                // again here would just REPLACE it with an identical fresh run (no
+                                // visible effect), and per feedback there was previously no
+                                // indication anywhere in the app that a dismissed scan was still
+                                // going. This surfaces it directly instead of a plain idle button.
+                                ListItem(
+                                    headlineContent = { Text(stringResource(R.string.settings_scan_running)) },
+                                    supportingContent = { Text(stringResource(R.string.settings_scan_running_description)) },
+                                    trailingContent = {
+                                        val openSource = remember { MutableInteractionSource() }
+                                        OutlinedButton(
+                                            onClick = onOpenRunningScan,
+                                            interactionSource = openSource,
+                                            modifier = Modifier.focusHighlight(openSource)
+                                        ) {
+                                            Text(stringResource(R.string.settings_scan_running_open))
+                                        }
+                                    },
+                                    colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                            } else {
+                                ListItem(
+                                    // Folded into headlineContent - see the "player" branch's own
+                                    // ListItem below for why (ListItem top-aligns trailing content
+                                    // whenever supportingContent is present).
+                                    headlineContent = {
+                                        Column {
+                                            Text(stringResource(R.string.settings_rescan_now))
+                                            Text(
+                                                stringResource(R.string.settings_rescan_now_description),
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+                                    },
+                                    trailingContent = {
+                                        val rescanNowSource = remember { MutableInteractionSource() }
+                                        OutlinedButton(
+                                            onClick = onRescanNow,
+                                            enabled = sources.isNotEmpty(),
+                                            interactionSource = rescanNowSource,
+                                            modifier = Modifier.focusHighlight(rescanNowSource)
+                                        ) {
+                                            Text(stringResource(R.string.settings_rescan_now_action))
+                                        }
+                                    },
+                                    colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                                SettingsDivider()
+                                ListItem(
+                                    headlineContent = {
+                                        Column {
+                                            Text(stringResource(R.string.settings_rescan_force_now))
+                                            Text(
+                                                stringResource(R.string.settings_rescan_force_now_description),
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+                                    },
+                                    trailingContent = {
+                                        val forceSource = remember { MutableInteractionSource() }
+                                        OutlinedButton(
+                                            onClick = onRescanForceNow,
+                                            enabled = sources.isNotEmpty(),
+                                            interactionSource = forceSource,
+                                            modifier = Modifier.focusHighlight(forceSource)
+                                        ) {
+                                            Text(stringResource(R.string.settings_rescan_now_action))
+                                        }
+                                    },
+                                    colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                            }
                             SettingsDivider()
                             ListItem(
                                 headlineContent = { Text(stringResource(R.string.settings_rescan_interval)) },

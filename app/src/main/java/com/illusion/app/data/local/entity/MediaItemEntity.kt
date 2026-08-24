@@ -57,7 +57,9 @@ data class MediaItemEntity(
     val studio: String? = null,
     val premiered: String? = null,
     val imdbId: String? = null,
-    val tmdbId: String? = null
+    val tmdbId: String? = null,
+    /** Kodi's separate freeform <tag> field - distinct from [genres], often left in whatever language the scraper that wrote them used. */
+    val tags: List<String> = emptyList()
 )
 
 /** True if any sidecar subtitle file follows the "forced" naming convention (e.g. "Movie.forced.srt") - the file itself isn't parsed, just its name. */

@@ -21,9 +21,10 @@ import kotlinx.coroutines.launch
 
 class SearchViewModel(
     private val libraryRepository: LibraryRepository,
-    private val settingsRepository: SettingsRepository
+    private val settingsRepository: SettingsRepository,
+    initialQuery: String? = null
 ) : ViewModel() {
-    private val _query = MutableStateFlow("")
+    private val _query = MutableStateFlow(initialQuery.orEmpty())
     val query: StateFlow<String> = _query.asStateFlow()
 
     @OptIn(FlowPreview::class, ExperimentalCoroutinesApi::class)
@@ -55,8 +56,8 @@ class SearchViewModel(
     }
 
     companion object {
-        fun factory(libraryRepository: LibraryRepository, settingsRepository: SettingsRepository) = viewModelFactory {
-            initializer { SearchViewModel(libraryRepository, settingsRepository) }
+        fun factory(libraryRepository: LibraryRepository, settingsRepository: SettingsRepository, initialQuery: String? = null) = viewModelFactory {
+            initializer { SearchViewModel(libraryRepository, settingsRepository, initialQuery) }
         }
     }
 }

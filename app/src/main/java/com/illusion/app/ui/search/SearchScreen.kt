@@ -70,14 +70,16 @@ import com.illusion.app.ui.common.posterGridColumns
 fun SearchScreen(
     libraryRepository: LibraryRepository,
     settingsRepository: SettingsRepository,
+    initialQuery: String? = null,
     onOpenItem: (String) -> Unit,
     onOpenSettings: () -> Unit,
     onOpenFavorites: () -> Unit,
     onOpenHistory: () -> Unit,
     onOpenDownloads: () -> Unit,
+    onOpenTags: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val viewModel: SearchViewModel = viewModel(factory = SearchViewModel.factory(libraryRepository, settingsRepository))
+    val viewModel: SearchViewModel = viewModel(factory = SearchViewModel.factory(libraryRepository, settingsRepository, initialQuery))
     val query by viewModel.query.collectAsState()
     val results by viewModel.results.collectAsState()
     val recentSearches by viewModel.recentSearches.collectAsState()
@@ -149,19 +151,29 @@ fun SearchScreen(
                     }
             )
             if (query.isBlank()) {
-                if (recentSearches.isEmpty()) {
-                    Text(
-                        stringResource(R.string.search_empty_query),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.fillMaxWidth().padding(24.dp)
-                    )
-                } else {
-                    RecentSearchesList(
-                        recentSearches = recentSearches,
-                        onSelect = { viewModel.setQuery(it) },
-                        onRemove = viewModel::removeRecentSearch,
-                        onClearAll = viewModel::clearRecentSearches
-                    )
+                Column(modifier = Modifier.fillMaxSize()) {
+                    Row(
+                        horizontalArrangement = Arrangement.End,
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp)
+                    ) {
+                        TextButton(onClick = onOpenTags) {
+                            Text(stringResource(R.string.search_all_tags))
+                        }
+                    }
+                    if (recentSearches.isEmpty()) {
+                        Text(
+                            stringResource(R.string.search_empty_query),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.fillMaxWidth().padding(24.dp)
+                        )
+                    } else {
+                        RecentSearchesList(
+                            recentSearches = recentSearches,
+                            onSelect = { viewModel.setQuery(it) },
+                            onRemove = viewModel::removeRecentSearch,
+                            onClearAll = viewModel::clearRecentSearches
+                        )
+                    }
                 }
             } else if (results.isEmpty()) {
                 Text(

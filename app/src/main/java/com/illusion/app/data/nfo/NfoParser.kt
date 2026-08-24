@@ -19,6 +19,7 @@ class NfoParser {
         var originalTitle: String? = null
         var year: Int? = null
         val genres = mutableListOf<String>()
+        val tags = mutableListOf<String>()
         var rating: Double? = null
         var plot: String? = null
         val directors = mutableListOf<String>()
@@ -81,6 +82,7 @@ class NfoParser {
                             "originaltitle" -> originalTitle = text
                             "year" -> year = text.toIntOrNull()
                             "genre" -> genres.add(text)
+                            "tag" -> tags.add(text)
                             "rating", "value" -> rating = rating ?: text.toDoubleOrNull()
                             "plot" -> plot = text
                             "director" -> directors.add(text)
@@ -135,6 +137,7 @@ class NfoParser {
             originalTitle = originalTitle,
             year = year,
             genres = genres,
+            tags = tags,
             rating = rating,
             plot = plot,
             director = directors,

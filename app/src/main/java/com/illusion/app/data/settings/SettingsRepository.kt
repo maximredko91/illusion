@@ -43,6 +43,7 @@ class SettingsRepository(private val context: Context) {
         val THEME_MODE = stringPreferencesKey("theme_mode")
         val PLAYER_MODE = stringPreferencesKey("player_mode")
         val PREDICTIVE_BACK_ENABLED = booleanPreferencesKey("predictive_back_enabled")
+        val DEEPL_API_KEY = stringPreferencesKey("deepl_api_key")
         val RECENT_SEARCHES = stringPreferencesKey("recent_searches")
         val DOUBLE_TAP_SEEK_ENABLED = booleanPreferencesKey("player_double_tap_seek_enabled")
         val SWIPE_SEEK_ENABLED = booleanPreferencesKey("player_swipe_seek_enabled")
@@ -234,6 +235,15 @@ class SettingsRepository(private val context: Context) {
 
     suspend fun setPredictiveBackEnabled(value: Boolean) {
         context.dataStore.edit { it[Keys.PREDICTIVE_BACK_ENABLED] = value }
+    }
+
+    /** Opt-in, entered by the user in Settings (TagTranslationRepository/DeepLClient) - null means DeepL upgrade is unavailable and tag labels stay on the offline ML Kit translation. Never required; the app's own tag list works fully offline without this. */
+    val deeplApiKey: Flow<String?> = context.dataStore.data.map { it[Keys.DEEPL_API_KEY] }
+
+    suspend fun setDeeplApiKey(value: String?) {
+        context.dataStore.edit {
+            if (value.isNullOrBlank()) it.remove(Keys.DEEPL_API_KEY) else it[Keys.DEEPL_API_KEY] = value
+        }
     }
 
     private val MAX_RECENT_SEARCHES = 10

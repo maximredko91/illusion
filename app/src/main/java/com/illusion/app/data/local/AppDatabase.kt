@@ -12,6 +12,7 @@ import com.illusion.app.data.local.dao.DownloadDao
 import com.illusion.app.data.local.dao.FavoriteDao
 import com.illusion.app.data.local.dao.MediaItemDao
 import com.illusion.app.data.local.dao.SmbSourceDao
+import com.illusion.app.data.local.dao.TagTranslationDao
 import com.illusion.app.data.local.dao.ThumbnailSpriteDao
 import com.illusion.app.data.local.dao.WatchProgressDao
 import com.illusion.app.data.local.entity.AudioTrackEntity
@@ -19,6 +20,7 @@ import com.illusion.app.data.local.entity.DownloadEntity
 import com.illusion.app.data.local.entity.FavoriteEntity
 import com.illusion.app.data.local.entity.MediaItemEntity
 import com.illusion.app.data.local.entity.SmbSourceEntity
+import com.illusion.app.data.local.entity.TagTranslationEntity
 import com.illusion.app.data.local.entity.ThumbnailSpriteEntity
 import com.illusion.app.data.local.entity.WatchProgressEntity
 
@@ -30,9 +32,10 @@ import com.illusion.app.data.local.entity.WatchProgressEntity
         FavoriteEntity::class,
         ThumbnailSpriteEntity::class,
         DownloadEntity::class,
-        AudioTrackEntity::class
+        AudioTrackEntity::class,
+        TagTranslationEntity::class
     ],
-    version = 11
+    version = 13
 )
 @TypeConverters(Converters::class)
 abstract class AppDatabase : RoomDatabase() {
@@ -43,6 +46,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun thumbnailSpriteDao(): ThumbnailSpriteDao
     abstract fun downloadDao(): DownloadDao
     abstract fun audioTrackDao(): AudioTrackDao
+    abstract fun tagTranslationDao(): TagTranslationDao
 
     companion object {
         @Volatile
@@ -152,6 +156,32 @@ abstract class AppDatabase : RoomDatabase() {
         // (observeByCategory, observeSeriesGroupedByCategory, observeByCollection, source lookups)
         // but the table never had indices for any of them - full-table scans on a 3000+ row table
         // since the first commit. Adding the indices Room's schema now expects (see MediaItemEntity).
+        // Kodi's separate freeform <tag> field (distinct from <genre>) was never read/stored at
+        // all until now - default '[]' matches what the JSON Converters would encode for an empty
+        // list, so every pre-existing row reads back as "no tags" until the next rescan fills it in.
+        private val MIGRATION_11_12 = object : Migration(11, 12) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `media_items` ADD COLUMN `tags` TEXT NOT NULL DEFAULT '[]'")
+            }
+        }
+
+        // Persisted tag translations (TagTranslationRepository) - see TagTranslationEntity's own
+        // KDoc for why this needs a `source` column, not just tag->translation.
+        private val MIGRATION_12_13 = object : Migration(12, 13) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `tag_translations` (
+                        `tag` TEXT NOT NULL,
+                        `translation` TEXT NOT NULL,
+                        `source` TEXT NOT NULL,
+                        PRIMARY KEY(`tag`)
+                    )
+                    """
+                )
+            }
+        }
+
         private val MIGRATION_9_10 = object : Migration(9, 10) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("CREATE INDEX IF NOT EXISTS `index_media_items_category` ON `media_items` (`category`)")
@@ -250,7 +280,7 @@ abstract class AppDatabase : RoomDatabase() {
                     context.applicationContext,
                     AppDatabase::class.java,
                     "illusion.db"
-                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11).build().also { instance = it }
+                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13).build().also { instance = it }
             }
     }
 }
