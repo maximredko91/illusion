@@ -94,8 +94,12 @@ class DetailsViewModel(
                 ?.let { libraryRepository.observeEpisodes(it).first() }
                 ?: emptyList()
             _state.update { it.copy(similar = similar, collection = collection, episodes = episodes) }
-            loadAudioTracks(item)
-            loadClickablePersons(item)
+            // Independent launches (not sequential suspend calls in this same coroutine) - loadAudioTracks
+            // can involve a real SMB round trip (audioTrackProber.probe), and clickable names were
+            // waiting on that to finish first before their own (unrelated) library scan even started,
+            // reported as "actors/director stopped being clickable right away like they used to".
+            launch { loadAudioTracks(item) }
+            launch { loadClickablePersons(item) }
         }
     }
 

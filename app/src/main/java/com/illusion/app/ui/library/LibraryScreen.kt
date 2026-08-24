@@ -20,13 +20,12 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.ui.draw.clipToBounds
-import androidx.compose.ui.layout.layout
-import androidx.compose.ui.unit.Constraints
-import kotlin.math.roundToInt
+import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.layout.height
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowUpward
@@ -51,8 +50,6 @@ import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
@@ -117,33 +114,23 @@ fun LibraryScreen(
     // screen in view instead of honoring the scroll, so the list silently stayed where the user
     // was. Deferring the actual scroll to a LaunchedEffect keyed on `items` guarantees it only
     // runs once the newly-sorted/filtered list has actually landed.
-    // Declared here (not down by its TopAppBar) so the scroll-to-top effect below can reset it -
-    // the scroll behavior tracks its own collapse offset independently of the grid's actual
-    // scroll position, driven only by nested-scroll deltas. gridState.scrollToItem(0) is a hard
-    // jump that doesn't dispatch those deltas, so after a filter/sort change the bar's remembered
-    // offset stayed wherever it was before the jump - its background/shadow rendered at that stale
-    // partially-collapsed position while the grid content had already snapped to the top under it,
-    // showing as a floating dark bar with nothing underneath explaining it.
-    //
-    // exitUntilCollapsedScrollBehavior, not enterAlways - per feedback, flinging up while the bar
-    // was still mid-collapse felt unrealistically fast. That's nested scroll consuming part of the
-    // drag delta to shrink the bar while the fling velocity handed to the grid at release is still
-    // computed from the *raw* pointer motion, so the grid ends up flinging at a speed the drag
-    // itself never visibly reached - a real characteristic of how Compose splits delta vs. velocity
-    // across nested scroll, not something fixable by tuning fling behavior. enterAlways made this
-    // worse by re-triggering the same collapse dance on every small downward wobble too; this
-    // behavior only collapses once (scrolling up from the top) and only re-expands once the grid
-    // is scrolled back to its own top, so the mid-collapse handoff window comes up far less often.
-    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
-
+    // Real root cause (explained to the user, this isn't a tuning tweak): a Scaffold topBar +
+    // TopAppBarDefaults.*ScrollBehavior collapses the bar via nested scroll, which consumes part
+    // of each drag's DELTA to shrink the bar - but the fling VELOCITY the grid receives at release
+    // is computed from raw pointer motion regardless of how much delta the bar ate, so a fling that
+    // started while the bar was mid-collapse could land the grid moving faster than the drag itself
+    // ever visibly moved. No amount of picking a different *ScrollBehavior fixed this - it's how
+    // Compose splits delta vs. velocity across nested scroll, full stop. Fix: the header is no
+    // longer a separate nested-scroll-connected component at all - it's now the grid's own first
+    // item (see the `item(span = ...)` below), so it scrolls at the exact same 1:1 rate as every
+    // card underneath it and rides off the top exactly like the rest of the content does. No
+    // separate collapse state, no delta/velocity split, nothing left to desync.
     var pendingScrollToTop by remember { mutableStateOf(false) }
     val scrollToTop: () -> Unit = { pendingScrollToTop = true }
     LaunchedEffect(items) {
         if (pendingScrollToTop) {
             pendingScrollToTop = false
             gridState.scrollToItem(0)
-            scrollBehavior.state.contentOffset = 0f
-            scrollBehavior.state.heightOffset = 0f
         }
     }
 
@@ -182,30 +169,71 @@ fun LibraryScreen(
         }
     }
 
-    // scrollBehavior itself is declared up top (see its own comment there) - hides the top bar as
-    // the grid scrolls forward (title/icons slide up and out) and brings it straight back the
-    // moment the user scrolls the other way, even before reaching the top - the grid already
-    // reclaims real vertical room on a phone, doubly so in landscape (see the sort/filter row
-    // folding into the title above), so letting the bar get out of the way while browsing is worth
-    // the animation, not just decoration.
-    // Computed once here, in LibraryScreen's own (rarely-recomposing) scope, and passed down as a
-    // plain value - calling this directly inside the `topBar` lambda below queried the real
-    // View-system insets (ViewCompat.getRootWindowInsets, not a cheap Compose snapshot read) on
-    // every recomposition that lambda goes through, which includes every scroll-driven recompose
-    // TopAppBar's own collapsing/color-interpolation triggers while scrolling the grid.
+    // No longer read by a TopAppBar's `windowInsets` param (there's no TopAppBar here anymore) -
+    // applied directly as windowInsetsPadding() on the header content below instead.
     val topBarInsets = com.illusion.app.ui.common.rememberLatchedStatusBarsInsets()
 
     // Scroll-to-top FAB: appears once the user has scrolled a few rows down, so they can jump
     // straight back to the top of a long library instead of flinging repeatedly - per feedback,
-    // getting back to the start (or catching the sort/filter row again, which scrolls away with
-    // the top bar) had no shortcut before this.
+    // getting back to the start (or catching the sort/filter row again, which now scrolls away
+    // with everything else as ordinary grid content) had no shortcut before this.
     val coroutineScope = rememberCoroutineScope()
     val showScrollToTop by remember {
         derivedStateOf { gridState.firstVisibleItemIndex > 6 }
     }
 
+    // The former TopAppBar's content, manually laid out (no TopAppBar composable - see this
+    // function's own top comment for why) - rendered as the grid's own first item so it's
+    // ordinary scrolling content, not a separately nested-scroll-driven component. Also reused
+    // (called directly, not as a grid item) above the loading spinner/empty state below, so it's
+    // still visible - just non-scrolling, same as before - while there's no grid to be part of.
+    val header: @Composable () -> Unit = {
+        Column(modifier = Modifier.fillMaxWidth().windowInsetsPadding(topBarInsets)) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth().height(64.dp).padding(start = 16.dp, end = 4.dp)
+            ) {
+                if (isLandscape) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(16.dp),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text(categoryTitle(category), style = MaterialTheme.typography.titleLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        sortFilterRow()
+                    }
+                } else {
+                    Text(
+                        categoryTitle(category),
+                        style = MaterialTheme.typography.titleLarge,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+                com.illusion.app.ui.common.TooltipIconButton(stringResource(R.string.nav_search), Icons.Default.Search, onOpenSearch)
+                com.illusion.app.ui.common.TooltipIconButton(stringResource(R.string.favorites_title), Icons.Default.Favorite, onOpenFavorites)
+                com.illusion.app.ui.common.TooltipIconButton(stringResource(R.string.history_title), Icons.Default.History, onOpenHistory)
+                com.illusion.app.ui.common.TooltipIconButton(stringResource(R.string.downloads_title), Icons.Default.Download, onOpenDownloads)
+                com.illusion.app.ui.common.TooltipIconButton(stringResource(R.string.settings_title), Icons.Default.Settings, onOpenSettings)
+            }
+            if (category == Category.CARTOONS || category == Category.CARTOON_SERIES) {
+                CartoonCategoryToggle(
+                    category = category,
+                    onCategoryChange = { scrollToTop(); onCategoryChange(it) },
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                )
+            }
+            if (!isLandscape) {
+                Box(modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)) {
+                    sortFilterRow()
+                }
+            }
+        }
+    }
+
     Scaffold(
-        modifier = modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
+        modifier = modifier,
         // Without this, Scaffold's own default (WindowInsets.systemBars) reserves bottom
         // navigation-bar space AGAIN on top of what the outer Scaffold in IllusionNavHost already
         // reserves for its real NavigationBar - the ambient WindowInsets aren't consumed by that
@@ -214,29 +242,6 @@ fun LibraryScreen(
         // fresh), so this screen's grid stopped scrolling short of the visible nav bar, leaving a
         // dead unpainted gap between the last row and the real bar underneath it.
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
-        topBar = {
-            TopAppBar(
-                windowInsets = topBarInsets,
-                scrollBehavior = scrollBehavior,
-                title = {
-                    if (isLandscape) {
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                            Text(categoryTitle(category), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            sortFilterRow()
-                        }
-                    } else {
-                        Text(categoryTitle(category), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    }
-                },
-                actions = {
-                    com.illusion.app.ui.common.TooltipIconButton(stringResource(R.string.nav_search), Icons.Default.Search, onOpenSearch)
-                    com.illusion.app.ui.common.TooltipIconButton(stringResource(R.string.favorites_title), Icons.Default.Favorite, onOpenFavorites)
-                    com.illusion.app.ui.common.TooltipIconButton(stringResource(R.string.history_title), Icons.Default.History, onOpenHistory)
-                    com.illusion.app.ui.common.TooltipIconButton(stringResource(R.string.downloads_title), Icons.Default.Download, onOpenDownloads)
-                    com.illusion.app.ui.common.TooltipIconButton(stringResource(R.string.settings_title), Icons.Default.Settings, onOpenSettings)
-                }
-            )
-        },
         floatingActionButton = {
             AnimatedVisibility(
                 visible = showScrollToTop,
@@ -252,8 +257,6 @@ fun LibraryScreen(
                     onClick = {
                         haptics.tick()
                         coroutineScope.launch { gridState.animateScrollToItem(0) }
-                        scrollBehavior.state.contentOffset = 0f
-                        scrollBehavior.state.heightOffset = 0f
                     },
                     shape = androidx.compose.foundation.shape.CircleShape,
                     // Default FAB colors (primaryContainer/onPrimaryContainer) don't track a
@@ -269,100 +272,68 @@ fun LibraryScreen(
             }
         }
     ) { innerPadding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
-        ) {
-            // Rides up and out together with the TopAppBar on scroll (not just repositioned below
-            // a shrinking bar while staying fully visible itself) - per feedback, having only the
-            // bar collapse while this stayed put read as broken/mismatched rather than as one
-            // cohesive header. Reuses the SAME scrollBehavior.state.collapsedFraction the TopAppBar
-            // itself is already driven by, so both move in lockstep with no separate animation to
-            // fall out of sync. The custom Modifier.layout measures this block at its natural
-            // (unconstrained) height first, then reports a shrunk height to the Column based on
-            // collapsedFraction while still placing/drawing the real content at full size - clipToBounds
-            // then clips the part that's scrolled outside those shrunk bounds. Without measuring the
-            // natural height separately like this, there's no "full size" to shrink from.
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clipToBounds()
-                    .layout { measurable, constraints ->
-                        val natural = measurable.measure(constraints.copy(minHeight = 0, maxHeight = Constraints.Infinity))
-                        val shrunkHeight = (natural.height * (1f - scrollBehavior.state.collapsedFraction))
-                            .roundToInt()
-                            .coerceIn(0, natural.height)
-                        layout(natural.width, shrunkHeight) { natural.placeRelative(0, 0) }
+        // Crossfades only the loading/empty/grid branch itself (keyed on that 3-way state, not
+        // on `items`) - Room's query is async even when fast, so switching to this tab a beat
+        // before the first emission lands would otherwise hard-cut from spinner to grid with no
+        // animation of its own once the (separately animated) tab-switch transition has already
+        // finished playing.
+        Crossfade(
+            targetState = if (isLoading) 0 else if (items.isEmpty()) 1 else 2,
+            modifier = Modifier.fillMaxSize().padding(innerPadding)
+        ) { state ->
+            when (state) {
+                0 -> Column(modifier = Modifier.fillMaxSize()) {
+                    header()
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator()
                     }
-            ) {
-                Column {
-                    if (category == Category.CARTOONS || category == Category.CARTOON_SERIES) {
-                        CartoonCategoryToggle(
-                            category = category,
-                            onCategoryChange = { scrollToTop(); onCategoryChange(it) },
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                }
+                1 -> Column(modifier = Modifier.fillMaxSize()) {
+                    header()
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Text(
+                            stringResource(
+                                if (genreFilter != null || yearFilter != null) {
+                                    R.string.library_empty_filtered
+                                } else {
+                                    R.string.library_empty
+                                }
+                            ),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
-                    if (!isLandscape) {
-                        Box(modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)) {
-                            sortFilterRow()
-                        }
+                }
+                else -> LazyVerticalGrid(
+                    columns = posterGridColumns(),
+                    state = gridState,
+                    // Was a custom FlingBehavior damping initial velocity to ~70% (meant to
+                    // feel "softer") - reverted per feedback: damping velocity roughly
+                    // squares the lost distance (spline decay), so a fling that used to
+                    // carry across a couple rows now died almost immediately, reading as
+                    // "the grid got heavy, I have to swipe hard to get anywhere" rather
+                    // than smoother. Platform default fling is the correct baseline here.
+                    modifier = Modifier.fillMaxSize().focusGroup(),
+                    contentPadding = PaddingValues(bottom = 8.dp, start = 8.dp, end = 8.dp)
+                ) {
+                    // The header rides away with the rest of the scroll (see this function's
+                    // top comment) - full-width span so it doesn't get squeezed into one column.
+                    item(span = { GridItemSpan(maxLineSpan) }) { header() }
+                    items(items, key = { it.stableId }) { item ->
+                        // No animateItem() here (unlike Favorites/History/Downloads) -
+                        // sorting/filtering this grid reorders/reshuffles most or all of
+                        // its items at once, and animating every card's move across a
+                        // multi-column grid simultaneously produced visible dark bar
+                        // artifacts sweeping across rows mid-transition, not a clean
+                        // reflow. A plain instant re-layout has no such glitch.
+                        PosterCard(
+                            item = item,
+                            onClick = { onOpenItem(item.stableId) },
+                            modifier = Modifier.padding(4.dp),
+                            showRatingBadge = sortOrder == SortOrder.RATING
+                        )
                     }
                 }
             }
-
-            // Crossfades only the loading/empty/grid branch itself (keyed on that 3-way state, not
-            // on `items`) - Room's query is async even when fast, so switching to this tab a beat
-            // before the first emission lands would otherwise hard-cut from spinner to grid with no
-            // animation of its own once the (separately animated) tab-switch transition has already
-            // finished playing.
-            Crossfade(targetState = if (isLoading) 0 else if (items.isEmpty()) 1 else 2) { state ->
-                    when (state) {
-                        0 -> Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                            CircularProgressIndicator()
-                        }
-                        1 -> Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                            Text(
-                                stringResource(
-                                    if (genreFilter != null || yearFilter != null) {
-                                        R.string.library_empty_filtered
-                                    } else {
-                                        R.string.library_empty
-                                    }
-                                ),
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                        else -> LazyVerticalGrid(
-                            columns = posterGridColumns(),
-                            state = gridState,
-                            // Was a custom FlingBehavior damping initial velocity to ~70% (meant to
-                            // feel "softer") - reverted per feedback: damping velocity roughly
-                            // squares the lost distance (spline decay), so a fling that used to
-                            // carry across a couple rows now died almost immediately, reading as
-                            // "the grid got heavy, I have to swipe hard to get anywhere" rather
-                            // than smoother. Platform default fling is the correct baseline here.
-                            modifier = Modifier.fillMaxSize().focusGroup(),
-                            contentPadding = PaddingValues(8.dp)
-                        ) {
-                            items(items, key = { it.stableId }) { item ->
-                                // No animateItem() here (unlike Favorites/History/Downloads) -
-                                // sorting/filtering this grid reorders/reshuffles most or all of
-                                // its items at once, and animating every card's move across a
-                                // multi-column grid simultaneously produced visible dark bar
-                                // artifacts sweeping across rows mid-transition, not a clean
-                                // reflow. A plain instant re-layout has no such glitch.
-                                PosterCard(
-                                    item = item,
-                                    onClick = { onOpenItem(item.stableId) },
-                                    modifier = Modifier.padding(4.dp),
-                                    showRatingBadge = sortOrder == SortOrder.RATING
-                                )
-                            }
-                        }
-                    }
-                }
         }
     }
 }
