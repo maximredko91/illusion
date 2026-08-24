@@ -368,7 +368,15 @@ class LibraryScanner(
             studio = metadata?.studio ?: showMetadata?.studio,
             premiered = metadata?.premiered,
             imdbId = metadata?.imdbId ?: showMetadata?.imdbId,
-            tmdbId = metadata?.tmdbId ?: showMetadata?.tmdbId
+            tmdbId = metadata?.tmdbId ?: showMetadata?.tmdbId,
+            // From the nfo's own <fileinfo><streamdetails><video> - not re-probed by this app (see
+            // NfoMetadata.videoWidth's own KDoc for why: an earlier version read each video's real
+            // container header itself over SMB, confirmed on-device to be dramatically slower for a
+            // library of thousands of files than just reading a value already sitting in the nfo
+            // this app fetches anyway). Genuinely per-file, unlike genre/year above - no
+            // showMetadata fallback, since a per-episode nfo carries its own streamdetails too.
+            videoWidth = metadata?.videoWidth,
+            videoHeight = metadata?.videoHeight
         )
     }
 

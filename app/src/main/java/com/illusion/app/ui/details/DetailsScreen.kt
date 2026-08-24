@@ -119,6 +119,7 @@ import com.illusion.app.data.local.entity.DownloadEntity
 import com.illusion.app.data.local.entity.DownloadStatus
 import com.illusion.app.data.local.entity.MediaItemEntity
 import com.illusion.app.data.local.entity.hasForcedSubtitles
+import com.illusion.app.domain.model.videoQualityLabel
 import com.illusion.app.data.player.AudioTrackProber
 import com.illusion.app.data.repository.AudioTrackRepository
 import com.illusion.app.data.repository.DownloadRepository
@@ -556,7 +557,8 @@ private fun DetailsContent(
                     listOfNotNull(
                         item.year?.toString(),
                         item.country,
-                        item.runtimeMinutes?.let { "$it мин" }
+                        item.runtimeMinutes?.let { "$it мин" },
+                        item.videoQualityLabel
                     ).joinToString(" · "),
                     style = MaterialTheme.typography.bodyMedium,
                     fontWeight = FontWeight.Medium,

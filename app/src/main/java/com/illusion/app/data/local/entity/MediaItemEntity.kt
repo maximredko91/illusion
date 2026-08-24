@@ -69,7 +69,10 @@ data class MediaItemEntity(
      * excluded from every ordinary library browse query (see MediaItemDao) so it never shows up
      * in Home/Library/Search looking like a real, fully-scanned title.
      */
-    val isOrphanedDownload: Boolean = false
+    val isOrphanedDownload: Boolean = false,
+    /** Real pixel dimensions read from the video container's own header during scanning (LibraryScanner.extractVideoFormat) - null if that read failed (corrupt/unsupported header, dropped connection) or hasn't run yet. Drives the resolution badge on Details ([com.illusion.app.domain.model.videoQualityLabel]). */
+    val videoWidth: Int? = null,
+    val videoHeight: Int? = null
 )
 
 /** True if any sidecar subtitle file follows the "forced" naming convention (e.g. "Movie.forced.srt") - the file itself isn't parsed, just its name. */

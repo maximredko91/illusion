@@ -35,7 +35,7 @@ import com.illusion.app.data.local.entity.WatchProgressEntity
         AudioTrackEntity::class,
         TagTranslationEntity::class
     ],
-    version = 14
+    version = 15
 )
 @TypeConverters(Converters::class)
 abstract class AppDatabase : RoomDatabase() {
@@ -193,6 +193,17 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        // Resolution badge on Details - both null until the next rescan re-reads each video's
+        // container header (LibraryScanner.extractVideoFormat); a normal (non-forced) rescan
+        // never revisits an unchanged file, so existing rows stay null until a real file edit or a
+        // forced rescan ("Полное пересканирование" in Settings) touches them.
+        private val MIGRATION_14_15 = object : Migration(14, 15) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `media_items` ADD COLUMN `videoWidth` INTEGER")
+                db.execSQL("ALTER TABLE `media_items` ADD COLUMN `videoHeight` INTEGER")
+            }
+        }
+
         private val MIGRATION_9_10 = object : Migration(9, 10) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("CREATE INDEX IF NOT EXISTS `index_media_items_category` ON `media_items` (`category`)")
@@ -291,7 +302,7 @@ abstract class AppDatabase : RoomDatabase() {
                     context.applicationContext,
                     AppDatabase::class.java,
                     "illusion.db"
-                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14).build().also { instance = it }
+                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15).build().also { instance = it }
             }
     }
 }

@@ -37,10 +37,16 @@ class NfoParser {
         var premiered: String? = null
         var imdbId: String? = null
         var tmdbId: String? = null
+        var videoWidth: Int? = null
+        var videoHeight: Int? = null
 
         var inActor = false
         var inSet = false
         var inFanart = false
+        // <fileinfo><streamdetails> has both a <video> and (separately) an <audio> block, each
+        // with their own <codec> - only <width>/<height> inside the video one are real pixel
+        // dimensions worth reading, so this has to be tracked rather than just matching by tag name.
+        var inVideoStreamDetails = false
         var currentActorName: String? = null
         var currentTag: String? = null
         // <uniqueid type="imdb">tt123</uniqueid> / <uniqueid type="tmdb">456</uniqueid> - the id
@@ -64,6 +70,7 @@ class NfoParser {
                         "actor" -> inActor = true
                         "set" -> inSet = true
                         "fanart" -> inFanart = true
+                        "video" -> inVideoStreamDetails = true
                         "uniqueid" -> currentUniqueIdType = parser.getAttributeValue(null, "type")?.lowercase()
                         // Kodi nests the backdrop as <fanart><thumb>url</thumb></fanart> - a
                         // sibling of the top-level poster <thumb> elements, not a variant of them.
@@ -107,6 +114,8 @@ class NfoParser {
                                 "imdb" -> imdbId = imdbId ?: text
                                 "tmdb" -> tmdbId = tmdbId ?: text
                             }
+                            "width" -> if (inVideoStreamDetails) videoWidth = text.toIntOrNull()
+                            "height" -> if (inVideoStreamDetails) videoHeight = text.toIntOrNull()
                         }
                     }
                 }
@@ -121,6 +130,7 @@ class NfoParser {
                         "set" -> inSet = false
                         "fanart" -> inFanart = false
                         "uniqueid" -> currentUniqueIdType = null
+                        "video" -> inVideoStreamDetails = false
                     }
                     currentTag = null
                     depth--
@@ -154,7 +164,9 @@ class NfoParser {
             studio = studio,
             premiered = premiered,
             imdbId = imdbId,
-            tmdbId = tmdbId
+            tmdbId = tmdbId,
+            videoWidth = videoWidth,
+            videoHeight = videoHeight
         )
     }
 
