@@ -71,6 +71,8 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -745,50 +747,54 @@ private fun DetailsContent(
             }
         }
 
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically,
+        Column(
+            verticalArrangement = Arrangement.spacedBy(8.dp),
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp, vertical = 8.dp)
         ) {
-            val playSource = remember { MutableInteractionSource() }
-            Button(
-                onClick = { onPlay(item.stableId) },
-                interactionSource = playSource,
-                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
-                modifier = Modifier.weight(1f).focusHighlight(playSource)
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth()
             ) {
-                Icon(Icons.Default.PlayArrow, contentDescription = null)
-                Text(
-                    stringResource(if (hasStartedWatching) R.string.details_continue_watching else R.string.details_play),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(start = 8.dp)
-                )
-            }
-            if (item.trailerPath != null) {
-                // Was icon-only (a bare Icons.Default.Theaters circle) - per user feedback, nothing
-                // about that icon alone actually reads as "trailer" to someone who hasn't already
-                // learned what it means here. A short label fixes that; it fits without pushing
-                // anything off-screen since the play button next to it already flexes down via
-                // Modifier.weight(1f).
-                val trailerSource = remember { MutableInteractionSource() }
-                OutlinedButton(
-                    onClick = { onPlayTrailer(item.stableId) },
-                    interactionSource = trailerSource,
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.primary),
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary),
+                val playSource = remember { MutableInteractionSource() }
+                Button(
+                    onClick = { onPlay(item.stableId) },
+                    interactionSource = playSource,
                     contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
-                    modifier = Modifier.focusHighlight(trailerSource)
+                    modifier = Modifier.weight(1f).focusHighlight(playSource)
                 ) {
-                    Icon(Icons.Default.Theaters, contentDescription = null)
+                    Icon(Icons.Default.PlayArrow, contentDescription = null)
                     Text(
-                        stringResource(R.string.details_trailer),
+                        stringResource(if (hasStartedWatching) R.string.details_continue_watching else R.string.details_play),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.padding(start = 6.dp)
+                        modifier = Modifier.padding(start = 8.dp)
                     )
+                }
+                if (item.trailerPath != null) {
+                    // Was icon-only (a bare Icons.Default.Theaters circle) - per user feedback, nothing
+                    // about that icon alone actually reads as "trailer" to someone who hasn't already
+                    // learned what it means here. A short label fixes that. Same weight(1f) as the
+                    // play button so both buttons in this row end up the same size.
+                    val trailerSource = remember { MutableInteractionSource() }
+                    OutlinedButton(
+                        onClick = { onPlayTrailer(item.stableId) },
+                        interactionSource = trailerSource,
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.primary),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
+                        modifier = Modifier.weight(1f).focusHighlight(trailerSource)
+                    ) {
+                        Icon(Icons.Default.Theaters, contentDescription = null)
+                        Text(
+                            stringResource(R.string.details_trailer),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.padding(start = 6.dp)
+                        )
+                    }
                 }
             }
             DownloadButton(
@@ -866,38 +872,68 @@ private fun DownloadButton(
     var showRemoveConfirm by remember { mutableStateOf(false) }
     when (download?.status) {
         null -> {
+            // Same filled-Button design as "Смотреть" above it, not a bare icon - per user feedback,
+            // an icon-only download affordance didn't read clearly enough next to a labeled button.
             val startSource = remember { MutableInteractionSource() }
-            IconButton(onClick = onStart, interactionSource = startSource, modifier = Modifier.focusHighlight(startSource)) {
-                Icon(Icons.Default.Download, contentDescription = stringResource(R.string.details_download))
+            Button(
+                onClick = onStart,
+                interactionSource = startSource,
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
+                modifier = Modifier.fillMaxWidth().focusHighlight(startSource)
+            ) {
+                Icon(Icons.Default.Download, contentDescription = null)
+                Text(
+                    stringResource(R.string.details_download_label),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(start = 8.dp)
+                )
             }
         }
-        DownloadStatus.QUEUED, DownloadStatus.DOWNLOADING -> Row(verticalAlignment = Alignment.CenterVertically) {
+        DownloadStatus.QUEUED, DownloadStatus.DOWNLOADING -> {
             val progress = if (download.totalBytes > 0) {
                 (download.downloadedBytes.toFloat() / download.totalBytes.toFloat()).coerceIn(0f, 1f)
             } else {
                 0f
             }
-            Text(
-                "${(progress * 100).toInt()}%",
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(start = 4.dp)) {
-                CircularProgressIndicator(progress = { progress }, modifier = Modifier.padding(8.dp))
-                val cancelSource = remember { MutableInteractionSource() }
-                IconButton(onClick = onRemove, interactionSource = cancelSource, modifier = Modifier.focusHighlight(cancelSource)) {
-                    Icon(Icons.Default.Close, contentDescription = stringResource(R.string.details_download_cancel))
+            FilledTonalButton(
+                onClick = onRemove,
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        stringResource(R.string.details_download_downloading_label, (progress * 100).toInt()),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    LinearProgressIndicator(
+                        progress = { progress },
+                        modifier = Modifier.fillMaxWidth().padding(top = 4.dp)
+                    )
                 }
+                Icon(
+                    Icons.Default.Close,
+                    contentDescription = stringResource(R.string.details_download_cancel),
+                    modifier = Modifier.padding(start = 12.dp)
+                )
             }
         }
         DownloadStatus.COMPLETED -> {
             val removeSource = remember { MutableInteractionSource() }
-            IconButton(
+            FilledTonalButton(
                 onClick = { showRemoveConfirm = true },
                 interactionSource = removeSource,
-                modifier = Modifier.focusHighlight(removeSource)
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
+                modifier = Modifier.fillMaxWidth().focusHighlight(removeSource)
             ) {
-                Icon(Icons.Default.DownloadDone, contentDescription = stringResource(R.string.details_download_remove))
+                Icon(Icons.Default.DownloadDone, contentDescription = null)
+                Text(
+                    stringResource(R.string.details_download_done_label),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(start = 8.dp)
+                )
             }
             if (showRemoveConfirm) {
                 AlertDialog(
@@ -933,15 +969,26 @@ private fun DownloadButton(
         DownloadStatus.FAILED -> {
             val errorMessage = stringResource(R.string.details_download_error_generic, download.errorMessage ?: stringResource(R.string.downloads_failed))
             val retrySource = remember { MutableInteractionSource() }
-            IconButton(
+            Button(
                 onClick = {
                     onError(errorMessage)
                     onStart()
                 },
                 interactionSource = retrySource,
-                modifier = Modifier.focusHighlight(retrySource)
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.errorContainer,
+                    contentColor = MaterialTheme.colorScheme.onErrorContainer
+                ),
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
+                modifier = Modifier.fillMaxWidth().focusHighlight(retrySource)
             ) {
-                Icon(Icons.Default.ErrorOutline, contentDescription = stringResource(R.string.details_download_retry))
+                Icon(Icons.Default.ErrorOutline, contentDescription = null)
+                Text(
+                    stringResource(R.string.details_download_retry_label),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(start = 8.dp)
+                )
             }
         }
     }

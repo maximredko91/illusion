@@ -182,7 +182,7 @@ fun PosterCard(
 }
 
 /** Crimson strip in the launcher mark/splash - see ic_mark.xml. Reused here so the brand's own perforation motif shows up in-app, not just on the icon. */
-private val IllusionCrimson = Color(0xFFC2413A)
+internal val IllusionCrimson = Color(0xFFC2413A)
 private val RatingBadgeBackground = Color.Black.copy(alpha = 0.68f)
 
 @Composable
@@ -232,7 +232,7 @@ fun RatingBadge(rating: Double, modifier: Modifier = Modifier) {
  * layer for a see-through blend mode, which isn't worth the cost at this size.
  */
 @Composable
-private fun PerforationStrip(holeColor: Color, modifier: Modifier = Modifier) {
+internal fun PerforationStrip(holeColor: Color, modifier: Modifier = Modifier) {
     Canvas(modifier = modifier) {
         drawRect(color = IllusionCrimson)
         val vertical = size.height >= size.width

@@ -185,6 +185,10 @@
     <string name="downloads_completed">Загружено · %1$s</string>
     <string name="downloads_failed">Ошибка загрузки</string>
     <string name="details_download">Скачать для просмотра без сети</string>
+    <string name="details_download_label">Скачать</string>
+    <string name="details_download_downloading_label">Загрузка… %1$d%%</string>
+    <string name="details_download_done_label">Загружено</string>
+    <string name="details_download_retry_label">Повторить</string>
     <string name="details_download_cancel">Отменить загрузку</string>
     <string name="details_download_remove">Удалить загрузку</string>
     <string name="details_download_retry">Повторить загрузку</string>

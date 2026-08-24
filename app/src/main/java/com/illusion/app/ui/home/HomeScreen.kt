@@ -4,10 +4,13 @@ import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
@@ -24,16 +27,21 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.em
+import androidx.compose.ui.unit.sp
 import com.illusion.app.R
 import com.illusion.app.data.local.entity.MediaItemEntity
+import com.illusion.app.ui.common.PerforationStrip
 import com.illusion.app.ui.common.PosterCard
 import com.illusion.app.ui.common.focusHighlight
 import com.illusion.app.ui.common.posterCardMinWidth
@@ -63,7 +71,41 @@ fun HomeScreen(
         topBar = {
             TopAppBar(
                 windowInsets = com.illusion.app.ui.common.rememberLatchedStatusBarsInsets(),
-                title = { Text(stringResource(R.string.app_name)) },
+                title = {
+                    // Framed top/bottom by the same crimson perforated-strip motif as the splash
+                    // wordmark (MainActivity.kt's AppSplashOverlay) and the launcher mark itself -
+                    // width(IntrinsicSize.Min) makes the Column (and so the strips inside it, which
+                    // fillMaxWidth) measure to the text's own width rather than the whole app bar.
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier.width(IntrinsicSize.Min)
+                    ) {
+                        PerforationStrip(
+                            holeColor = MaterialTheme.colorScheme.surface,
+                            modifier = Modifier.fillMaxWidth().height(2.dp)
+                        )
+                        Text(
+                            stringResource(R.string.app_name).uppercase(),
+                            modifier = Modifier.padding(vertical = 2.dp),
+                            // Same face as the splash wordmark (MainActivity.kt's AppSplashOverlay)
+                            // it flies in from - a plain default-style Text here made the landing
+                            // read as a font/case swap rather than a clean touchdown. Smaller than
+                            // the splash's 20sp and maxLines=1 - at that size, uppercase plus the
+                            // same letter-spacing wrapped onto two lines in the TopAppBar's much
+                            // narrower title slot (shared with 5 action icons), unlike the splash's
+                            // full-width center stage.
+                            fontFamily = androidx.compose.ui.text.font.FontFamily.Serif,
+                            fontWeight = androidx.compose.ui.text.font.FontWeight.Medium,
+                            fontSize = 14.sp,
+                            letterSpacing = 0.12.em,
+                            maxLines = 1
+                        )
+                        PerforationStrip(
+                            holeColor = MaterialTheme.colorScheme.surface,
+                            modifier = Modifier.fillMaxWidth().height(2.dp)
+                        )
+                    }
+                },
                 actions = {
                     com.illusion.app.ui.common.TooltipIconButton(stringResource(R.string.nav_search), Icons.Default.Search, onOpenSearch)
                     com.illusion.app.ui.common.TooltipIconButton(stringResource(R.string.favorites_title), Icons.Default.Favorite, onOpenFavorites)
