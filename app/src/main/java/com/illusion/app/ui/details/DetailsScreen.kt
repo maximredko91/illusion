@@ -74,6 +74,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -104,6 +105,7 @@ import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
@@ -129,6 +131,7 @@ import com.illusion.app.ui.common.shimmer
 import com.illusion.app.ui.common.ZoomableImageViewer
 import com.illusion.app.ui.common.focusHighlight
 import com.illusion.app.ui.common.toggle
+import com.illusion.app.ui.theme.IllusionTheme
 
 @Composable
 fun DetailsScreen(
@@ -747,64 +750,17 @@ private fun DetailsContent(
             }
         }
 
-        Column(
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 8.dp)
-        ) {
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                val playSource = remember { MutableInteractionSource() }
-                Button(
-                    onClick = { onPlay(item.stableId) },
-                    interactionSource = playSource,
-                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
-                    modifier = Modifier.weight(1f).focusHighlight(playSource)
-                ) {
-                    Icon(Icons.Default.PlayArrow, contentDescription = null)
-                    Text(
-                        stringResource(if (hasStartedWatching) R.string.details_continue_watching else R.string.details_play),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.padding(start = 8.dp)
-                    )
-                }
-                if (item.trailerPath != null) {
-                    // Was icon-only (a bare Icons.Default.Theaters circle) - per user feedback, nothing
-                    // about that icon alone actually reads as "trailer" to someone who hasn't already
-                    // learned what it means here. A short label fixes that. Same weight(1f) as the
-                    // play button so both buttons in this row end up the same size.
-                    val trailerSource = remember { MutableInteractionSource() }
-                    OutlinedButton(
-                        onClick = { onPlayTrailer(item.stableId) },
-                        interactionSource = trailerSource,
-                        colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.primary),
-                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary),
-                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
-                        modifier = Modifier.weight(1f).focusHighlight(trailerSource)
-                    ) {
-                        Icon(Icons.Default.Theaters, contentDescription = null)
-                        Text(
-                            stringResource(R.string.details_trailer),
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.padding(start = 6.dp)
-                        )
-                    }
-                }
-            }
-            DownloadButton(
-                download = download,
-                itemTitle = displayTitle,
-                onStart = onStartDownload,
-                onRemove = onRemoveDownload,
-                onError = onDownloadError
-            )
-        }
+        ActionButtonsRow(
+            hasStartedWatching = hasStartedWatching,
+            hasTrailer = item.trailerPath != null,
+            download = download,
+            itemTitle = displayTitle,
+            onPlay = { onPlay(item.stableId) },
+            onPlayTrailer = { onPlayTrailer(item.stableId) },
+            onStartDownload = onStartDownload,
+            onRemoveDownload = onRemoveDownload,
+            onDownloadError = onDownloadError
+        )
 
         // Same backdrop treatment as the tagline/studio/audio/subtitles card above it (per
         // feedback) - a plain Text here previously had no visual container of its own at all.
@@ -857,6 +813,79 @@ private fun DetailsContent(
             contentDescription = displayTitle,
             onDismiss = { zoomedImage = null },
             imageLoader = if (zoomedImageIsFanart) fanartImageLoader else null
+        )
+    }
+}
+
+/** Play/Trailer/download row from the top of Details - extracted so it's previewable in isolation (see the @Preview functions right below DownloadButton) without needing a full MediaItemEntity/ViewModel. */
+@Composable
+private fun ActionButtonsRow(
+    hasStartedWatching: Boolean,
+    hasTrailer: Boolean,
+    download: DownloadEntity?,
+    itemTitle: String,
+    onPlay: () -> Unit,
+    onPlayTrailer: () -> Unit,
+    onStartDownload: () -> Unit,
+    onRemoveDownload: () -> Unit,
+    onDownloadError: (String) -> Unit
+) {
+    Column(
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp)
+    ) {
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            val playSource = remember { MutableInteractionSource() }
+            Button(
+                onClick = onPlay,
+                interactionSource = playSource,
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
+                modifier = Modifier.weight(1f).focusHighlight(playSource)
+            ) {
+                Icon(Icons.Default.PlayArrow, contentDescription = null)
+                Text(
+                    stringResource(if (hasStartedWatching) R.string.details_continue_watching else R.string.details_play),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(start = 8.dp)
+                )
+            }
+            if (hasTrailer) {
+                // Was icon-only (a bare Icons.Default.Theaters circle) - per user feedback, nothing
+                // about that icon alone actually reads as "trailer" to someone who hasn't already
+                // learned what it means here. A short label fixes that. Same weight(1f) as the
+                // play button so both buttons in this row end up the same size.
+                val trailerSource = remember { MutableInteractionSource() }
+                OutlinedButton(
+                    onClick = onPlayTrailer,
+                    interactionSource = trailerSource,
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.primary),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary),
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
+                    modifier = Modifier.weight(1f).focusHighlight(trailerSource)
+                ) {
+                    Icon(Icons.Default.Theaters, contentDescription = null)
+                    Text(
+                        stringResource(R.string.details_trailer),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(start = 6.dp)
+                    )
+                }
+            }
+        }
+        DownloadButton(
+            download = download,
+            itemTitle = itemTitle,
+            onStart = onStartDownload,
+            onRemove = onRemoveDownload,
+            onError = onDownloadError
         )
     }
 }
@@ -990,6 +1019,96 @@ private fun DownloadButton(
                     modifier = Modifier.padding(start = 8.dp)
                 )
             }
+        }
+    }
+}
+
+// Previews for the redesigned action-button row (Play/Trailer equal-width, DownloadButton below in
+// the same filled-Button style as Play) - one per DownloadEntity state, since that's what actually
+// changes DownloadButton's look. No real MediaItemEntity/ViewModel needed, just fake DownloadEntity
+// values - see ActionButtonsRow's own KDoc for why this was extracted out of DetailsScreen for this.
+@Preview(showBackground = true)
+@Composable
+private fun ActionButtonsRowNotDownloadedPreview() {
+    IllusionTheme {
+        Surface {
+            ActionButtonsRow(
+                hasStartedWatching = false,
+                hasTrailer = true,
+                download = null,
+                itemTitle = "Пример фильма",
+                onPlay = {}, onPlayTrailer = {}, onStartDownload = {}, onRemoveDownload = {}, onDownloadError = {}
+            )
+        }
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+private fun ActionButtonsRowDownloadingPreview() {
+    IllusionTheme {
+        Surface {
+            ActionButtonsRow(
+                hasStartedWatching = true,
+                hasTrailer = false,
+                download = DownloadEntity(
+                    stableId = "preview",
+                    contentUri = "content://preview",
+                    status = DownloadStatus.DOWNLOADING,
+                    totalBytes = 1_000_000_000L,
+                    downloadedBytes = 420_000_000L,
+                    updatedAt = 0L
+                ),
+                itemTitle = "Пример фильма",
+                onPlay = {}, onPlayTrailer = {}, onStartDownload = {}, onRemoveDownload = {}, onDownloadError = {}
+            )
+        }
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+private fun ActionButtonsRowDownloadedPreview() {
+    IllusionTheme {
+        Surface {
+            ActionButtonsRow(
+                hasStartedWatching = true,
+                hasTrailer = true,
+                download = DownloadEntity(
+                    stableId = "preview",
+                    contentUri = "content://preview",
+                    status = DownloadStatus.COMPLETED,
+                    totalBytes = 1_000_000_000L,
+                    downloadedBytes = 1_000_000_000L,
+                    updatedAt = 0L
+                ),
+                itemTitle = "Пример фильма",
+                onPlay = {}, onPlayTrailer = {}, onStartDownload = {}, onRemoveDownload = {}, onDownloadError = {}
+            )
+        }
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+private fun ActionButtonsRowFailedPreview() {
+    IllusionTheme {
+        Surface {
+            ActionButtonsRow(
+                hasStartedWatching = false,
+                hasTrailer = false,
+                download = DownloadEntity(
+                    stableId = "preview",
+                    contentUri = "content://preview",
+                    status = DownloadStatus.FAILED,
+                    totalBytes = 1_000_000_000L,
+                    downloadedBytes = 120_000_000L,
+                    updatedAt = 0L,
+                    errorMessage = "Соединение потеряно"
+                ),
+                itemTitle = "Пример фильма",
+                onPlay = {}, onPlayTrailer = {}, onStartDownload = {}, onRemoveDownload = {}, onDownloadError = {}
+            )
         }
     }
 }
