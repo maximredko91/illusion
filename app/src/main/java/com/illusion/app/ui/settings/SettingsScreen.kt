@@ -91,6 +91,7 @@ import com.illusion.app.data.local.entity.SmbSourceEntity
 import com.illusion.app.ui.common.focusHighlight
 import com.illusion.app.ui.common.reject
 import com.illusion.app.ui.common.segmentTick
+import com.illusion.app.ui.common.tick
 import com.illusion.app.ui.common.toggle
 import com.illusion.app.ui.library.sortLabel
 import kotlinx.coroutines.flow.Flow
@@ -462,9 +463,50 @@ fun SettingsScreen(
                             SettingsDivider()
                             ListItem(
                                 headlineContent = { Text(stringResource(R.string.settings_version, com.illusion.app.BuildConfig.VERSION_NAME)) },
-                                supportingContent = { Text(stringResource(R.string.settings_build_number, com.illusion.app.BuildConfig.VERSION_CODE)) },
                                 colors = ListItemDefaults.colors(containerColor = Color.Transparent),
                                 modifier = Modifier.fillMaxWidth()
+                            )
+                            // A separate row (not the version's own supportingContent line) so it's
+                            // its own tap target - tapping it 7 times triggers a small easter egg,
+                            // the same "tap the build number" joke stock Android's own Settings has
+                            // (there it unlocks Developer Options; this app's real dev-tools unlock
+                            // is a normal visible menu entry elsewhere, per the user's own earlier
+                            // preference against gating it behind tap-counting obscurity - this is
+                            // purely for fun, no functional side effect).
+                            var buildNumberTapCount by remember { mutableStateOf(0) }
+                            var lastBuildNumberTapAt by remember { mutableStateOf(0L) }
+                            val eggContext = LocalContext.current
+                            val buildNumberSource = remember { MutableInteractionSource() }
+                            ListItem(
+                                headlineContent = { Text(stringResource(R.string.settings_build_number, com.illusion.app.BuildConfig.VERSION_CODE)) },
+                                colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .focusHighlight(buildNumberSource)
+                                    .clickable(interactionSource = buildNumberSource, indication = LocalIndication.current) {
+                                        val now = System.currentTimeMillis()
+                                        buildNumberTapCount = if (now - lastBuildNumberTapAt > 1500) 1 else buildNumberTapCount + 1
+                                        lastBuildNumberTapAt = now
+                                        when {
+                                            buildNumberTapCount in 4..6 -> {
+                                                haptics.segmentTick()
+                                                android.widget.Toast.makeText(
+                                                    eggContext,
+                                                    eggContext.getString(R.string.settings_easter_egg_countdown, 7 - buildNumberTapCount),
+                                                    android.widget.Toast.LENGTH_SHORT
+                                                ).show()
+                                            }
+                                            buildNumberTapCount >= 7 -> {
+                                                haptics.tick()
+                                                buildNumberTapCount = 0
+                                                android.widget.Toast.makeText(
+                                                    eggContext,
+                                                    R.string.settings_easter_egg_message,
+                                                    android.widget.Toast.LENGTH_LONG
+                                                ).show()
+                                            }
+                                        }
+                                    }
                             )
                             SettingsDivider()
                             ListItem(
