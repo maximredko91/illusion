@@ -15,6 +15,7 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
@@ -250,8 +251,14 @@ private fun IllusionNavGraph(app: IllusionApplication, navController: NavHostCon
                     // back down onto its poster card rather than sliding underneath that motion.
                     fadeIn(tween(DETAILS_FADE_MS))
                 } else {
-                    slideInHorizontally(tween(NAV_TRANSITION_MS, easing = FastOutSlowInEasing)) { -it / 6 } +
-                        fadeIn(tween(NAV_TRANSITION_MS))
+                    // Every other pop (Settings/Favorites/Search/... back to Tabs, or any nested
+                    // screen back to its parent) uses the same fade+scale-in Details already did -
+                    // matches Android's own predictive-back convention (the destination is already
+                    // sitting slightly behind/smaller and settles to full size as it's revealed)
+                    // instead of a slide-in-from-the-edge, which used to only read correctly for a
+                    // full system-driven swipe and looked like a plain re-entrance for a tap-back.
+                    fadeIn(tween(NAV_TRANSITION_MS)) +
+                        scaleIn(tween(NAV_TRANSITION_MS, easing = FastOutSlowInEasing), initialScale = 0.95f)
                 }
             },
             popExitTransition = {
@@ -266,8 +273,10 @@ private fun IllusionNavGraph(app: IllusionApplication, navController: NavHostCon
                     // shrinking away even when the gesture is paused mid-swipe, not just at 60fps.
                     fadeOut(tween(DETAILS_FADE_MS)) + scaleOut(tween(DETAILS_FADE_MS), targetScale = 0.92f)
                 } else {
-                    slideOutHorizontally(tween(NAV_TRANSITION_MS, easing = FastOutSlowInEasing)) { it / 3 } +
-                        fadeOut(tween(NAV_TRANSITION_MS))
+                    // Same shrink-away treatment as Details, generalized - see popEnterTransition's
+                    // comment above for why this replaced the old slide-out.
+                    fadeOut(tween(NAV_TRANSITION_MS)) +
+                        scaleOut(tween(NAV_TRANSITION_MS, easing = FastOutSlowInEasing), targetScale = 0.92f)
                 }
             }
         ) {
