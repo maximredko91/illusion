@@ -71,8 +71,23 @@ class UpdateViewModel(
                         }
                     }
                     WorkInfo.State.SUCCEEDED -> {
+                        // WorkManager keeps a unique work's WorkInfo around indefinitely once it
+                        // succeeds - REPLACE only affects a NEW enqueue, it doesn't clear the old
+                        // record on its own. Without this check, every future launch (including
+                        // ones running the very update that download was for) re-subscribed to
+                        // that same stale SUCCEEDED result and re-showed "Обновление готово" for
+                        // an install that already happened. The target versionCode is encoded
+                        // right in the file name (UpdateDownloadWorker.apkDir's own naming) - only
+                        // surface it if this process is still older than that.
                         val path = info.outputData.getString(UpdateDownloadWorker.KEY_FILE_PATH)
-                        _state.update { it.copy(isDownloading = false, downloadProgress = 1f, downloadedFile = path?.let(::File)) }
+                        val file = path?.let(::File)
+                        val downloadedVersionCode = file?.nameWithoutExtension?.substringAfterLast('-')?.toIntOrNull()
+                        if (file != null && downloadedVersionCode != null && downloadedVersionCode > BuildConfig.VERSION_CODE) {
+                            _state.update { it.copy(isDownloading = false, downloadProgress = 1f, downloadedFile = file) }
+                        } else {
+                            file?.delete()
+                            _state.update { it.copy(isDownloading = false, downloadProgress = null, downloadedFile = null) }
+                        }
                     }
                     WorkInfo.State.FAILED, WorkInfo.State.CANCELLED -> {
                         _state.update { it.copy(isDownloading = false, error = "Не удалось скачать обновление") }
