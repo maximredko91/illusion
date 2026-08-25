@@ -167,4 +167,28 @@ object WorkScheduler {
     }
 
     private const val ADD_MEDIA_UPLOAD_WORK_NAME = "add_media_upload"
+    private const val UPDATE_DOWNLOAD_WORK_NAME = "update_download"
+
+    /** Downloads a GitHub release .apk that UpdateChecker already confirmed is newer than the running build. Progress/result observed via [updateDownloadWorkInfo]. */
+    fun enqueueUpdateDownload(context: Context, apkUrl: String, versionCode: Int) {
+        val request = OneTimeWorkRequestBuilder<UpdateDownloadWorker>()
+            .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
+            .setInputData(
+                workDataOf(
+                    UpdateDownloadWorker.KEY_URL to apkUrl,
+                    UpdateDownloadWorker.KEY_VERSION_CODE to versionCode
+                )
+            )
+            .build()
+
+        WorkManager.getInstance(context).enqueueUniqueWork(
+            UPDATE_DOWNLOAD_WORK_NAME,
+            ExistingWorkPolicy.REPLACE,
+            request
+        )
+    }
+
+    fun updateDownloadWorkInfo(context: Context): Flow<androidx.work.WorkInfo?> =
+        WorkManager.getInstance(context).getWorkInfosForUniqueWorkFlow(UPDATE_DOWNLOAD_WORK_NAME)
+            .map { infos -> infos.firstOrNull() }
 }

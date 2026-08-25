@@ -155,6 +155,9 @@ fun SettingsScreen(
     onRememberDevAccess: () -> Unit,
     onForgetDevAccess: () -> Unit,
     onDevAccessGranted: () -> Unit,
+    onCheckForUpdates: () -> Unit,
+    upToDateMessage: String?,
+    onDismissUpToDateMessage: () -> Unit,
     onBack: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -390,15 +393,36 @@ fun SettingsScreen(
                             onClick = { selectedCategory = "reset" }
                         )
 
-                        Text(
-                            text = stringResource(R.string.settings_version, com.illusion.app.BuildConfig.VERSION_NAME, com.illusion.app.BuildConfig.VERSION_CODE),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(top = 16.dp, bottom = 16.dp),
-                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                        )
+                        Column(
+                            modifier = Modifier.fillMaxWidth().padding(top = 16.dp, bottom = 16.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Text(
+                                text = stringResource(R.string.settings_version, com.illusion.app.BuildConfig.VERSION_NAME, com.illusion.app.BuildConfig.VERSION_CODE),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                            )
+                            val checkUpdatesSource = remember { MutableInteractionSource() }
+                            TextButton(
+                                onClick = onCheckForUpdates,
+                                interactionSource = checkUpdatesSource,
+                                modifier = Modifier.focusHighlight(checkUpdatesSource)
+                            ) {
+                                Text(stringResource(R.string.settings_check_updates))
+                            }
+                            if (upToDateMessage != null) {
+                                LaunchedEffect(upToDateMessage) {
+                                    kotlinx.coroutines.delay(4000)
+                                    onDismissUpToDateMessage()
+                                }
+                                Text(
+                                    upToDateMessage,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
                     }
 
                     "smb_sources" -> {

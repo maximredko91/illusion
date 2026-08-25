@@ -54,6 +54,9 @@ import com.illusion.app.ui.common.PerforationStrip
 import com.illusion.app.ui.navigation.IllusionNavHost
 import com.illusion.app.ui.player.PipController
 import com.illusion.app.ui.theme.IllusionTheme
+import com.illusion.app.ui.update.UpdatePrompt
+import com.illusion.app.ui.update.UpdateViewModel
+import androidx.lifecycle.viewmodel.compose.viewModel
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -78,6 +81,12 @@ class MainActivity : ComponentActivity() {
                     CrashReportPrompt()
                     NotificationPermissionRequest()
                     AppSplashOverlay()
+                    val updateViewModel: UpdateViewModel = viewModel(
+                        viewModelStoreOwner = this@MainActivity,
+                        factory = UpdateViewModel.factory(app, app.updateChecker, app.settingsRepository)
+                    )
+                    LaunchedEffect(Unit) { updateViewModel.checkForUpdate() }
+                    UpdatePrompt(updateViewModel)
                 }
             }
         }

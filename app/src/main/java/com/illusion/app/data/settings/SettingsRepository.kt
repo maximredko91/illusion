@@ -5,6 +5,7 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.illusion.app.domain.model.AccentColor
@@ -53,6 +54,8 @@ class SettingsRepository(private val context: Context) {
         val SUBTITLE_TEXT_COLOR = intPreferencesKey("player_subtitle_text_color")
         val SUBTITLE_BACKGROUND_OPACITY = intPreferencesKey("player_subtitle_background_opacity")
         val SUBTITLE_TEXT_SIZE_PERCENT = intPreferencesKey("player_subtitle_text_size_percent")
+        val SKIPPED_UPDATE_VERSION_CODE = intPreferencesKey("skipped_update_version_code")
+        val LAST_UPDATE_CHECK_AT_MS = longPreferencesKey("last_update_check_at_ms")
     }
 
     val requireChargingForHeavyTasks: Flow<Boolean> = context.dataStore.data.map {
@@ -288,5 +291,19 @@ class SettingsRepository(private val context: Context) {
     /** Clears every preference here (sort order, haptics, seek duration, sharpen, poster caching, rescan interval, charging requirement, downloads folder, UI mode, player mode, gesture toggles, technical info, subtitle style, predictive back) back to its default - does not touch SMB sources or the library index, only this DataStore. */
     suspend fun resetToDefaults() {
         context.dataStore.edit { it.clear() }
+    }
+
+    /** versionCode the user explicitly chose "skip this version" for on the update dialog - null once a newer release supersedes it, so skipping v70 doesn't also silently skip v71. */
+    val skippedUpdateVersionCode: Flow<Int?> = context.dataStore.data.map { it[Keys.SKIPPED_UPDATE_VERSION_CODE] }
+
+    suspend fun setSkippedUpdateVersionCode(versionCode: Int) {
+        context.dataStore.edit { it[Keys.SKIPPED_UPDATE_VERSION_CODE] = versionCode }
+    }
+
+    /** Throttles the automatic on-launch update check (see MainActivity) - the manual "Проверить обновления" button in Settings bypasses this and always hits the network. */
+    val lastUpdateCheckAtMs: Flow<Long> = context.dataStore.data.map { it[Keys.LAST_UPDATE_CHECK_AT_MS] ?: 0L }
+
+    suspend fun setLastUpdateCheckAtMs(timestamp: Long) {
+        context.dataStore.edit { it[Keys.LAST_UPDATE_CHECK_AT_MS] = timestamp }
     }
 }

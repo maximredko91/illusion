@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <!-- UpdateDownloadWorker writes the downloaded .apk to context.cacheDir/updates - this is the
+         only path exposed to the package installer, nothing else in cacheDir is shared. -->
+    <cache-path name="updates" path="updates/" />
+</paths>

@@ -97,6 +97,7 @@ class IllusionApplication : Application(), Configuration.Provider, SingletonImag
         TmdbClient { devAccessStore.tmdbApiKey ?: BuildConfig.TMDB_API_KEY }
     }
     val nfoWriter: NfoWriter by lazy { NfoWriter() }
+    val updateChecker: com.illusion.app.data.update.UpdateChecker by lazy { com.illusion.app.data.update.UpdateChecker() }
 
     override val workManagerConfiguration: Configuration
         get() = Configuration.Builder()

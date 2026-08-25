@@ -12,6 +12,7 @@
     <string name="settings_external_player_app">Приложение</string>
     <string name="settings_external_player_app_description">Каким приложением открывать внешний плеер</string>
     <string name="settings_external_player_app_system">Системный выбор</string>
+    <string name="settings_check_updates">Проверить обновления</string>
     <string name="player_mode_ask_title">Как открыть?</string>
     <string name="player_mode_ask_internal">Внутренний плеер</string>
     <string name="player_mode_ask_external">Внешний плеер</string>

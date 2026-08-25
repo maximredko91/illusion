@@ -478,6 +478,16 @@ private fun IllusionNavGraph(app: IllusionApplication, navController: NavHostCon
                 val isScanRunning by remember(context) { WorkScheduler.isOneTimeScanRunning(context) }.collectAsState(initial = false)
                 val scanCoroutineScope = rememberCoroutineScope()
                 val deeplUpgradeState by settingsViewModel.deeplUpgradeState.collectAsState()
+                // Explicitly scoped to the Activity (not this NavBackStackEntry) so it resolves to
+                // the exact same instance MainActivity's top-level UpdatePrompt observes - the
+                // manual "Проверить обновления" button here needs to trigger the same dialog that
+                // lives above the whole NavHost, not a second independent ViewModel/dialog nobody
+                // ever sees rendered.
+                val updateViewModel: com.illusion.app.ui.update.UpdateViewModel = viewModel(
+                    viewModelStoreOwner = context as androidx.activity.ComponentActivity,
+                    factory = com.illusion.app.ui.update.UpdateViewModel.factory(app, app.updateChecker, app.settingsRepository)
+                )
+                val upToDateMessage by updateViewModel.upToDateMessage.collectAsState()
                 SettingsScreen(
                     sources = sources,
                     deeplApiKey = settingsViewModel.deeplApiKey,
@@ -555,6 +565,9 @@ private fun IllusionNavGraph(app: IllusionApplication, navController: NavHostCon
                     onRememberDevAccess = settingsViewModel::rememberDevAccess,
                     onForgetDevAccess = settingsViewModel::forgetDevAccess,
                     onDevAccessGranted = { navController.navigate(Destination.AddMedia) },
+                    onCheckForUpdates = { updateViewModel.checkForUpdate(force = true) },
+                    upToDateMessage = upToDateMessage,
+                    onDismissUpToDateMessage = { updateViewModel.dismissUpToDateMessage() },
                     onBack = { navController.popBackStack() }
                 )
             }

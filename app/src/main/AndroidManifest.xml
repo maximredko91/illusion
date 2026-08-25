@@ -24,6 +24,12 @@
          required alongside FOREGROUND_SERVICE once a specific type is declared, same as the scan
          worker's FOREGROUND_SERVICE_DATA_SYNC above. -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+    <!-- Needed to launch the system package installer with a downloaded update .apk - without it
+         the ACTION_VIEW install intent silently does nothing on API 26+. Granting this doesn't
+         skip the OS's own "install unknown apps" confirmation (Settings > Apps > Special access) -
+         that's a separate, one-time-per-source gate the user still has to clear themselves; see
+         UpdateInstaller's own KDoc. -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
     <!-- The Xiaomi TV Box target has no touchscreen and may not declare the leanback feature -
          both must be optional or the Play Store (and some OEM stores) would filter the app out
@@ -94,6 +100,19 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- Exposes UpdateDownloadWorker's downloaded .apk (context.cacheDir/updates) to the
+             system package installer via a content:// Uri - a raw file:// Uri would be rejected
+             (StrictMode FileUriExposedException) on API 24+. -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
 
         <service
             android:name=".data.player.PlaybackService"
