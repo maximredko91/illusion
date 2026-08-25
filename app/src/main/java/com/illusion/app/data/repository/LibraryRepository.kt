@@ -123,4 +123,26 @@ class LibraryRepository(private val dao: MediaItemDao) {
             dao.clearIntroMarkers(item.stableId)
         }
     }
+
+    /** Same idea as [markIntroEnd] but for the credits at the end of an episode - only a start is needed since credits run to EOF. */
+    suspend fun markCreditsStart(item: MediaItemEntity, startMs: Long) {
+        val seriesId = item.seriesStableId
+        val season = item.seasonNumber
+        if (seriesId != null && season != null) {
+            dao.setOutroMarkerForSeason(seriesId, season, startMs)
+        } else {
+            dao.setOutroMarker(item.stableId, startMs)
+        }
+    }
+
+    /** Undoes [markCreditsStart] - same single-item-vs-whole-season scoping. */
+    suspend fun clearOutroMarker(item: MediaItemEntity) {
+        val seriesId = item.seriesStableId
+        val season = item.seasonNumber
+        if (seriesId != null && season != null) {
+            dao.clearOutroMarkerForSeason(seriesId, season)
+        } else {
+            dao.clearOutroMarker(item.stableId)
+        }
+    }
 }

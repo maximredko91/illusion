@@ -72,7 +72,9 @@ data class MediaItemEntity(
     val isOrphanedDownload: Boolean = false,
     /** Real pixel dimensions read from the video container's own header during scanning (LibraryScanner.extractVideoFormat) - null if that read failed (corrupt/unsupported header, dropped connection) or hasn't run yet. Drives the resolution badge on Details ([com.illusion.app.domain.model.videoQualityLabel]). */
     val videoWidth: Int? = null,
-    val videoHeight: Int? = null
+    val videoHeight: Int? = null,
+    /** Mirrors [introStartMs]/[introEndMs]'s manual-marking approach but for the credits at the END of an episode - runs to EOF so only a start is needed, not a range. Drives the "skip credits / next episode" banner (see PlayerViewModel.isWithinOutro). */
+    val outroStartMs: Long? = null
 )
 
 /** True if any sidecar subtitle file follows the "forced" naming convention (e.g. "Movie.forced.srt") - the file itself isn't parsed, just its name. */

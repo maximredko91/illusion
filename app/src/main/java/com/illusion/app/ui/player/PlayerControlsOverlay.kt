@@ -45,9 +45,12 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.Subtitles
+import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.HorizontalDivider
@@ -88,6 +91,9 @@ fun TopGradientBar(
     onOpenSettings: () -> Unit,
     sharpenEnabled: Boolean,
     onToggleSharpen: () -> Unit,
+    sleepTimerRemainingMs: Long?,
+    onSetSleepTimer: (Long) -> Unit,
+    onCancelSleepTimer: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Row(
@@ -131,6 +137,63 @@ fun TopGradientBar(
         val aspectSource = remember { MutableInteractionSource() }
         IconButton(onClick = onCycleAspectRatio, interactionSource = aspectSource, modifier = Modifier.focusHighlight(aspectSource, color = Color.White)) {
             Icon(Icons.Default.AspectRatio, contentDescription = stringResource(R.string.player_aspect_ratio), tint = Color.White)
+        }
+        // Moved here from the settings panel per feedback - buried at the bottom of a long scroll
+        // it was easy to miss, unlike the season-scoped intro/credits markers which stay there
+        // (one-time-per-season actions, not something reached for every session). The countdown
+        // shows right on the icon itself (tinted like the sharpen quick-toggle) so its state is
+        // visible without opening the dropdown.
+        var sleepTimerMenuExpanded by remember { mutableStateOf(false) }
+        Box {
+            val sleepTimerSource = remember { MutableInteractionSource() }
+            IconButton(
+                onClick = { sleepTimerMenuExpanded = true },
+                interactionSource = sleepTimerSource,
+                modifier = Modifier.focusHighlight(sleepTimerSource, color = Color.White)
+            ) {
+                if (sleepTimerRemainingMs != null) {
+                    Text(
+                        formatTime(sleepTimerRemainingMs),
+                        color = MaterialTheme.colorScheme.primary,
+                        style = MaterialTheme.typography.labelSmall
+                    )
+                } else {
+                    Icon(Icons.Default.Timer, contentDescription = stringResource(R.string.player_sleep_timer_button), tint = Color.White)
+                }
+            }
+            // Fixed width on every row - the countdown text's own width otherwise shifts by a
+            // pixel or two each second as its digits change (a proportional font renders "1"
+            // narrower than "8"), and since DropdownMenu sizes itself to its widest child, that
+            // constant sub-pixel wobble in one row was visibly resizing the whole menu every tick.
+            DropdownMenu(expanded = sleepTimerMenuExpanded, onDismissRequest = { sleepTimerMenuExpanded = false }) {
+                if (sleepTimerRemainingMs != null) {
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.player_sleep_timer_remaining, formatTime(sleepTimerRemainingMs))) },
+                        onClick = {},
+                        modifier = Modifier.width(220.dp)
+                    )
+                }
+                listOf(15, 30, 45, 60).forEach { minutes ->
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.player_sleep_timer_minutes, minutes)) },
+                        onClick = {
+                            onSetSleepTimer(minutes * 60_000L)
+                            sleepTimerMenuExpanded = false
+                        },
+                        modifier = Modifier.width(220.dp)
+                    )
+                }
+                if (sleepTimerRemainingMs != null) {
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.player_sleep_timer_cancel)) },
+                        onClick = {
+                            onCancelSleepTimer()
+                            sleepTimerMenuExpanded = false
+                        },
+                        modifier = Modifier.width(220.dp)
+                    )
+                }
+            }
         }
         IconButton(onClick = { /* Cast: требует настройки Google Cast SDK (App ID) - см. заметки */ }) {
             Icon(
@@ -281,6 +344,18 @@ fun SkipIntroBanner(onSkip: () -> Unit, modifier: Modifier = Modifier) {
     }
 }
 
+/** Mirrors [SkipIntroBanner] but for the end-of-episode credits - tapping it just calls the same PlayerViewModel.playNext() the manual "next episode" button already uses, not a new transition. */
+@Composable
+fun SkipCreditsBanner(onSkip: () -> Unit, modifier: Modifier = Modifier) {
+    Button(
+        onClick = onSkip,
+        colors = ButtonDefaults.buttonColors(containerColor = Color.White.copy(alpha = 0.85f)),
+        modifier = modifier
+    ) {
+        Text(stringResource(R.string.player_skip_credits), color = Color.Black)
+    }
+}
+
 @Composable
 fun ErrorOverlay(message: String, onRetry: () -> Unit, modifier: Modifier = Modifier) {
     Box(
@@ -378,6 +453,10 @@ fun PlayerSettingsPanel(
     introMarkedEndMs: Long?,
     onMarkIntroEnd: () -> Unit,
     onClearIntroMarkers: () -> Unit,
+    canMarkCredits: Boolean,
+    outroMarkedStartMs: Long?,
+    onMarkCreditsStart: () -> Unit,
+    onClearOutroMarker: () -> Unit,
     onSelect: (Float) -> Unit,
     onDismiss: () -> Unit
 ) {
@@ -609,6 +688,32 @@ fun PlayerSettingsPanel(
                     }
                     Text(
                         stringResource(R.string.player_mark_intro_end_hint),
+                        color = Color.White.copy(alpha = 0.7f),
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+
+                if (canMarkCredits) {
+                    PanelSectionLabel(stringResource(R.string.player_settings_section_credits))
+                    if (outroMarkedStartMs != null) {
+                        Text(
+                            stringResource(R.string.player_credits_marked_at, formatTime(outroMarkedStartMs)),
+                            color = Color.White.copy(alpha = 0.7f),
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        TextButton(onClick = onMarkCreditsStart) {
+                            Text(stringResource(R.string.player_mark_credits_start))
+                        }
+                        if (outroMarkedStartMs != null) {
+                            TextButton(onClick = onClearOutroMarker) {
+                                Text(stringResource(R.string.player_clear_outro_marker))
+                            }
+                        }
+                    }
+                    Text(
+                        stringResource(R.string.player_mark_credits_start_hint),
                         color = Color.White.copy(alpha = 0.7f),
                         style = MaterialTheme.typography.bodySmall
                     )

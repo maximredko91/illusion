@@ -1,5 +1,9 @@
 package com.illusion.app.ui.search
 
+import android.content.Intent
+import android.speech.RecognizerIntent
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -22,6 +26,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -50,6 +55,7 @@ import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.stringResource
@@ -104,6 +110,27 @@ fun SearchScreen(
             val focusRequester = remember { FocusRequester() }
             val keyboardController = LocalSoftwareKeyboardController.current
             val uiMode = LocalUiMode.current
+            val context = LocalContext.current
+            // The system speech-recognizer UI Intent (not the SpeechRecognizer class) - it
+            // delegates to whatever app resolves it (typically the Google app), which handles its
+            // own mic permission/UI internally, so this doesn't need RECORD_AUDIO in the manifest.
+            val speechRecognitionIntent = remember {
+                Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
+                    .putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+            }
+            // Some devices (esp. some TV boxes/custom ROMs) have nothing installed that can
+            // handle this intent at all - the icon is hidden rather than shown-but-silently-
+            // does-nothing when tapped.
+            val voiceSearchAvailable = remember {
+                speechRecognitionIntent.resolveActivity(context.packageManager) != null
+            }
+            val voiceSearchLauncher = rememberLauncherForActivityResult(
+                ActivityResultContracts.StartActivityForResult()
+            ) { result ->
+                result.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
+                    ?.firstOrNull()
+                    ?.let { viewModel.setQuery(it) }
+            }
             // Auto-focus+keyboard only on phone: TV has no soft keyboard to pop and its
             // D-pad focus should land wherever the remote navigated from, not be yanked
             // onto this field on screen entry.
@@ -123,6 +150,15 @@ fun SearchScreen(
                     viewModel.commitSearch()
                     keyboardController?.hide()
                 }),
+                trailingIcon = if (voiceSearchAvailable) {
+                    {
+                        com.illusion.app.ui.common.TooltipIconButton(
+                            label = stringResource(R.string.search_voice),
+                            icon = Icons.Default.Mic,
+                            onClick = { voiceSearchLauncher.launch(speechRecognitionIntent) }
+                        )
+                    }
+                } else null,
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(8.dp)

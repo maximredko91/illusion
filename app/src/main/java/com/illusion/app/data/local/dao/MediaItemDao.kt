@@ -134,4 +134,16 @@ interface MediaItemDao {
 
     @Query("UPDATE media_items SET introStartMs = NULL, introEndMs = NULL WHERE seriesStableId = :seriesStableId AND seasonNumber = :seasonNumber")
     suspend fun clearIntroMarkersForSeason(seriesStableId: String, seasonNumber: Int)
+
+    @Query("UPDATE media_items SET outroStartMs = :startMs WHERE stableId = :stableId")
+    suspend fun setOutroMarker(stableId: String, startMs: Long)
+
+    @Query("UPDATE media_items SET outroStartMs = :startMs WHERE seriesStableId = :seriesStableId AND seasonNumber = :seasonNumber")
+    suspend fun setOutroMarkerForSeason(seriesStableId: String, seasonNumber: Int, startMs: Long)
+
+    @Query("UPDATE media_items SET outroStartMs = NULL WHERE stableId = :stableId")
+    suspend fun clearOutroMarker(stableId: String)
+
+    @Query("UPDATE media_items SET outroStartMs = NULL WHERE seriesStableId = :seriesStableId AND seasonNumber = :seasonNumber")
+    suspend fun clearOutroMarkerForSeason(seriesStableId: String, seasonNumber: Int)
 }

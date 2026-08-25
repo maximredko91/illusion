@@ -92,6 +92,14 @@ data class PlayerUiState(
     val canMarkIntro: Boolean = false,
     /** Non-null when this episode/season already has an intro marker, so the settings dialog can show it and offer to clear it instead of only offering to (re-)mark it. */
     val introMarkedEndMs: Long? = null,
+    /** Mirrors [showSkipIntro] but for the credits banner at the end of an episode - see [PlayerViewModel.isWithinOutro]. */
+    val showSkipCredits: Boolean = false,
+    /** Mirrors [canMarkIntro] for the "mark start of credits" action. */
+    val canMarkCredits: Boolean = false,
+    /** Mirrors [introMarkedEndMs] for the credits marker. */
+    val outroMarkedStartMs: Long? = null,
+    /** Non-null while a sleep timer is counting down - null means no timer is active. Survives episode/trailer transitions (see the playItem/playTrailerItem reconstructions), unlike the per-item intro/credits fields above. */
+    val sleepTimerRemainingMs: Long? = null,
     val playbackSpeed: Float = 1f,
     val thumbnailFrames: ThumbnailFrames? = null,
     val videoAspectRatio: Float = 16f / 9f,
@@ -284,7 +292,18 @@ class PlayerViewModel(
                             reloadPlayer()
                         }
                         enabled -> player.setVideoEffects(listOf(SharpenEffect(amount)))
-                        effectsPipelineTainted -> player.setVideoEffects(emptyList())
+                        // Was a plain player.setVideoEffects(emptyList()) call - crashed on-device
+                        // (confirmed via logcat: BufferQueueProducer "already connected", EGL_BAD_ALLOC
+                        // creating a new EGL surface) the moment a NEW media item was loaded afterward
+                        // (e.g. autoplay-next, or retrying a transient error), not immediately on
+                        // toggle. Root cause: the effects VideoSink's own EGL surface connection to
+                        // the output Surface isn't released by an empty setVideoEffects() call either
+                        // (same underlying Media3 1.11.0 limitation as the reenableAfterOff case above,
+                        // just the mirror direction) - the plain MediaCodecVideoRenderer path then
+                        // fails to connect to a Surface still held by the stale effects pipeline. A
+                        // full reload releases and recreates that connection cleanly, same fix as
+                        // re-enabling.
+                        effectsPipelineTainted -> reloadPlayer()
                     }
                     wasEnabled = enabled
                 }
@@ -462,6 +481,18 @@ class PlayerViewModel(
                 isLoading = true,
                 title = item.title,
                 episodeLabel = episodeLabel,
+                // A fresh PlayerUiState() defaults both of these to 0 - on a plain load() that's
+                // invisible (the seek bar isn't on screen yet), but reloadPlayer() (sharpen
+                // toggle/reload-after-tainted-effects-pipeline) replaces state on an ALREADY-VISIBLE
+                // seek bar showing e.g. "1:07 / 1:39:10". Leaving these at their 0 default for even
+                // one recomposition put a stale currentPositionMs against a reset durationMs=0,
+                // which Slider clamps to its far right end (value > valueRange.end) - looked like the
+                // bar flashing to the very end and back once the real duration arrived a moment
+                // later. Seeding both from what's already known (the resume position this reload was
+                // called with, and the previous duration - accurate for the same file, and corrected
+                // within one tick either way) keeps the bar visually stationary through the reload.
+                currentPositionMs = startPositionMs,
+                durationMs = it.durationMs,
                 subtitlesEnabled = it.subtitlesEnabled,
                 sharpenEnabled = it.sharpenEnabled,
                 sharpenAmount = it.sharpenAmount,
@@ -475,6 +506,9 @@ class PlayerViewModel(
                 subtitleTextSizePercent = it.subtitleTextSizePercent,
                 canMarkIntro = item.seriesStableId != null && item.seasonNumber != null,
                 introMarkedEndMs = item.introEndMs,
+                canMarkCredits = item.seriesStableId != null && item.seasonNumber != null,
+                outroMarkedStartMs = item.outroStartMs,
+                sleepTimerRemainingMs = it.sleepTimerRemainingMs,
                 readyForInternalPlayback = it.readyForInternalPlayback
             )
         }
@@ -514,7 +548,12 @@ class PlayerViewModel(
 
         val old = player
         val position = old.currentPosition.coerceAtLeast(0)
-        val wasPlaying = old.isPlaying
+        // old.isPlaying (not just playWhenReady) is false during a momentary rebuffer even though
+        // the user never paused anything - a reload that happened to land mid-stall (e.g. a
+        // transient SMB reconnect, confirmed to occur in the wild via SmbDataSource's own retry
+        // logging) would then resume paused instead of picking playback back up. playWhenReady
+        // reflects actual user intent, not the decoder's instantaneous state, and survives that.
+        val wasPlaying = old.playWhenReady
         val duration = old.duration.takeIf { it != C.TIME_UNSET }?.coerceAtLeast(0) ?: 0L
         val item = currentItem
         val trailerItem = currentTrailerItem
@@ -583,7 +622,8 @@ class PlayerViewModel(
                 showTechnicalInfo = it.showTechnicalInfo,
                 subtitleTextColor = it.subtitleTextColor,
                 subtitleBackgroundOpacity = it.subtitleBackgroundOpacity,
-                subtitleTextSizePercent = it.subtitleTextSizePercent
+                subtitleTextSizePercent = it.subtitleTextSizePercent,
+                sleepTimerRemainingMs = it.sleepTimerRemainingMs
             )
         }
     }
@@ -691,6 +731,51 @@ class PlayerViewModel(
         viewModelScope.launch {
             libraryRepository.clearIntroMarkers(item)
         }
+    }
+
+    /** Mirrors [markIntroEnd] but for the credits at the end of an episode - only a start position is marked, since credits run to EOF. */
+    fun markCreditsStart() {
+        val item = currentItem ?: return
+        val positionMs = player.currentPosition.coerceAtLeast(0)
+        currentItem = item.copy(outroStartMs = positionMs)
+        _state.update { it.copy(outroMarkedStartMs = positionMs) }
+        viewModelScope.launch {
+            libraryRepository.markCreditsStart(item, positionMs)
+        }
+    }
+
+    /** Undoes [markCreditsStart] for the whole season. */
+    fun clearOutroMarker() {
+        val item = currentItem ?: return
+        currentItem = item.copy(outroStartMs = null)
+        _state.update { it.copy(outroMarkedStartMs = null, showSkipCredits = false) }
+        viewModelScope.launch {
+            libraryRepository.clearOutroMarker(item)
+        }
+    }
+
+    private var sleepTimerJob: Job? = null
+
+    /** Starts (or replaces) a countdown that pauses playback once it reaches zero - not tied to any particular item, so it survives autoplay-to-next-episode same as playbackSpeed. */
+    fun setSleepTimer(durationMs: Long) {
+        sleepTimerJob?.cancel()
+        _state.update { it.copy(sleepTimerRemainingMs = durationMs) }
+        sleepTimerJob = viewModelScope.launch {
+            var remaining = durationMs
+            while (remaining > 0) {
+                delay(1000)
+                remaining -= 1000
+                _state.update { it.copy(sleepTimerRemainingMs = remaining.coerceAtLeast(0)) }
+            }
+            player.pause()
+            _state.update { it.copy(sleepTimerRemainingMs = null) }
+        }
+    }
+
+    fun cancelSleepTimer() {
+        sleepTimerJob?.cancel()
+        sleepTimerJob = null
+        _state.update { it.copy(sleepTimerRemainingMs = null) }
     }
 
     fun setPlaybackSpeed(speed: Float) {
@@ -875,9 +960,21 @@ class PlayerViewModel(
                 _state.update {
                     it.copy(
                         currentPositionMs = position,
-                        durationMs = duration,
+                        // A freshly created ExoPlayer (reloadPlayer(), e.g. from the sharpen
+                        // toggle) reports duration as C.TIME_UNSET - coerced to 0 above - until it
+                        // actually reads the container's metadata, which is a real network round
+                        // trip over SmbDataSource, not instant. Ticking through a real, large
+                        // currentPositionMs (position preserved across the reload) against a
+                        // momentarily-0 durationMs isn't just briefly wrong data - the seek bar's
+                        // valueRange is 0..durationMs, so it visibly snapped to the far right end
+                        // for however many 500ms ticks metadata took to arrive, then back once the
+                        // real duration landed. Keeping the last known non-zero duration instead of
+                        // regressing to 0 makes that transition invisible - the real value (same
+                        // file, so unchanged) arrives a tick or two later regardless.
+                        durationMs = if (duration > 0) duration else it.durationMs,
                         bufferedPositionMs = buffered,
-                        showSkipIntro = isWithinIntro(position)
+                        showSkipIntro = isWithinIntro(position),
+                        showSkipCredits = isWithinOutro(position)
                     )
                 }
                 maybeSaveProgress(position, duration)
@@ -894,6 +991,12 @@ class PlayerViewModel(
         val start = currentItem?.introStartMs ?: return false
         val end = currentItem?.introEndMs ?: return false
         return positionMs in start..end
+    }
+
+    /** No upper bound needed (credits run to EOF) - gated on there actually being a next episode to skip to, otherwise the banner would offer to "skip" into nothing. */
+    private fun isWithinOutro(positionMs: Long): Boolean {
+        val start = currentItem?.outroStartMs ?: return false
+        return positionMs >= start && nextEpisode != null
     }
 
     private fun maybeSaveProgress(position: Long, duration: Long) {

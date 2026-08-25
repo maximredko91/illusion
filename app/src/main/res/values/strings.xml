@@ -126,6 +126,7 @@
     <string name="action_save">Сохранить</string>
 
     <string name="search_hint">Поиск фильмов и сериалов</string>
+    <string name="search_voice">Голосовой поиск</string>
     <string name="search_empty_query">Начните вводить название, актёра или описание</string>
     <string name="search_no_results">Ничего не найдено</string>
     <string name="search_all_tags">Все теги</string>
@@ -356,6 +357,16 @@
     <string name="player_settings_section_speed">Скорость</string>
     <string name="player_settings_section_image">Изображение</string>
     <string name="player_settings_section_intro">Заставка</string>
+    <string name="player_skip_credits">Следующая серия</string>
+    <string name="player_settings_section_credits">Титры</string>
+    <string name="player_mark_credits_start">Отметить начало титров</string>
+    <string name="player_mark_credits_start_hint">Применится ко всем сериям этого сезона</string>
+    <string name="player_credits_marked_at">Титры отмечены с %1$s</string>
+    <string name="player_clear_outro_marker">Сбросить</string>
+    <string name="player_sleep_timer_button">Таймер сна</string>
+    <string name="player_sleep_timer_remaining">Остановка через %1$s</string>
+    <string name="player_sleep_timer_minutes">%1$d мин</string>
+    <string name="player_sleep_timer_cancel">Отменить таймер</string>
     <string name="player_lock">Заблокировать управление</string>
     <string name="player_unlock">Разблокировать управление</string>
     <string name="player_aspect_ratio">Соотношение сторон</string>

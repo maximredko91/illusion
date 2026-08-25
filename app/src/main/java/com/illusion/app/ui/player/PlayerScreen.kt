@@ -361,6 +361,17 @@ fun PlayerScreen(
                 SkipIntroBanner(onSkip = viewModel::skipIntro)
             }
 
+            AnimatedVisibility(
+                visible = uiState.showSkipCredits,
+                enter = fadeIn() + slideInVertically(initialOffsetY = { it / 2 }),
+                exit = fadeOut() + slideOutVertically(targetOffsetY = { it / 2 }),
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(24.dp)
+            ) {
+                SkipCreditsBanner(onSkip = viewModel::playNext)
+            }
+
             if (isLocked) {
                 LockedOverlay(onUnlock = { isLocked = false; controlsVisible = true })
             }
@@ -383,7 +394,10 @@ fun PlayerScreen(
                         onCycleAspectRatio = { bumpInteraction(); cycleResizeMode() },
                         onOpenSettings = { bumpInteraction(); showSpeedDialog = true },
                         sharpenEnabled = uiState.sharpenEnabled,
-                        onToggleSharpen = { bumpInteraction(); viewModel.setSharpenEnabled(!uiState.sharpenEnabled) }
+                        onToggleSharpen = { bumpInteraction(); viewModel.setSharpenEnabled(!uiState.sharpenEnabled) },
+                        sleepTimerRemainingMs = uiState.sleepTimerRemainingMs,
+                        onSetSleepTimer = { duration -> bumpInteraction(); viewModel.setSleepTimer(duration) },
+                        onCancelSleepTimer = { bumpInteraction(); viewModel.cancelSleepTimer() }
                     )
                     Box(modifier = Modifier.fillMaxSize().weight(1f), contentAlignment = Alignment.Center) {
                         if (uiState.isLoading && uiState.error == null && !isLocked) {
@@ -472,6 +486,10 @@ fun PlayerScreen(
             introMarkedEndMs = uiState.introMarkedEndMs,
             onMarkIntroEnd = { viewModel.markIntroEnd(); showSpeedDialog = false },
             onClearIntroMarkers = { viewModel.clearIntroMarkers(); showSpeedDialog = false },
+            canMarkCredits = uiState.canMarkCredits,
+            outroMarkedStartMs = uiState.outroMarkedStartMs,
+            onMarkCreditsStart = { viewModel.markCreditsStart(); showSpeedDialog = false },
+            onClearOutroMarker = { viewModel.clearOutroMarker(); showSpeedDialog = false },
             onSelect = { speed -> viewModel.setPlaybackSpeed(speed); showSpeedDialog = false },
             onDismiss = { showSpeedDialog = false }
         )
