@@ -391,6 +391,7 @@ private fun IllusionNavGraph(app: IllusionApplication, navController: NavHostCon
                         libraryRepository = app.libraryRepository,
                         settingsRepository = app.settingsRepository,
                         initialQuery = search.initialQuery,
+                        initialDisplayQuery = search.initialDisplayQuery,
                         onOpenItem = { stableId -> navController.navigate(Destination.Details(stableId)) },
                         onOpenSettings = { navController.navigate(Destination.Settings) },
                         onOpenFavorites = { navController.navigate(Destination.Favorites) },
@@ -405,8 +406,8 @@ private fun IllusionNavGraph(app: IllusionApplication, navController: NavHostCon
                     TagsScreen(
                         libraryRepository = app.libraryRepository,
                         translationRepository = app.tagTranslationRepository,
-                        onSelectTag = { tag ->
-                            navController.navigate(Destination.Search(tag)) {
+                        onSelectTag = { tag, label ->
+                            navController.navigate(Destination.Search(initialQuery = tag, initialDisplayQuery = label)) {
                                 popUpTo(Destination.Search()) { inclusive = true }
                             }
                         },

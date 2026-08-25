@@ -77,6 +77,7 @@ fun SearchScreen(
     libraryRepository: LibraryRepository,
     settingsRepository: SettingsRepository,
     initialQuery: String? = null,
+    initialDisplayQuery: String? = null,
     onOpenItem: (String) -> Unit,
     onOpenSettings: () -> Unit,
     onOpenFavorites: () -> Unit,
@@ -85,8 +86,10 @@ fun SearchScreen(
     onOpenTags: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val viewModel: SearchViewModel = viewModel(factory = SearchViewModel.factory(libraryRepository, settingsRepository, initialQuery))
-    val query by viewModel.query.collectAsState()
+    val viewModel: SearchViewModel = viewModel(
+        factory = SearchViewModel.factory(libraryRepository, settingsRepository, initialQuery, initialDisplayQuery)
+    )
+    val query by viewModel.displayQuery.collectAsState()
     val results by viewModel.results.collectAsState()
     val recentSearches by viewModel.recentSearches.collectAsState()
 

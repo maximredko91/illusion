@@ -19,7 +19,8 @@ sealed interface Destination {
     data object Tabs : Destination
 
     @Serializable
-    data class Search(val initialQuery: String? = null) : Destination
+    /** [initialDisplayQuery], when set, is what the search field actually shows (e.g. a tag's Russian translation) while [initialQuery] is what's used to filter (the raw English tag the data actually matches on) - see TagsScreen's onSelectTag. Defaults to [initialQuery] itself when null, same as before this field existed. */
+    data class Search(val initialQuery: String? = null, val initialDisplayQuery: String? = null) : Destination
 
     /** Full, sortable/filterable tag browser - Search's own inline chip row only surfaces the top N most common tags (a large library can have thousands of distinct freeform <tag> values, too many to dump unranked into a chip row). Reached from Search, picking a tag navigates back to Search with it pre-filled. */
     @Serializable

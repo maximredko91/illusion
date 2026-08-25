@@ -22,10 +22,17 @@ import kotlinx.coroutines.launch
 class SearchViewModel(
     private val libraryRepository: LibraryRepository,
     private val settingsRepository: SettingsRepository,
-    initialQuery: String? = null
+    initialQuery: String? = null,
+    initialDisplayQuery: String? = null
 ) : ViewModel() {
+    // Split from _query so a tag selection can search by its raw English tag (what the data
+    // actually matches on) while the field shows the tag's Russian translation - typing normally
+    // keeps both in sync via setQuery below, this only ever diverges right after arriving from a
+    // translated tag, and never in a way the user can tell (nothing in the UI ever shows _query
+    // directly instead of _displayQuery).
     private val _query = MutableStateFlow(initialQuery.orEmpty())
-    val query: StateFlow<String> = _query.asStateFlow()
+    private val _displayQuery = MutableStateFlow(initialDisplayQuery ?: initialQuery.orEmpty())
+    val displayQuery: StateFlow<String> = _displayQuery.asStateFlow()
 
     @OptIn(FlowPreview::class, ExperimentalCoroutinesApi::class)
     val results: StateFlow<List<MediaItemEntity>> = _query
@@ -38,6 +45,7 @@ class SearchViewModel(
 
     fun setQuery(value: String) {
         _query.value = value
+        _displayQuery.value = value
     }
 
     /** Called on IME "search" submit or on opening a result - saves the query to recent-searches history. */
@@ -56,8 +64,13 @@ class SearchViewModel(
     }
 
     companion object {
-        fun factory(libraryRepository: LibraryRepository, settingsRepository: SettingsRepository, initialQuery: String? = null) = viewModelFactory {
-            initializer { SearchViewModel(libraryRepository, settingsRepository, initialQuery) }
+        fun factory(
+            libraryRepository: LibraryRepository,
+            settingsRepository: SettingsRepository,
+            initialQuery: String? = null,
+            initialDisplayQuery: String? = null
+        ) = viewModelFactory {
+            initializer { SearchViewModel(libraryRepository, settingsRepository, initialQuery, initialDisplayQuery) }
         }
     }
 }

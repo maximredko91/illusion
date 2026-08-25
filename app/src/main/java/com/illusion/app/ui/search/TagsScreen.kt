@@ -45,7 +45,7 @@ import com.illusion.app.ui.common.focusHighlight
 fun TagsScreen(
     libraryRepository: LibraryRepository,
     translationRepository: TagTranslationRepository,
-    onSelectTag: (String) -> Unit,
+    onSelectTag: (tag: String, label: String) -> Unit,
     onBack: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -127,16 +127,14 @@ fun TagsScreen(
                     contentPadding = PaddingValues(bottom = 8.dp)
                 ) {
                     items(tags, key = { it.tag }) { entry ->
+                        // No longer shows the raw English tag underneath the translated label -
+                        // per feedback, an ordinary user shouldn't see any trace of this being a
+                        // translation over English data at all, in the label or in the search
+                        // query it lands on (see onSelectTag below).
                         ListItem(
                             headlineContent = { Text(entry.label) },
-                            // Machine translation of a short freeform word/phrase isn't always
-                            // spot-on - showing the original English underneath lets the user
-                            // judge for themselves rather than trusting a possibly-off label blindly.
-                            supportingContent = if (entry.label != entry.tag) {
-                                { Text(entry.tag, color = MaterialTheme.colorScheme.onSurfaceVariant) }
-                            } else null,
                             trailingContent = { Text(entry.count.toString(), color = MaterialTheme.colorScheme.onSurfaceVariant) },
-                            modifier = Modifier.clickable { onSelectTag(entry.tag) }
+                            modifier = Modifier.clickable { onSelectTag(entry.tag, entry.label) }
                         )
                     }
                 }
