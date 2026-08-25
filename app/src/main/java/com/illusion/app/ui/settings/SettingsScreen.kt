@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.ui.Alignment
@@ -30,6 +31,7 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.DeleteSweep
+import androidx.compose.material.icons.filled.Devices
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Feedback
 import androidx.compose.material.icons.filled.Folder
@@ -74,6 +76,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.colorResource
@@ -172,6 +175,14 @@ fun SettingsScreen(
     val predictiveBackOn by predictiveBackEnabled.collectAsState(initial = true)
     val currentAccentColor by accentColor.collectAsState(initial = com.illusion.app.domain.model.AccentColor.ILLUSION)
     val currentThemeMode by themeMode.collectAsState(initial = com.illusion.app.domain.model.ThemeMode.SYSTEM)
+    // Same effective-dark logic as IllusionTheme itself - the accent swatches need to preview
+    // whichever of an accent's two variants (light/dark*Primary) is actually going to apply right
+    // now, not always the light one regardless of theme (see AccentColorSwatch's own updated KDoc).
+    val effectiveDarkTheme = when (currentThemeMode) {
+        com.illusion.app.domain.model.ThemeMode.SYSTEM -> androidx.compose.foundation.isSystemInDarkTheme()
+        com.illusion.app.domain.model.ThemeMode.LIGHT -> false
+        com.illusion.app.domain.model.ThemeMode.DARK, com.illusion.app.domain.model.ThemeMode.BLACK -> true
+    }
     val chargingOnly by requireChargingForHeavyTasks.collectAsState(initial = true)
     val rescanHours by rescanIntervalHours.collectAsState(initial = 0)
     val downloadsFolder by downloadsFolderUri.collectAsState(initial = null)
@@ -324,6 +335,13 @@ fun SettingsScreen(
                             description = stringResource(R.string.settings_category_ui_mode_description),
                             icon = Icons.Default.Tune,
                             onClick = { selectedCategory = "ui_mode" }
+                        )
+                        SettingsDivider()
+                        CategoryRow(
+                            title = stringResource(R.string.settings_screen_mode_section),
+                            description = stringResource(R.string.settings_category_screen_mode_description),
+                            icon = Icons.Default.Devices,
+                            onClick = { selectedCategory = "screen_mode" }
                         )
                         SettingsDivider()
                         CategoryRow(
@@ -560,38 +578,6 @@ fun SettingsScreen(
                                 modifier = Modifier.fillMaxWidth()
                             )
                             SettingsDivider()
-                            val phoneRowSource = remember { MutableInteractionSource() }
-                            ListItem(
-                                headlineContent = { Text(stringResource(R.string.settings_ui_mode_phone)) },
-                                trailingContent = {
-                                    RadioButton(
-                                        selected = currentUiMode == UiMode.PHONE,
-                                        onClick = { onUiModeChange(UiMode.PHONE) }
-                                    )
-                                },
-                                colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .focusHighlight(phoneRowSource)
-                                    .clickable(interactionSource = phoneRowSource, indication = LocalIndication.current) { onUiModeChange(UiMode.PHONE) }
-                            )
-                            SettingsDivider()
-                            val tvRowSource = remember { MutableInteractionSource() }
-                            ListItem(
-                                headlineContent = { Text(stringResource(R.string.settings_ui_mode_tv)) },
-                                trailingContent = {
-                                    RadioButton(
-                                        selected = currentUiMode == UiMode.TV,
-                                        onClick = { onUiModeChange(UiMode.TV) }
-                                    )
-                                },
-                                colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .focusHighlight(tvRowSource)
-                                    .clickable(interactionSource = tvRowSource, indication = LocalIndication.current) { onUiModeChange(UiMode.TV) }
-                            )
-                            SettingsDivider()
                             ListItem(
                                 headlineContent = { Text(stringResource(R.string.settings_haptics)) },
                                 supportingContent = { Text(stringResource(R.string.settings_haptics_description)) },
@@ -628,7 +614,10 @@ fun SettingsScreen(
 
                         // Accent color merged in here (was its own top-level category) per user
                         // feedback - it's another interface-level appearance choice, same as the
-                        // phone/TV mode and haptics/predictive-back switches above.
+                        // theme/haptics/predictive-back switches above. Phone/TV mode used to live
+                        // in this same screen too but moved out to its own "Режим экрана" category -
+                        // it's a structural/functional choice (which whole layout the app uses),
+                        // not an appearance one like everything else here.
                         SettingsGroup(modifier = Modifier.padding(top = 12.dp, bottom = 24.dp)) {
                             Text(
                                 stringResource(R.string.settings_accent_color),
@@ -649,9 +638,17 @@ fun SettingsScreen(
                                 verticalArrangement = Arrangement.spacedBy(12.dp)
                             ) {
                                 com.illusion.app.domain.model.AccentColor.entries.forEach { color ->
-                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    // Fixed-width column, not wrap-content: a plain Column's width
+                                    // follows its widest child, so a longer label ("Бирюзовый")
+                                    // pushed that whole cell wider than a shorter one ("Синий") -
+                                    // FlowRow packs cells by their actual width, so circles ended up
+                                    // at different x-offsets per row instead of lining up in a grid.
+                                    Column(
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                        modifier = Modifier.width(76.dp)
+                                    ) {
                                         AccentColorSwatch(
-                                            color = color,
+                                            color = if (effectiveDarkTheme) color.darkPrimary else color.lightPrimary,
                                             selected = color == currentAccentColor,
                                             onClick = { onAccentColorChange(color) }
                                         )
@@ -659,11 +656,49 @@ fun SettingsScreen(
                                             accentColorLabel(color),
                                             style = MaterialTheme.typography.labelSmall,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                                            maxLines = 2,
                                             modifier = Modifier.padding(top = 4.dp)
                                         )
                                     }
                                 }
                             }
+                        }
+                    }
+
+                    "screen_mode" -> {
+                        SettingsGroup {
+                            val phoneRowSource = remember { MutableInteractionSource() }
+                            ListItem(
+                                headlineContent = { Text(stringResource(R.string.settings_ui_mode_phone)) },
+                                trailingContent = {
+                                    RadioButton(
+                                        selected = currentUiMode == UiMode.PHONE,
+                                        onClick = { onUiModeChange(UiMode.PHONE) }
+                                    )
+                                },
+                                colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .focusHighlight(phoneRowSource)
+                                    .clickable(interactionSource = phoneRowSource, indication = LocalIndication.current) { onUiModeChange(UiMode.PHONE) }
+                            )
+                            SettingsDivider()
+                            val tvRowSource = remember { MutableInteractionSource() }
+                            ListItem(
+                                headlineContent = { Text(stringResource(R.string.settings_ui_mode_tv)) },
+                                trailingContent = {
+                                    RadioButton(
+                                        selected = currentUiMode == UiMode.TV,
+                                        onClick = { onUiModeChange(UiMode.TV) }
+                                    )
+                                },
+                                colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .focusHighlight(tvRowSource)
+                                    .clickable(interactionSource = tvRowSource, indication = LocalIndication.current) { onUiModeChange(UiMode.TV) }
+                            )
                         }
                     }
 
@@ -1350,6 +1385,7 @@ fun SettingsScreen(
 private fun categoryTitle(key: String): String = when (key) {
     "smb_sources" -> stringResource(R.string.settings_smb_sources)
     "ui_mode" -> stringResource(R.string.settings_ui_mode_section)
+    "screen_mode" -> stringResource(R.string.settings_screen_mode_section)
     "library" -> stringResource(R.string.settings_library_section)
     "scan" -> stringResource(R.string.settings_scan_section)
     "player" -> stringResource(R.string.settings_player_section)
@@ -1433,10 +1469,17 @@ private fun accentColorLabel(color: com.illusion.app.domain.model.AccentColor): 
     com.illusion.app.domain.model.AccentColor.PINK -> stringResource(R.string.accent_color_pink)
 }
 
-/** One swatch in the accent-color picker - the swatch shows [AccentColor.lightPrimary] regardless of the active theme (dark or light), since it's a color *choice*, not a themed surface. */
+/**
+ * One swatch in the accent-color picker. Takes the already-resolved [Color] rather than an
+ * [AccentColor] - it used to always render `lightPrimary` regardless of which theme was actually
+ * active, so in dark mode the picker's own preview didn't match what selecting that accent would
+ * actually apply (dark mode uses each accent's `darkPrimary`, a different, usually more vivid
+ * tone-80-ish pastel) - the caller now picks light/dark*Primary itself based on the real active
+ * theme and passes the result straight through.
+ */
 @Composable
 private fun AccentColorSwatch(
-    color: com.illusion.app.domain.model.AccentColor,
+    color: Color,
     selected: Boolean,
     onClick: () -> Unit
 ) {
@@ -1447,7 +1490,7 @@ private fun AccentColorSwatch(
             .size(40.dp)
             .focusHighlight(interactionSource)
             .clip(androidx.compose.foundation.shape.CircleShape)
-            .background(color.lightPrimary)
+            .background(color)
             .then(
                 if (selected) {
                     Modifier.border(3.dp, MaterialTheme.colorScheme.onSurface, androidx.compose.foundation.shape.CircleShape)
@@ -1462,10 +1505,14 @@ private fun AccentColorSwatch(
         contentAlignment = Alignment.Center
     ) {
         if (selected) {
+            // Was a hardcoded white tint - fine against the old always-lightPrimary (tone-40,
+            // reliably dark) swatches, but dark theme's darkPrimary tones are pale tone-80-ish
+            // pastels a white checkmark barely shows up on.
+            val checkTint = if (color.luminance() > 0.5f) androidx.compose.ui.graphics.Color.Black else androidx.compose.ui.graphics.Color.White
             Icon(
                 Icons.Default.Check,
                 contentDescription = null,
-                tint = androidx.compose.ui.graphics.Color.White
+                tint = checkTint
             )
         }
     }

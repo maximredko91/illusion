@@ -9,9 +9,42 @@ import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import com.illusion.app.domain.model.AccentColor
 import com.illusion.app.domain.model.ThemeMode
+
+/**
+ * `darkColorScheme(primary = X, ...)` only overrides the three roles actually passed in - every
+ * other role (onPrimary, primaryContainer, ...) silently stays at Material3's baked-in default
+ * purple-ish tone regardless of the chosen accent. That was invisible while this app only ever
+ * had one hardcoded scheme, but once accent color became user-choosable it meant anything reading
+ * `onPrimary` - most visibly a `Switch`'s checked thumb (Material3's own SwitchTokens map
+ * `checkedThumbColor` straight to `ColorSchemeKeyTokens.OnPrimary`, confirmed by reading the real
+ * Switch.kt/SwitchTokens.kt sources) - never actually changed color no matter which accent was
+ * picked, only the track around it (`primary`) did.
+ *
+ * A first pass here just picked pure black-or-white by contrast (luminance() > 0.5f), which
+ * technically fixed legibility but not the actual complaint: every one of this app's *dark*-theme
+ * accent primaries is a light M3 tone-80-ish pastel (by Material's own dark-theme convention, for
+ * contrast against a dark background), so every single one has luminance > 0.5 and the computed
+ * on-color collapsed back to plain black for all nine accents - visually indistinguishable from
+ * the original bug. What's actually needed is a same-hue variant at a contrasting *lightness*, not
+ * a hue-blind black/white snap - so the thumb still visibly shifts color with the chosen accent
+ * while staying legible against its own track. HSL (not raw RGB math) is what makes "same hue,
+ * different lightness" a one-line change - androidx.core's ColorUtils wraps the same platform HSL
+ * conversion `android.graphics.Color` itself uses, no extra dependency needed.
+ */
+private fun onColorFor(background: Color): Color {
+    val hsl = FloatArray(3)
+    androidx.core.graphics.ColorUtils.colorToHSL(background.toArgb(), hsl)
+    val backgroundIsLight = hsl[2] > 0.5f
+    // Slightly past the opposite extreme (0.12/0.92, not 0/1) so the result reads as "a deep/pale
+    // shade of this hue" rather than snapping all the way to true black/white regardless of hue -
+    // pure black or white would wash out the saturation entirely on some hues.
+    hsl[2] = if (backgroundIsLight) 0.12f else 0.92f
+    return Color(androidx.core.graphics.ColorUtils.HSLToColor(hsl))
+}
 
 private val DarkColorScheme = darkColorScheme(
     primary = Purple80,
@@ -43,9 +76,23 @@ fun IllusionTheme(
         // applying below API 31 or being silently ignored while dynamic color is active.
         accentColor != AccentColor.DEFAULT -> {
             if (darkTheme) {
-                darkColorScheme(primary = accentColor.darkPrimary, secondary = accentColor.darkSecondary, tertiary = accentColor.darkTertiary)
+                darkColorScheme(
+                    primary = accentColor.darkPrimary,
+                    onPrimary = onColorFor(accentColor.darkPrimary),
+                    secondary = accentColor.darkSecondary,
+                    onSecondary = onColorFor(accentColor.darkSecondary),
+                    tertiary = accentColor.darkTertiary,
+                    onTertiary = onColorFor(accentColor.darkTertiary)
+                )
             } else {
-                lightColorScheme(primary = accentColor.lightPrimary, secondary = accentColor.lightSecondary, tertiary = accentColor.lightTertiary)
+                lightColorScheme(
+                    primary = accentColor.lightPrimary,
+                    onPrimary = onColorFor(accentColor.lightPrimary),
+                    secondary = accentColor.lightSecondary,
+                    onSecondary = onColorFor(accentColor.lightSecondary),
+                    tertiary = accentColor.lightTertiary,
+                    onTertiary = onColorFor(accentColor.lightTertiary)
+                )
             }
         }
 

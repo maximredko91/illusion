@@ -43,7 +43,9 @@
 
     <string name="settings_title">Настройки</string>
     <string name="settings_category_smb_sources_description">Список подключённых сетевых папок</string>
-    <string name="settings_category_ui_mode_description">Тема, режим экрана, акцентный цвет, тактильный отклик, анимация жеста «назад»</string>
+    <string name="settings_category_ui_mode_description">Тема, акцентный цвет, тактильный отклик, анимация жеста «назад»</string>
+    <string name="settings_screen_mode_section">Режим экрана</string>
+    <string name="settings_category_screen_mode_description">Телефон или Android TV</string>
     <string name="settings_category_library_description">Сортировка по умолчанию, перевод тегов</string>
     <string name="settings_category_scan_description">Пересканирование и расписание</string>
     <string name="settings_category_player_description">Внутренний или внешний плеер</string>
