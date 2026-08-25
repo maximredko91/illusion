@@ -8,6 +8,7 @@ import coil3.ImageLoader
 import coil3.SingletonImageLoader
 import coil3.request.ImageRequest
 import com.illusion.app.IllusionApplication
+import com.illusion.app.data.image.episodeThumbModel
 import com.illusion.app.data.image.fanartModel
 import com.illusion.app.data.image.posterModel
 import com.illusion.app.data.repository.LibraryRepository
@@ -15,7 +16,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 
-/** Warms Coil's disk cache for every poster/fanart in the library, so the grid renders instantly instead of loading images one by one over SMB. */
+/** Warms Coil's disk cache for every poster/fanart/episode-thumbnail in the library, so grids and episode lists render instantly instead of loading images one by one over SMB. */
 class PosterPreloadWorker(
     context: Context,
     params: WorkerParameters,
@@ -31,7 +32,15 @@ class PosterPreloadWorker(
         // flat distinct() list like before the cache split.
         val posterModels = items.mapNotNull { it.posterModel }.distinct().map { it to posterLoader }
         val fanartModels = items.mapNotNull { it.fanartModel }.distinct().map { it to fanartLoader }
-        val work = posterModels + fanartModels
+        // Episode screenshots (episodeThumbModel) used to be missing here entirely - Coil still
+        // cached them normally once actually viewed (same smb-image:// pipeline, same
+        // PosterCachePolicyInterceptor as posters/fanarts), but never pre-warmed like every other
+        // image in the library, so the first visit to any season's episode list always paid a live
+        // SMB fetch per thumbnail - felt uncached by comparison even though it technically wasn't.
+        // Shares the poster loader/cache, not fanart's - comparable small-thumbnail size, not a
+        // full backdrop.
+        val episodeThumbModels = items.mapNotNull { it.episodeThumbModel }.distinct().map { it to posterLoader }
+        val work = posterModels + fanartModels + episodeThumbModels
         var done = 0
         setProgress(workDataOf(KEY_PROCESSED to 0, KEY_TOTAL to work.size))
 
