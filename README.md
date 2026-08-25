@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="app/src/main/res/mipmap-xxxhdpi/ic_launcher.webp" width="96" alt="Иллюзион icon">
+  <img src="docs/icon.png" width="96" alt="Иллюзион icon">
 </p>
 
 <h1 align="center">Иллюзион (Illusion)</h1>
