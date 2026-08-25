@@ -37,6 +37,10 @@ class TagsViewModel(
     private val _tags = MutableStateFlow<List<TagCount>>(emptyList())
     val tags: StateFlow<List<TagCount>> = _tags.asStateFlow()
 
+    /** True while the lazy ML Kit pass below is still working through never-before-seen tags - lets TagsScreen explain why some entries are still showing their raw English text instead of silently leaving the user to wonder. Once every tag in the library has been translated at least once (persisted in Room), this stays false for good - a fresh install/first visit is the only time it's ever true for long. */
+    private val _isTranslating = MutableStateFlow(false)
+    val isTranslating: StateFlow<Boolean> = _isTranslating.asStateFlow()
+
     init {
         viewModelScope.launch {
             val counts = withContext(Dispatchers.Default) {
@@ -59,12 +63,17 @@ class TagsViewModel(
             // translator calls at once. Sequential instead: still fills in the list live (each
             // result updates the UI as soon as it resolves) without hammering ML Kit's client
             // with thousands of simultaneous requests.
-            withContext(Dispatchers.Default) {
-                counts.filter { it.tag !in cachedLabels }.forEach { tagCount ->
-                    val label = translationRepository.translateLazily(tagCount.tag)
-                    _allTags.update { list -> list.map { if (it.tag == tagCount.tag) it.copy(label = label) else it } }
-                    recompute()
+            val pending = counts.filter { it.tag !in cachedLabels }
+            if (pending.isNotEmpty()) {
+                _isTranslating.value = true
+                withContext(Dispatchers.Default) {
+                    pending.forEach { tagCount ->
+                        val label = translationRepository.translateLazily(tagCount.tag)
+                        _allTags.update { list -> list.map { if (it.tag == tagCount.tag) it.copy(label = label) else it } }
+                        recompute()
+                    }
                 }
+                _isTranslating.value = false
             }
         }
     }

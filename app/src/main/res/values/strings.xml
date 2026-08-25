@@ -136,6 +136,7 @@
     <string name="tags_sort_by_count">По популярности</string>
     <string name="tags_sort_alphabetical">По алфавиту</string>
     <string name="tags_filter_hint">Фильтр по названию тега</string>
+    <string name="tags_translating_hint">Некоторые теги ещё переводятся — это разовый процесс, при следующем открытии экрана всё уже будет готово</string>
     <string name="tags_empty">В библиотеке нет тегов</string>
     <string name="settings_tag_translation">Перевод тегов</string>
     <string name="settings_tag_translation_description">По умолчанию теги переводятся на устройстве (офлайн, без интернета). Для более точного перевода можно один раз запустить перевод через DeepL — понадобится бесплатный API-ключ с deepl.com</string>
