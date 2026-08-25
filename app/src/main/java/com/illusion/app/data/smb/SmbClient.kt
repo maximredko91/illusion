@@ -191,9 +191,17 @@ class SmbConnection internal constructor(
         }
     }
 
+    // runCatching, not a plain call: if the connection already died (network drop mid-session),
+    // smbj throws SMBRuntimeException trying to send the close request over an already-closed
+    // DiskShare - there's nothing left to clean up at that point, so there's no reason to let that
+    // propagate. Left unguarded, this crashed the whole process on-device (SIGABRT, "JNI DETECTED
+    // ERROR ... CallBooleanMethodV called with pending exception") specifically because
+    // SmbMediaDataSource.close() (below) is invoked by MediaMetadataRetriever's own native code
+    // via JNI - Android's CheckJNI aborts hard on an uncaught Java exception crossing that
+    // boundary, unlike a normal uncaught-exception crash the app's own crash handler could log.
     override fun close() {
-        diskShare.close()
-        client.close()
+        runCatching { diskShare.close() }
+        runCatching { client.close() }
     }
 }
 
@@ -211,7 +219,9 @@ class SmbRandomAccessFile internal constructor(
     fun read(buffer: ByteArray, filePosition: Long, offset: Int = 0, length: Int = buffer.size): Int =
         file.read(buffer, filePosition, offset, length)
 
-    override fun close() = file.close()
+    // See SmbConnection.close()'s comment - same reasoning, a dead connection makes close() itself
+    // throw SMBRuntimeException, which must not propagate uncaught here.
+    override fun close() { runCatching { file.close() } }
 }
 
 class SmbRandomAccessWriteFile internal constructor(
@@ -221,7 +231,8 @@ class SmbRandomAccessWriteFile internal constructor(
     fun write(buffer: ByteArray, filePosition: Long, offset: Int = 0, length: Int = buffer.size): Long =
         file.write(buffer, filePosition, offset, length)
 
-    override fun close() = file.close()
+    // See SmbConnection.close()'s comment - same reasoning.
+    override fun close() { runCatching { file.close() } }
 }
 
 class SmbClient {

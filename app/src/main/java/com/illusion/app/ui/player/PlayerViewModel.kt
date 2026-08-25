@@ -30,6 +30,7 @@ import com.illusion.app.data.local.entity.DownloadEntity
 import com.illusion.app.data.local.entity.DownloadStatus
 import com.illusion.app.data.local.entity.MediaItemEntity
 import com.illusion.app.data.player.ExternalPlayer
+import com.illusion.app.data.player.PlaybackActivity
 import com.illusion.app.data.player.SmbDataSourceFactory
 import com.illusion.app.data.player.SmbMediaUri
 import com.illusion.app.data.repository.DownloadRepository
@@ -430,6 +431,9 @@ class PlayerViewModel(
     private suspend fun playItem(item: MediaItemEntity, startPositionMs: Long, autoPlay: Boolean) {
         ensurePlaybackServiceStarted()
         _state.update { it.copy(readyForInternalPlayback = true) }
+        // See PlaybackActivity's own KDoc - lets ThumbnailGenerator back off from the shared
+        // hardware video decoder while real playback needs it.
+        PlaybackActivity.isActive = true
         val download = completedDownload(item.stableId)
         val uri = download?.let { Uri.parse(it.contentUri) } ?: SmbMediaUri.build(item.sourceId, item.filePath, item.sizeBytes)
         val subtitleConfigs = if (download != null && download.subtitles.isNotEmpty()) {
@@ -470,7 +474,8 @@ class PlayerViewModel(
                 subtitleBackgroundOpacity = it.subtitleBackgroundOpacity,
                 subtitleTextSizePercent = it.subtitleTextSizePercent,
                 canMarkIntro = item.seriesStableId != null && item.seasonNumber != null,
-                introMarkedEndMs = item.introEndMs
+                introMarkedEndMs = item.introEndMs,
+                readyForInternalPlayback = it.readyForInternalPlayback
             )
         }
 
@@ -907,6 +912,7 @@ class PlayerViewModel(
     }
 
     override fun onCleared() {
+        PlaybackActivity.isActive = false
         val item = currentItem
         if (item != null) {
             val position = player.currentPosition.coerceAtLeast(0)

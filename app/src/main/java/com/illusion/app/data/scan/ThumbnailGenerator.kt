@@ -6,6 +6,7 @@ import android.graphics.Canvas
 import android.media.MediaMetadataRetriever
 import com.illusion.app.data.local.entity.MediaItemEntity
 import com.illusion.app.data.local.entity.ThumbnailSpriteEntity
+import com.illusion.app.data.player.PlaybackActivity
 import com.illusion.app.data.repository.SmbSourceRepository
 import com.illusion.app.data.smb.SmbClient
 import com.illusion.app.data.smb.SmbConnection
@@ -27,6 +28,10 @@ class ThumbnailGenerator(
     private val context: Context
 ) {
     suspend fun generate(item: MediaItemEntity): ThumbnailSpriteEntity? = withContext(Dispatchers.IO) {
+        // See PlaybackActivity's own KDoc - live playback and this class's MediaMetadataRetriever
+        // both contend for the same shared hardware video decoder; skip generation outright while
+        // playback needs it rather than starve the real player of a stable decoded frame.
+        if (PlaybackActivity.isActive) return@withContext null
         if (item.sizeBytes <= 0) return@withContext null
         val info = sourceRepository.connectionInfoById(item.sourceId) ?: return@withContext null
         val connection = smbClient.connect(info)
@@ -49,6 +54,10 @@ class ThumbnailGenerator(
 
             val frames = mutableListOf<Bitmap>()
             for (index in 0 until frameCount) {
+                // Bail out mid-sprite, not just before starting one - a single sprite's up-to-100
+                // getFrameAtTime() calls each reconfigure the decoder, so finishing them all once
+                // playback starts would still starve the player for a noticeable stretch.
+                if (PlaybackActivity.isActive) return null
                 val timeUs = index * intervalMs * 1000
                 val original = retriever.getFrameAtTime(timeUs, MediaMetadataRetriever.OPTION_CLOSEST_SYNC) ?: continue
                 val scaled = Bitmap.createScaledBitmap(original, FRAME_WIDTH, FRAME_HEIGHT, true)
