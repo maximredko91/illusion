@@ -60,6 +60,18 @@ android {
         versionCode = 74
         versionName = "0.1.0-beta1"
 
+        // The real bulk of a universal APK's size turned out to be native .so libs bundled per-ABI
+        // (ML Kit's on-device tag-translation library alone is ~17MB *per architecture*) - R8
+        // shrinking can't touch precompiled native code at all. Distribution here is a flat APK via
+        // GitHub Releases, not Play Store's automatic per-device App Bundle splitting, so this app
+        // has to pick its own ABI(s) - both real targets (the developer's phone, the Xiaomi TV Box)
+        // are arm64. armeabi-v7a/x86/x86_64 were only ever relevant for very old devices or the
+        // emulator, and this project has never actually tested on an emulator (always the real
+        // on-device workflow - see CLAUDE.md's own testing conventions).
+        ndk {
+            abiFilters += "arm64-v8a"
+        }
+
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("String", "TMDB_API_KEY", "\"$tmdbApiKey\"")
         buildConfigField("String", "DEV_ACCESS_PASSWORD", "\"$devAccessPassword\"")
@@ -77,8 +89,16 @@ android {
     }
     buildTypes {
         release {
+            // AGP 9's declarative DSL - no minifyEnabled/proguardFiles here, keep rules live under
+            // optimization.keepRules instead. Room/Compose/Media3/kotlinx.serialization all ship
+            // their own consumer-rules.pro bundled in their AARs (that's what those are for), so
+            // this app only needs to add rules for things that actually break - verified by reading
+            // R8's own real output, not guessed upfront.
             optimization {
-                enable = false
+                enable = true
+                keepRules {
+                    files.add(file("proguard-rules.pro"))
+                }
             }
             // Falls back to no signingConfig (Android Studio then signs "release" builds with the
             // debug key) on a fresh checkout that hasn't generated app/illusion-release.jks yet -
