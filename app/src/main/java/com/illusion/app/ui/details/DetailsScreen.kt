@@ -361,10 +361,11 @@ private fun DetailsContent(
                     // The same alpha/stop values read very differently depending on the resolved
                     // background color: a dark background blends into a photo like a natural
                     // vignette, but the identical curve in a light theme washes the art out into a
-                    // near-white haze over roughly the same area - reported as "covers almost half
-                    // the fanart" specifically on light theme, while dark theme (unchanged below)
-                    // was fine as-is. Only the light-theme curve is softened - lower top alpha, and
-                    // the bottom dissolve starts later so more of the image stays clear.
+                    // near-white haze over roughly the same area. Per feedback, the top fade was
+                    // never the actual problem (kept at dark theme's own values below) - it's
+                    // specifically the BOTTOM dissolve fading to a light/white background that
+                    // reads as covering half the fanart. Pushed further down (0.87 vs 0.62) so only
+                    // the last ~13% actually washes toward opaque, instead of the last third.
                     val backgroundColor = MaterialTheme.colorScheme.background
                     val isLightBackground = backgroundColor.luminance() > 0.5f
                     Box(
@@ -373,9 +374,9 @@ private fun DetailsContent(
                             .background(
                                 if (isLightBackground) {
                                     Brush.verticalGradient(
-                                        0f to backgroundColor.copy(alpha = 0.12f),
+                                        0f to backgroundColor.copy(alpha = 0.28f),
                                         0.14f to Color.Transparent,
-                                        0.75f to Color.Transparent,
+                                        0.87f to Color.Transparent,
                                         1f to backgroundColor
                                     )
                                 } else {
