@@ -568,6 +568,8 @@ private fun IllusionNavGraph(app: IllusionApplication, navController: NavHostCon
                     onCheckForUpdates = { updateViewModel.checkForUpdate(force = true) },
                     upToDateMessage = upToDateMessage,
                     onDismissUpToDateMessage = { updateViewModel.dismissUpToDateMessage() },
+                    updateCheckIntervalHours = updateViewModel.updateCheckIntervalHours,
+                    onUpdateCheckIntervalChange = { hours -> updateViewModel.setUpdateCheckIntervalHours(hours) },
                     onBack = { navController.popBackStack() }
                 )
             }

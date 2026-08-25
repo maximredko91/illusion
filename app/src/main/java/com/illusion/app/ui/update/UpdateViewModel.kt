@@ -9,6 +9,7 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import androidx.work.WorkInfo
 import com.illusion.app.BuildConfig
 import com.illusion.app.data.settings.SettingsRepository
+import com.illusion.app.data.update.UpdateCheckResult
 import com.illusion.app.data.update.UpdateChecker
 import com.illusion.app.data.update.UpdateInfo
 import com.illusion.app.data.update.UpdateInstaller
@@ -42,6 +43,8 @@ class UpdateViewModel(
 ) : ViewModel() {
     private val _state = MutableStateFlow(UpdateUiState())
     val state: StateFlow<UpdateUiState> = _state.asStateFlow()
+
+    val updateCheckIntervalHours: Flow<Int> = settingsRepository.updateCheckIntervalHours
 
     /** Set when a manual check (Settings' "Проверить обновления" button) finds nothing newer - a one-shot toast-style message, not part of [state] since it has nothing to do with the update dialog itself. */
     private val _upToDateMessage = MutableStateFlow<String?>(null)
@@ -80,22 +83,38 @@ class UpdateViewModel(
         }
     }
 
-    /** [force] bypasses both the once-a-day throttle and a previously-skipped versionCode - used by Settings' manual check button; the automatic on-launch check (MainActivity) always passes false. */
+    /**
+     * [force] bypasses the configured interval/off setting and a previously-skipped versionCode -
+     * used by Settings' manual check button; the automatic on-launch check (MainActivity) always
+     * passes false, and respects [SettingsRepository.updateCheckIntervalHours] (0 = never
+     * auto-check, only the manual button works).
+     */
     fun checkForUpdate(force: Boolean = false) {
         viewModelScope.launch {
             if (!force) {
+                val intervalHours = settingsRepository.updateCheckIntervalHours.first()
+                if (intervalHours <= 0) return@launch
                 val lastCheckedAt = settingsRepository.lastUpdateCheckAtMs.first()
-                if (System.currentTimeMillis() - lastCheckedAt < AUTO_CHECK_INTERVAL_MS) return@launch
+                if (System.currentTimeMillis() - lastCheckedAt < intervalHours * 60 * 60 * 1000L) return@launch
             }
             settingsRepository.setLastUpdateCheckAtMs(System.currentTimeMillis())
-            val info = updateChecker.checkForUpdate(BuildConfig.VERSION_CODE)
-            if (info == null) {
-                if (force) _upToDateMessage.value = "У вас последняя версия"
-                return@launch
+            when (val result = updateChecker.checkForUpdate(BuildConfig.VERSION_CODE)) {
+                is UpdateCheckResult.Failed -> {
+                    if (force) _upToDateMessage.value = "Не удалось проверить обновления — нет подключения к интернету"
+                }
+                is UpdateCheckResult.UpToDate -> {
+                    if (force) _upToDateMessage.value = "У вас последняя версия"
+                }
+                is UpdateCheckResult.Available -> {
+                    if (!force && settingsRepository.skippedUpdateVersionCode.first() == result.info.versionCode) return@launch
+                    _state.update { it.copy(update = result.info) }
+                }
             }
-            if (!force && settingsRepository.skippedUpdateVersionCode.first() == info.versionCode) return@launch
-            _state.update { it.copy(update = info) }
         }
+    }
+
+    fun setUpdateCheckIntervalHours(hours: Int) {
+        viewModelScope.launch { settingsRepository.setUpdateCheckIntervalHours(hours) }
     }
 
     fun dismissUpToDateMessage() {
@@ -132,8 +151,6 @@ class UpdateViewModel(
     }
 
     companion object {
-        private const val AUTO_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000L
-
         fun factory(context: Context, updateChecker: UpdateChecker, settingsRepository: SettingsRepository) = viewModelFactory {
             initializer { UpdateViewModel(context.applicationContext, updateChecker, settingsRepository) }
         }

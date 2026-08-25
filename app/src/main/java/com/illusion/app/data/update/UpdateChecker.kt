@@ -32,20 +32,32 @@ class UpdateChecker(
 
     private val json = Json { ignoreUnknownKeys = true }
 
-    /** Null if there's no newer release, the feed is unreachable, or the latest release has no versionCode-tagged .apk asset. */
-    suspend fun checkForUpdate(currentVersionCode: Int): UpdateInfo? = withContext(Dispatchers.IO) {
-        val release = runCatching { fetchLatestRelease() }.getOrNull() ?: return@withContext null
-        if (release.draft || release.prerelease) return@withContext null
-        val versionCode = versionCodeFromTag(release.tagName) ?: return@withContext null
-        if (versionCode <= currentVersionCode) return@withContext null
-        val apk = release.assets.firstOrNull { it.name.endsWith(".apk", ignoreCase = true) } ?: return@withContext null
-        UpdateInfo(
-            versionCode = versionCode,
-            versionName = release.tagName,
-            releaseNotes = release.body.orEmpty(),
-            apkDownloadUrl = apk.browserDownloadUrl,
-            apkSizeBytes = apk.size.takeIf { it > 0 },
-            releasePageUrl = release.htmlUrl
+    /**
+     * [UpdateCheckResult.Failed] (no internet, GitHub unreachable, malformed response, ...) is
+     * deliberately distinct from [UpdateCheckResult.UpToDate] - collapsing both into a single
+     * null used to make "нет интернета" look identical to "у вас последняя версия" on the manual
+     * check button, which is actively misleading (the user has no way to tell those two states
+     * apart, and might reasonably conclude they're on the latest build when the check never
+     * actually completed).
+     */
+    suspend fun checkForUpdate(currentVersionCode: Int): UpdateCheckResult = withContext(Dispatchers.IO) {
+        val release = runCatching { fetchLatestRelease() }.getOrElse {
+            return@withContext UpdateCheckResult.Failed(it.message ?: "Неизвестная ошибка")
+        }
+        if (release.draft || release.prerelease) return@withContext UpdateCheckResult.UpToDate
+        val versionCode = versionCodeFromTag(release.tagName) ?: return@withContext UpdateCheckResult.UpToDate
+        if (versionCode <= currentVersionCode) return@withContext UpdateCheckResult.UpToDate
+        val apk = release.assets.firstOrNull { it.name.endsWith(".apk", ignoreCase = true) }
+            ?: return@withContext UpdateCheckResult.UpToDate
+        UpdateCheckResult.Available(
+            UpdateInfo(
+                versionCode = versionCode,
+                versionName = release.tagName,
+                releaseNotes = release.body.orEmpty(),
+                apkDownloadUrl = apk.browserDownloadUrl,
+                apkSizeBytes = apk.size.takeIf { it > 0 },
+                releasePageUrl = release.htmlUrl
+            )
         )
     }
 

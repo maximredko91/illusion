@@ -164,6 +164,8 @@ fun SettingsScreen(
     onCheckForUpdates: () -> Unit,
     upToDateMessage: String?,
     onDismissUpToDateMessage: () -> Unit,
+    updateCheckIntervalHours: Flow<Int>,
+    onUpdateCheckIntervalChange: (Int) -> Unit,
     onBack: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -485,6 +487,14 @@ fun SettingsScreen(
                                         Text(stringResource(R.string.action_check))
                                     }
                                 },
+                                colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                            SettingsDivider()
+                            val currentUpdateCheckIntervalHours by updateCheckIntervalHours.collectAsState(initial = 720)
+                            ListItem(
+                                headlineContent = { Text(stringResource(R.string.settings_update_check_interval)) },
+                                trailingContent = { UpdateCheckIntervalMenu(currentUpdateCheckIntervalHours, onUpdateCheckIntervalChange) },
                                 colors = ListItemDefaults.colors(containerColor = Color.Transparent),
                                 modifier = Modifier.fillMaxWidth()
                             )
@@ -1626,6 +1636,42 @@ private fun PlayerModeMenu(current: com.illusion.app.domain.model.PlayerMode, on
                     onClick = {
                         haptics.segmentTick()
                         onChange(mode)
+                        expanded = false
+                    },
+                    interactionSource = itemSource,
+                    modifier = Modifier.focusHighlight(itemSource)
+                )
+            }
+        }
+    }
+}
+
+private val UPDATE_CHECK_INTERVAL_OPTIONS = listOf(0, 24, 168, 720)
+
+private fun updateCheckIntervalLabel(hours: Int): String = when {
+    hours <= 0 -> "Выключено"
+    hours < 168 -> "Раз в сутки"
+    hours < 720 -> "Раз в неделю"
+    else -> "Раз в месяц"
+}
+
+@Composable
+private fun UpdateCheckIntervalMenu(currentHours: Int, onChange: (Int) -> Unit) {
+    var expanded by remember { mutableStateOf(false) }
+    val haptics = LocalHapticFeedback.current
+    Box {
+        val triggerSource = remember { MutableInteractionSource() }
+        OutlinedButton(onClick = { expanded = true }, interactionSource = triggerSource, modifier = Modifier.focusHighlight(triggerSource)) {
+            Text(updateCheckIntervalLabel(currentHours))
+        }
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            UPDATE_CHECK_INTERVAL_OPTIONS.forEach { hours ->
+                val itemSource = remember { MutableInteractionSource() }
+                DropdownMenuItem(
+                    text = { Text(updateCheckIntervalLabel(hours)) },
+                    onClick = {
+                        haptics.segmentTick()
+                        onChange(hours)
                         expanded = false
                     },
                     interactionSource = itemSource,

@@ -56,6 +56,7 @@ class SettingsRepository(private val context: Context) {
         val SUBTITLE_TEXT_SIZE_PERCENT = intPreferencesKey("player_subtitle_text_size_percent")
         val SKIPPED_UPDATE_VERSION_CODE = intPreferencesKey("skipped_update_version_code")
         val LAST_UPDATE_CHECK_AT_MS = longPreferencesKey("last_update_check_at_ms")
+        val UPDATE_CHECK_INTERVAL_HOURS = intPreferencesKey("update_check_interval_hours")
     }
 
     val requireChargingForHeavyTasks: Flow<Boolean> = context.dataStore.data.map {
@@ -305,5 +306,12 @@ class SettingsRepository(private val context: Context) {
 
     suspend fun setLastUpdateCheckAtMs(timestamp: Long) {
         context.dataStore.edit { it[Keys.LAST_UPDATE_CHECK_AT_MS] = timestamp }
+    }
+
+    /** How often MainActivity's automatic on-launch check is allowed to hit the network - 0 disables it entirely (manual "Проверить обновления" in Settings still always works). Defaults to once a month (720h), same "0 = off" convention as [rescanIntervalHours]. */
+    val updateCheckIntervalHours: Flow<Int> = context.dataStore.data.map { it[Keys.UPDATE_CHECK_INTERVAL_HOURS] ?: 720 }
+
+    suspend fun setUpdateCheckIntervalHours(hours: Int) {
+        context.dataStore.edit { it[Keys.UPDATE_CHECK_INTERVAL_HOURS] = hours }
     }
 }
