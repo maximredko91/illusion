@@ -466,6 +466,7 @@ fun SettingsScreen(
                                 colors = ListItemDefaults.colors(containerColor = Color.Transparent),
                                 modifier = Modifier.fillMaxWidth()
                             )
+                            SettingsDivider()
                             // A separate row (not the version's own supportingContent line) so it's
                             // its own tap target - tapping it 7 times triggers a small easter egg,
                             // the same "tap the build number" joke stock Android's own Settings has
@@ -485,6 +486,12 @@ fun SettingsScreen(
                             // before showing the next one collapses that into a single, instantly-
                             // updating toast, same as a live countdown should look.
                             var activeEggToast by remember { mutableStateOf<android.widget.Toast?>(null) }
+                            // The punchline (unlike the short countdown hints) is a full sentence -
+                            // MIUI's own Toast rendering (this device's OEM skin) truncates longer
+                            // toast text to one line with an ellipsis rather than wrapping it, no
+                            // matter LENGTH_LONG - confirmed on-device even after fixing the
+                            // queueing above. A real dialog is never OEM-truncated like that.
+                            var showEggDialog by remember { mutableStateOf(false) }
                             val buildNumberSource = remember { MutableInteractionSource() }
                             ListItem(
                                 headlineContent = { Text(stringResource(R.string.settings_build_number, com.illusion.app.BuildConfig.VERSION_CODE)) },
@@ -510,15 +517,22 @@ fun SettingsScreen(
                                                 haptics.tick()
                                                 buildNumberTapCount = 0
                                                 activeEggToast?.cancel()
-                                                activeEggToast = android.widget.Toast.makeText(
-                                                    eggContext,
-                                                    R.string.settings_easter_egg_message,
-                                                    android.widget.Toast.LENGTH_LONG
-                                                ).also { it.show() }
+                                                showEggDialog = true
                                             }
                                         }
                                     }
                             )
+                            if (showEggDialog) {
+                                AlertDialog(
+                                    onDismissRequest = { showEggDialog = false },
+                                    confirmButton = {
+                                        TextButton(onClick = { showEggDialog = false }) {
+                                            Text(stringResource(R.string.player_close))
+                                        }
+                                    },
+                                    text = { Text(stringResource(R.string.settings_easter_egg_message)) }
+                                )
+                            }
                             SettingsDivider()
                             ListItem(
                                 headlineContent = { Text(stringResource(R.string.settings_check_updates)) },
