@@ -283,6 +283,7 @@
         <item>Изображение при просмотре можно сделать чётче — в Настройках есть GPU-шейдер повышения резкости</item>
     </string-array>
     <string name="scan_progress_dismiss">Смотреть, пока сканируется</string>
+    <string name="scan_progress_stop">Остановить</string>
     <string name="scan_progress_source">Источник %1$d из %2$d: %3$s</string>
     <string name="scan_progress_listing">Поиск файлов… найдено %1$d</string>
     <string name="scan_progress_files">Найдено файлов: %1$d из %2$d</string>

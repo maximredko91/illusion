@@ -82,6 +82,11 @@ object WorkScheduler {
         WorkManager.getInstance(context).getWorkInfosForUniqueWorkFlow(ONE_TIME_SCAN_WORK_NAME)
             .map { infos -> infos.any { !it.state.isFinished } }
 
+    /** Stops a running manual "rescan now" - WorkManager cancels the underlying coroutine (CancellationException at its next suspend point), so whatever source was mid-scan simply never gets its upsertAll() call, same end state as the app being killed mid-scan. Nothing to clean up: already-scanned sources from earlier in this same run were already persisted (see LibraryScanner's own per-source upsertAll timing). */
+    fun cancelOneTimeScan(context: Context) {
+        WorkManager.getInstance(context).cancelUniqueWork(ONE_TIME_SCAN_WORK_NAME)
+    }
+
     /** Generates scrubbing-preview sprites for any library items that don't have one yet. Slow - honors the charging-only setting. */
     fun enqueueThumbnailGeneration(context: Context, requireCharging: Boolean) {
         val constraints = Constraints.Builder()

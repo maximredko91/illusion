@@ -221,14 +221,32 @@ fun ScanProgressScreen(
 
             if (isScanning) {
                 ScanTipsCarousel(modifier = Modifier.padding(top = 32.dp))
-                if (allowDismiss) {
-                    val dismissSource = remember { MutableInteractionSource() }
+                Row(modifier = Modifier.padding(top = 16.dp)) {
+                    // Distinct from "уйти" (below) - that leaves the scan running in the background,
+                    // this actually cancels the WorkManager job. Sources already fully scanned
+                    // earlier in this same run keep whatever they already persisted (see
+                    // LibraryScanner's own per-source upsertAll timing) - nothing to roll back,
+                    // same end state as the app being killed mid-scan.
+                    val stopSource = remember { MutableInteractionSource() }
                     TextButton(
-                        onClick = onDismiss,
-                        interactionSource = dismissSource,
-                        modifier = Modifier.padding(top = 16.dp).focusHighlight(dismissSource)
+                        onClick = {
+                            com.illusion.app.work.WorkScheduler.cancelOneTimeScan(context)
+                            onDismiss()
+                        },
+                        interactionSource = stopSource,
+                        modifier = Modifier.focusHighlight(stopSource)
                     ) {
-                        Text(stringResource(R.string.scan_progress_dismiss))
+                        Text(stringResource(R.string.scan_progress_stop))
+                    }
+                    if (allowDismiss) {
+                        val dismissSource = remember { MutableInteractionSource() }
+                        TextButton(
+                            onClick = onDismiss,
+                            interactionSource = dismissSource,
+                            modifier = Modifier.focusHighlight(dismissSource)
+                        ) {
+                            Text(stringResource(R.string.scan_progress_dismiss))
+                        }
                     }
                 }
             }
