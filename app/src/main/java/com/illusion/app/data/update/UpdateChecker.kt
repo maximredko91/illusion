@@ -52,7 +52,7 @@ class UpdateChecker(
         UpdateCheckResult.Available(
             UpdateInfo(
                 versionCode = versionCode,
-                versionName = release.tagName,
+                versionName = versionNameFromRelease(release),
                 releaseNotes = release.body.orEmpty(),
                 apkDownloadUrl = apk.browserDownloadUrl,
                 apkSizeBytes = apk.size.takeIf { it > 0 },
@@ -60,6 +60,18 @@ class UpdateChecker(
             )
         )
     }
+
+    /**
+     * Was `release.tagName` directly - the tag only ever carries the versionCode digits (e.g.
+     * "v75"), so the "What's new" dialog showed "Доступно обновление v75" instead of the app's
+     * actual semantic version. The release title is published as "vNN (versionName)" (see
+     * PowerShell's `gh release create --title`) - pulls the parenthesized part out of that, and
+     * falls back to the tag if the title is missing/doesn't follow the convention rather than
+     * failing the whole check over a cosmetic string.
+     */
+    private fun versionNameFromRelease(release: GitHubRelease): String =
+        release.name?.let { title -> Regex("\\(([^)]+)\\)").find(title)?.groupValues?.get(1) }
+            ?: release.tagName
 
     private fun fetchLatestRelease(): GitHubRelease {
         val request = Request.Builder()
