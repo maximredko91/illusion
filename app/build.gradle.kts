@@ -51,11 +51,14 @@ android {
         applicationId = "com.illusion.app"
         minSdk = 26
         targetSdk = 37
-        // Bump versionCode with every build installed for testing, and versionName's alphaN
+        // Bump versionCode with every build installed for testing, and versionName's betaN
         // suffix when it's a meaningfully new build - lets Settings show which exact build is on
-        // a device instead of guessing from install timestamps.
-        versionCode = 73
-        versionName = "0.1.0-alpha72"
+        // a device instead of guessing from install timestamps. Switched alphaN -> betaN
+        // 2026-08-25 once the repo went public and beta testers started using the in-app updater -
+        // restarted the counter at beta1 rather than continuing the alpha sequence's number, since
+        // jumping straight to "beta73" would misleadingly imply 72 prior beta builds existed.
+        versionCode = 74
+        versionName = "0.1.0-beta1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("String", "TMDB_API_KEY", "\"$tmdbApiKey\"")
