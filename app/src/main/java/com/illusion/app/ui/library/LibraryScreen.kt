@@ -306,6 +306,15 @@ fun LibraryScreen(
                 else -> LazyVerticalGrid(
                     columns = posterGridColumns(),
                     state = gridState,
+                    // Only the header item (first in this grid) carries the status-bar/cutout
+                    // inset padding - a fast upward fling past the top triggers Compose's default
+                    // stretch-overscroll effect, which visually scales the whole grid (header
+                    // included) during the stretch, briefly shrinking that padding below the real
+                    // inset and exposing the second row's card top edge under the transparent
+                    // status bar/cutout for a frame before it springs back. Disabling overscroll
+                    // just for this grid removes the stretch instead of trying to make the inset
+                    // padding itself survive being scaled.
+                    overscrollEffect = null,
                     // Was a custom FlingBehavior damping initial velocity to ~70% (meant to
                     // feel "softer") - reverted per feedback: damping velocity roughly
                     // squares the lost distance (spline decay), so a fling that used to

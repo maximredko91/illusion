@@ -32,6 +32,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.ui.unit.dp
 import androidx.work.WorkInfo
 import androidx.work.WorkManager
@@ -295,7 +296,15 @@ private fun ImageCacheLimitMenu(currentMb: Int, onChange: (Int) -> Unit) {
     val options = listOf(256, 512, 1024, 2048)
     androidx.compose.foundation.layout.Box {
         val triggerSource = remember { MutableInteractionSource() }
-        OutlinedButton(onClick = { expanded = true }, interactionSource = triggerSource, modifier = Modifier.focusHighlight(triggerSource)) {
+        // A fixed min width, not just wrap-content: "256 МБ"/"512 МБ" vs "1 ГБ"/"2 ГБ" are different
+        // pixel widths, and this button sits in a ListItem's trailingContent next to a long
+        // supportingContent description - letting the button's width vary with the label reflowed
+        // that description onto a different number of lines on every selection, visibly "jumping".
+        OutlinedButton(
+            onClick = { expanded = true },
+            interactionSource = triggerSource,
+            modifier = Modifier.focusHighlight(triggerSource).widthIn(min = 96.dp)
+        ) {
             Text(imageCacheLimitLabel(currentMb))
         }
         androidx.compose.material3.DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {

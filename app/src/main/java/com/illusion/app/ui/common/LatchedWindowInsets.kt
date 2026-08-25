@@ -1,8 +1,10 @@
 package com.illusion.app.ui.common
 
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.union
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -49,7 +51,15 @@ private fun rememberRecheckTick(): androidx.compose.runtime.MutableIntState {
     return tick
 }
 
-/** Latched replacement for `TopAppBarDefaults.windowInsets` - pass to `TopAppBar(windowInsets = ...)`. */
+/**
+ * Latched replacement for `TopAppBarDefaults.windowInsets` - pass to `TopAppBar(windowInsets = ...)`.
+ *
+ * Also unions in the plain (non-latched) `WindowInsets.displayCutout` - a punch-hole camera cutout
+ * sits on a *side* edge in landscape, not the top, so `statusBars` alone (top-only) misses it
+ * entirely. Without this, rotating to landscape let grid/list content scroll to directly underneath
+ * the cutout instead of being pushed clear of it. displayCutout doesn't need the same latching
+ * workaround as statusBars/navigationBars below - that race was only ever observed on those two.
+ */
 @Composable
 fun rememberLatchedStatusBarsInsets(): WindowInsets {
     val density = LocalDensity.current
@@ -64,7 +74,7 @@ fun rememberLatchedStatusBarsInsets(): WindowInsets {
     rememberRecheckTick().intValue
     val liveDp = maxOf(ambientDp, viewDp)
     if (liveDp > latchedDp) latchedDp = liveDp
-    return WindowInsets(top = latchedDp)
+    return WindowInsets(top = latchedDp).union(WindowInsets.displayCutout)
 }
 
 /** Latched replacement for `NavigationBarDefaults.windowInsets` - pass to `NavigationBar(windowInsets = ...)`. */

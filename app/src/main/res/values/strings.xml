@@ -13,6 +13,8 @@
     <string name="settings_external_player_app_description">Каким приложением открывать внешний плеер</string>
     <string name="settings_external_player_app_system">Системный выбор</string>
     <string name="settings_check_updates">Проверить обновления</string>
+    <string name="settings_about_section">О программе</string>
+    <string name="action_check">Проверить</string>
     <string name="player_mode_ask_title">Как открыть?</string>
     <string name="player_mode_ask_internal">Внутренний плеер</string>
     <string name="player_mode_ask_external">Внешний плеер</string>
@@ -42,7 +44,7 @@
     <string name="settings_title">Настройки</string>
     <string name="settings_category_smb_sources_description">Список подключённых сетевых папок</string>
     <string name="settings_category_ui_mode_description">Тема, режим экрана, акцентный цвет, тактильный отклик, анимация жеста «назад»</string>
-    <string name="settings_category_library_description">Сортировка по умолчанию</string>
+    <string name="settings_category_library_description">Сортировка по умолчанию, перевод тегов</string>
     <string name="settings_category_scan_description">Пересканирование и расписание</string>
     <string name="settings_category_player_description">Внутренний или внешний плеер</string>
     <string name="settings_category_downloads_description">Папка и объём загруженного</string>
@@ -101,7 +103,15 @@
     <string name="settings_downloads_recover_none">В выбранной папке не нашлось новых файлов</string>
     <string name="settings_downloads_recover_result">Восстановлено файлов: %1$d</string>
     <string name="settings_backup">Резервное копирование</string>
-    <string name="settings_version">Версия %1$s (%2$d)</string>
+    <string name="settings_version">Версия %1$s</string>
+    <string name="settings_build_number">Сборка %1$d</string>
+    <string name="settings_about_tagline">Медиацентр для локальной SMB-библиотеки</string>
+    <string name="settings_about_developer">Разработчик</string>
+    <string name="settings_about_source_code">Исходный код</string>
+    <string name="settings_about_license">Лицензия</string>
+    <string name="settings_about_license_value">GNU GPL v3.0</string>
+    <string name="settings_about_libraries">Используемые библиотеки</string>
+    <string name="settings_about_libraries_value">Jetpack Compose, Media3 (ExoPlayer), Room, WorkManager, Coil, smbj, OkHttp, kotlinx.serialization</string>
     <string name="settings_backup_export">Экспорт</string>
     <string name="settings_backup_import">Импорт</string>
     <string name="settings_backup_export_success">Резервная копия сохранена</string>

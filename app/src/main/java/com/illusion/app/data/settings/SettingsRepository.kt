@@ -63,7 +63,7 @@ class SettingsRepository(private val context: Context) {
     }
 
     val rescanIntervalHours: Flow<Int> = context.dataStore.data.map {
-        it[Keys.RESCAN_INTERVAL_HOURS] ?: 48
+        it[Keys.RESCAN_INTERVAL_HOURS] ?: 0
     }
 
     val defaultSortOrder: Flow<SortOrder> = context.dataStore.data.map {

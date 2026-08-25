@@ -33,6 +33,7 @@ import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Feedback
 import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material.icons.filled.RestartAlt
@@ -75,6 +76,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.colorResource
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -170,7 +173,7 @@ fun SettingsScreen(
     val currentAccentColor by accentColor.collectAsState(initial = com.illusion.app.domain.model.AccentColor.ILLUSION)
     val currentThemeMode by themeMode.collectAsState(initial = com.illusion.app.domain.model.ThemeMode.SYSTEM)
     val chargingOnly by requireChargingForHeavyTasks.collectAsState(initial = true)
-    val rescanHours by rescanIntervalHours.collectAsState(initial = 48)
+    val rescanHours by rescanIntervalHours.collectAsState(initial = 0)
     val downloadsFolder by downloadsFolderUri.collectAsState(initial = null)
     // Deleting a source used to fire straight from the trash icon with no confirmation - the most
     // destructive action on this whole screen (orphans everything that source scanned into the
@@ -392,36 +395,121 @@ fun SettingsScreen(
                             icon = Icons.Default.RestartAlt,
                             onClick = { selectedCategory = "reset" }
                         )
+                        SettingsDivider()
+                        CategoryRow(
+                            title = stringResource(R.string.settings_about_section),
+                            description = stringResource(R.string.settings_version, com.illusion.app.BuildConfig.VERSION_NAME),
+                            icon = Icons.Default.Info,
+                            onClick = { selectedCategory = "about" }
+                        )
+                    }
 
-                        Column(
-                            modifier = Modifier.fillMaxWidth().padding(top = 16.dp, bottom = 16.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            Text(
-                                text = stringResource(R.string.settings_version, com.illusion.app.BuildConfig.VERSION_NAME, com.illusion.app.BuildConfig.VERSION_CODE),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                    "about" -> {
+                        val aboutContext = LocalContext.current
+                        fun openUrl(url: String) {
+                            runCatching { aboutContext.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url))) }
+                        }
+                        SettingsGroup {
+                            ListItem(
+                                headlineContent = { Text(stringResource(R.string.app_name)) },
+                                supportingContent = { Text(stringResource(R.string.settings_about_tagline)) },
+                                leadingContent = {
+                                    // R.mipmap.ic_launcher is Android Studio's stock template
+                                    // placeholder (never updated after the real icon redesign,
+                                    // see README's own icon-fix commit) - the actual mark lives in
+                                    // the adaptive icon's own layers (mipmap-anydpi/ic_launcher.xml:
+                                    // ic_mark foreground on an icon_bg background), reassembled
+                                    // here the same way rather than pointing at the stale bitmap.
+                                    Box(
+                                        modifier = Modifier
+                                            .size(40.dp)
+                                            .clip(androidx.compose.foundation.shape.CircleShape)
+                                            .background(colorResource(R.color.icon_bg)),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            painterResource(R.drawable.ic_mark),
+                                            contentDescription = null,
+                                            tint = Color.Unspecified,
+                                            modifier = Modifier.size(28.dp)
+                                        )
+                                    }
+                                },
+                                colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                                modifier = Modifier.fillMaxWidth()
                             )
-                            val checkUpdatesSource = remember { MutableInteractionSource() }
-                            TextButton(
-                                onClick = onCheckForUpdates,
-                                interactionSource = checkUpdatesSource,
-                                modifier = Modifier.focusHighlight(checkUpdatesSource)
-                            ) {
-                                Text(stringResource(R.string.settings_check_updates))
-                            }
-                            if (upToDateMessage != null) {
-                                LaunchedEffect(upToDateMessage) {
-                                    kotlinx.coroutines.delay(4000)
-                                    onDismissUpToDateMessage()
-                                }
-                                Text(
-                                    upToDateMessage,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
+                            SettingsDivider()
+                            ListItem(
+                                headlineContent = { Text(stringResource(R.string.settings_version, com.illusion.app.BuildConfig.VERSION_NAME)) },
+                                supportingContent = { Text(stringResource(R.string.settings_build_number, com.illusion.app.BuildConfig.VERSION_CODE)) },
+                                colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                            SettingsDivider()
+                            ListItem(
+                                headlineContent = { Text(stringResource(R.string.settings_check_updates)) },
+                                supportingContent = if (upToDateMessage != null) {
+                                    {
+                                        LaunchedEffect(upToDateMessage) {
+                                            kotlinx.coroutines.delay(4000)
+                                            onDismissUpToDateMessage()
+                                        }
+                                        Text(upToDateMessage)
+                                    }
+                                } else null,
+                                trailingContent = {
+                                    val checkUpdatesSource = remember { MutableInteractionSource() }
+                                    OutlinedButton(
+                                        onClick = onCheckForUpdates,
+                                        interactionSource = checkUpdatesSource,
+                                        modifier = Modifier.focusHighlight(checkUpdatesSource)
+                                    ) {
+                                        Text(stringResource(R.string.action_check))
+                                    }
+                                },
+                                colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                            SettingsDivider()
+                            val developerSource = remember { MutableInteractionSource() }
+                            ListItem(
+                                headlineContent = { Text(stringResource(R.string.settings_about_developer)) },
+                                supportingContent = { Text("github.com/maximredko91") },
+                                colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                                modifier = Modifier.fillMaxWidth()
+                                    .clickable(interactionSource = developerSource, indication = LocalIndication.current) {
+                                        openUrl("https://github.com/maximredko91")
+                                    }
+                            )
+                            SettingsDivider()
+                            val sourceCodeSource = remember { MutableInteractionSource() }
+                            ListItem(
+                                headlineContent = { Text(stringResource(R.string.settings_about_source_code)) },
+                                supportingContent = { Text("github.com/maximredko91/illusion") },
+                                colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                                modifier = Modifier.fillMaxWidth()
+                                    .clickable(interactionSource = sourceCodeSource, indication = LocalIndication.current) {
+                                        openUrl("https://github.com/maximredko91/illusion")
+                                    }
+                            )
+                            SettingsDivider()
+                            val licenseSource = remember { MutableInteractionSource() }
+                            ListItem(
+                                headlineContent = { Text(stringResource(R.string.settings_about_license)) },
+                                supportingContent = { Text(stringResource(R.string.settings_about_license_value)) },
+                                colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                                modifier = Modifier.fillMaxWidth()
+                                    .clickable(interactionSource = licenseSource, indication = LocalIndication.current) {
+                                        openUrl("https://github.com/maximredko91/illusion/blob/main/LICENSE")
+                                    }
+                            )
+                            SettingsDivider()
+                            ListItem(
+                                headlineContent = { Text(stringResource(R.string.settings_about_libraries)) },
+                                supportingContent = { Text(stringResource(R.string.settings_about_libraries_value)) },
+                                colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                                modifier = Modifier.fillMaxWidth()
+                            )
                         }
                     }
 
@@ -1270,6 +1358,7 @@ private fun categoryTitle(key: String): String = when (key) {
     "add_media" -> stringResource(R.string.settings_add_media)
     "feedback" -> stringResource(R.string.settings_feedback)
     "reset" -> stringResource(R.string.settings_reset_section)
+    "about" -> stringResource(R.string.settings_about_section)
     else -> stringResource(R.string.settings_title)
 }
 

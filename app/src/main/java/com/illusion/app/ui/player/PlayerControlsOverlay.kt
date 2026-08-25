@@ -254,8 +254,8 @@ fun BottomGradientBar(
                 onValueChangeFinished = { isDragging = false; onSeekTo(sliderPosition.toLong()) },
                 valueRange = 0f..(durationMs.coerceAtLeast(1).toFloat()),
                 colors = SliderDefaults.colors(
-                    thumbColor = Color.White,
-                    activeTrackColor = Color.White,
+                    thumbColor = MaterialTheme.colorScheme.primary,
+                    activeTrackColor = MaterialTheme.colorScheme.primary,
                     inactiveTrackColor = Color.White.copy(alpha = 0.3f)
                 ),
                 modifier = Modifier.weight(1f)
