@@ -19,6 +19,9 @@ class SmbSourceRepository(
 
     suspend fun getEnabledSources(): List<SmbSourceEntity> = dao.getEnabled()
 
+    /** Toggles whether [source] is included the next time [scanAll][com.illusion.app.data.scan.LibraryScanner.scanAll] runs - lets the user pick which of several connected SMB sources actually contribute to the library, without deleting/re-adding a source's saved connection details. Already-scanned items from a disabled source stay in the library until the next rescan removes them (same as any other scan-time source change). */
+    suspend fun setEnabled(id: Long, enabled: Boolean) = dao.setEnabled(id, enabled)
+
     suspend fun addSource(source: SmbSourceEntity, password: String): Long {
         val id = dao.upsert(source)
         credentialStore.setPassword(id, password)

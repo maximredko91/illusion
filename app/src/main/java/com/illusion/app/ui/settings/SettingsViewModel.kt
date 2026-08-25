@@ -153,6 +153,10 @@ class SettingsViewModel(
     private val _downloadsSizeBytes = MutableStateFlow<Long?>(null)
     val downloadsSizeBytes: StateFlow<Long?> = _downloadsSizeBytes.asStateFlow()
 
+    fun setSourceEnabled(source: SmbSourceEntity, enabled: Boolean) {
+        viewModelScope.launch { smbSourceRepository.setEnabled(source.id, enabled) }
+    }
+
     fun deleteSource(source: SmbSourceEntity) {
         viewModelScope.launch { smbSourceRepository.deleteSource(source) }
     }

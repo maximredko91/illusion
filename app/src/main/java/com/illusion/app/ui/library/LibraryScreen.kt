@@ -7,6 +7,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
+import androidx.compose.foundation.background
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -25,6 +26,7 @@ import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.layout.windowInsetsTopHeight
 import androidx.compose.foundation.layout.height
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDownward
@@ -94,6 +96,9 @@ fun LibraryScreen(
     yearFilter: Int?,
     onYearFilterChange: (Int?) -> Unit,
     availableYears: List<Int>,
+    countryFilter: String?,
+    onCountryFilterChange: (String?) -> Unit,
+    availableCountries: List<String>,
     gridState: LazyGridState,
     onOpenItem: (String) -> Unit,
     onOpenSettings: () -> Unit,
@@ -164,6 +169,14 @@ fun LibraryScreen(
                     selected = yearFilter?.toString(),
                     options = availableYears.map { it.toString() },
                     onSelected = { scrollToTop(); onYearFilterChange(it?.toIntOrNull()) }
+                )
+            }
+            if (availableCountries.isNotEmpty()) {
+                FilterMenu(
+                    label = stringResource(R.string.library_country),
+                    selected = countryFilter,
+                    options = availableCountries,
+                    onSelected = { scrollToTop(); onCountryFilterChange(it) }
                 )
             }
         }
@@ -277,9 +290,10 @@ fun LibraryScreen(
         // before the first emission lands would otherwise hard-cut from spinner to grid with no
         // animation of its own once the (separately animated) tab-switch transition has already
         // finished playing.
+        Box(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
         Crossfade(
             targetState = if (isLoading) 0 else if (items.isEmpty()) 1 else 2,
-            modifier = Modifier.fillMaxSize().padding(innerPadding)
+            modifier = Modifier.fillMaxSize()
         ) { state ->
             when (state) {
                 0 -> Column(modifier = Modifier.fillMaxSize()) {
@@ -343,6 +357,21 @@ fun LibraryScreen(
                     }
                 }
             }
+        }
+        // The header carries the status-bar/cutout inset (see its own comment above) but only
+        // while it's actually the topmost visible content - it's the grid's own first item, so
+        // scrolling past it rides it away like everything else, and the poster cards that take
+        // its place have nothing of their own painting that same top strip. Without this, cards
+        // scrolled up under the transparent status bar sat directly behind the system icons with
+        // no scrim, unreadable either way. A plain opaque strip pinned above the grid, sized to
+        // the same inset, covers it regardless of scroll position.
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .windowInsetsTopHeight(topBarInsets)
+                .background(MaterialTheme.colorScheme.background)
+                .align(Alignment.TopCenter)
+        )
         }
     }
 }

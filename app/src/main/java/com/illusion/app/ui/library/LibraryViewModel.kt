@@ -66,6 +66,9 @@ class LibraryViewModel(
     private val _yearFilter = MutableStateFlow<Int?>(null)
     val yearFilter: StateFlow<Int?> = _yearFilter.asStateFlow()
 
+    private val _countryFilter = MutableStateFlow<String?>(null)
+    val countryFilter: StateFlow<String?> = _countryFilter.asStateFlow()
+
     private val isSeriesCategory = category == Category.TV_SHOWS || category == Category.CARTOON_SERIES
 
     // Room's query itself is near-instant, but it's still async - without this, items.isEmpty()
@@ -87,9 +90,9 @@ class LibraryViewModel(
         .onEach { _isLoading.value = false }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    val items: StateFlow<List<MediaItemEntity>> = combine(allItems, _genreFilter, _yearFilter) { items, genre, year ->
+    val items: StateFlow<List<MediaItemEntity>> = combine(allItems, _genreFilter, _yearFilter, _countryFilter) { items, genre, year, country ->
         val filtered = items.filter { item ->
-            (genre == null || genre in item.genres) && (year == null || item.year == year)
+            (genre == null || genre in item.genres) && (year == null || item.year == year) && (country == null || item.country == country)
         }
         // Filtering by a genre also brings along items where it's a minor/secondary tag (e.g. a
         // "Драма" filter matching a movie whose genres are [Боевик, Триллер, Драма]) - those used
@@ -113,9 +116,14 @@ class LibraryViewModel(
             .flatMap { it.genres }.distinct().sorted()
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    val availableYears: StateFlow<List<Int>> = combine(allItems, _genreFilter) { items, genre ->
-        items.filter { genre == null || genre in it.genres }
+    val availableYears: StateFlow<List<Int>> = combine(allItems, _genreFilter, _countryFilter) { items, genre, country ->
+        items.filter { (genre == null || genre in it.genres) && (country == null || it.country == country) }
             .mapNotNull { it.year }.distinct().sortedDescending()
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val availableCountries: StateFlow<List<String>> = combine(allItems, _genreFilter, _yearFilter) { items, genre, year ->
+        items.filter { (genre == null || genre in it.genres) && (year == null || it.year == year) }
+            .mapNotNull { it.country }.distinct().sorted()
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     fun setSortOrder(order: SortOrder) {
@@ -132,10 +140,15 @@ class LibraryViewModel(
         _yearFilter.value = year
     }
 
-    /** Called each time the user navigates to this tab (see TabsHost) - per feedback, sort/genre/year should start fresh on every visit rather than carrying over whatever was picked last time. */
+    fun setCountryFilter(country: String?) {
+        _countryFilter.value = country
+    }
+
+    /** Called each time the user navigates to this tab (see TabsHost) - per feedback, sort/genre/year/country should start fresh on every visit rather than carrying over whatever was picked last time. */
     fun resetFilters() {
         _genreFilter.value = null
         _yearFilter.value = null
+        _countryFilter.value = null
         userOverrodeSortOrder = false
         viewModelScope.launch {
             val default = settingsRepository.defaultSortOrder.first()

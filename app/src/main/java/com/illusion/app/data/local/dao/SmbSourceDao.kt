@@ -20,6 +20,9 @@ interface SmbSourceDao {
     @Query("SELECT * FROM smb_sources WHERE id = :id")
     suspend fun getById(id: Long): SmbSourceEntity?
 
+    @Query("UPDATE smb_sources SET enabled = :enabled WHERE id = :id")
+    suspend fun setEnabled(id: Long, enabled: Boolean)
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(source: SmbSourceEntity): Long
 

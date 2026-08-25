@@ -152,6 +152,7 @@ fun SettingsScreen(
     onAddSource: () -> Unit,
     onEditSource: (SmbSourceEntity) -> Unit,
     onDeleteSource: (SmbSourceEntity) -> Unit,
+    onSourceEnabledChange: (SmbSourceEntity, Boolean) -> Unit,
     onResetToDefaults: () -> Unit,
     onFactoryReset: () -> Unit,
     hasDevPassword: () -> Boolean,
@@ -553,19 +554,33 @@ fun SettingsScreen(
                                         headlineContent = { Text(source.displayName) },
                                         supportingContent = { Text("\\\\${source.host}\\${source.share}") },
                                         trailingContent = {
-                                            val deleteSource = remember { MutableInteractionSource() }
-                                            IconButton(
-                                                onClick = {
-                                                    haptics.reject()
-                                                    pendingDeleteSource = source
-                                                },
-                                                interactionSource = deleteSource,
-                                                modifier = Modifier.focusHighlight(deleteSource)
-                                            ) {
-                                                Icon(
-                                                    Icons.Default.Delete,
-                                                    contentDescription = stringResource(R.string.settings_delete_source)
-                                                )
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                // Only shown once there's more than one source to choose between - a
+                                                // single connected source has nothing to select against, and the
+                                                // switch would just be a confusing way to fully empty the library.
+                                                if (sources.size > 1) {
+                                                    Switch(
+                                                        checked = source.enabled,
+                                                        onCheckedChange = {
+                                                            haptics.segmentTick()
+                                                            onSourceEnabledChange(source, it)
+                                                        }
+                                                    )
+                                                }
+                                                val deleteSource = remember { MutableInteractionSource() }
+                                                IconButton(
+                                                    onClick = {
+                                                        haptics.reject()
+                                                        pendingDeleteSource = source
+                                                    },
+                                                    interactionSource = deleteSource,
+                                                    modifier = Modifier.focusHighlight(deleteSource)
+                                                ) {
+                                                    Icon(
+                                                        Icons.Default.Delete,
+                                                        contentDescription = stringResource(R.string.settings_delete_source)
+                                                    )
+                                                }
                                             }
                                         },
                                         colors = ListItemDefaults.colors(containerColor = Color.Transparent),

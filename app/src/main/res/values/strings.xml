@@ -156,6 +156,7 @@
     <string name="sort_rating">По рейтингу</string>
     <string name="library_genre">Жанр</string>
     <string name="library_year">Год</string>
+    <string name="library_country">Страна</string>
     <string name="library_sort_ascending">По возрастанию</string>
     <string name="library_sort_descending">По убыванию</string>
     <string name="sort_year_asc">Год: сначала старые</string>

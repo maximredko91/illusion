@@ -556,6 +556,7 @@ private fun IllusionNavGraph(app: IllusionApplication, navController: NavHostCon
                     onAddSource = { navController.navigate(Destination.AddSmbSource) },
                     onEditSource = { source -> navController.navigate(Destination.EditSmbSource(source.id)) },
                     onDeleteSource = { source -> settingsViewModel.deleteSource(source) },
+                    onSourceEnabledChange = { source, enabled -> settingsViewModel.setSourceEnabled(source, enabled) },
                     onResetToDefaults = { settingsViewModel.resetToDefaults() },
                     onFactoryReset = { settingsViewModel.factoryReset(context) },
                     hasDevPassword = settingsViewModel::hasDevPassword,
@@ -758,6 +759,8 @@ private fun TabsHost(
             val availableGenres by libraryViewModel.availableGenres.collectAsState()
             val yearFilter by libraryViewModel.yearFilter.collectAsState()
             val availableYears by libraryViewModel.availableYears.collectAsState()
+            val countryFilter by libraryViewModel.countryFilter.collectAsState()
+            val availableCountries by libraryViewModel.availableCountries.collectAsState()
             LibraryScreen(
                 category = category,
                 items = items,
@@ -772,6 +775,9 @@ private fun TabsHost(
                 yearFilter = yearFilter,
                 onYearFilterChange = libraryViewModel::setYearFilter,
                 availableYears = availableYears,
+                countryFilter = countryFilter,
+                onCountryFilterChange = libraryViewModel::setCountryFilter,
+                availableCountries = availableCountries,
                 gridState = gridStateFor(category),
                 onOpenItem = { stableId -> navController.navigate(Destination.Details(stableId)) },
                 onOpenSettings = { navController.navigate(Destination.Settings) },
