@@ -23,6 +23,24 @@ class WatchProgressRepository(
 
     suspend fun clearHistory() = progressDao.deleteAll()
 
+    /**
+     * Manual "mark watched/unwatched" toggle (Details screen) - the only other writer of [WatchProgressEntity.watched]
+     * is the player itself, automatically, on reaching the last 5s of playback. Marking watched
+     * writes position=duration so History's percent bar (only ever read when NOT watched) has
+     * nothing stale to show if the item is later unmarked. Marking unwatched deletes the row
+     * outright rather than writing watched=false with some position - a manual "no, I haven't
+     * seen this" should really mean "no progress recorded", not "stopped partway", which
+     * `positionMs > 0 && !watched` elsewhere reads as "still has something to continue".
+     */
+    suspend fun setWatched(stableId: String, watched: Boolean, durationMs: Long, now: Long) {
+        if (watched) {
+            val safeDuration = durationMs.coerceAtLeast(1L)
+            updateProgress(stableId, positionMs = safeDuration, durationMs = safeDuration, watched = true, now = now)
+        } else {
+            deleteHistoryEntry(stableId)
+        }
+    }
+
     suspend fun updateProgress(stableId: String, positionMs: Long, durationMs: Long, watched: Boolean, now: Long) {
         progressDao.upsert(
             WatchProgressEntity(

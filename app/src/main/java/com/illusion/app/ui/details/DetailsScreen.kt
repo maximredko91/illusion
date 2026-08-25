@@ -54,6 +54,8 @@ import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.RadioButtonUnchecked
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Theaters
@@ -184,6 +186,8 @@ fun DetailsScreen(
                 episodes = state.episodes,
                 isFavorite = isFavorite,
                 onToggleFavorite = viewModel::toggleFavorite,
+                isWatched = watchProgress?.watched == true,
+                onToggleWatched = viewModel::toggleWatched,
                 hasStartedWatching = watchProgress?.let { it.positionMs > 0 && !it.watched } == true,
                 download = download,
                 downloads = downloads,
@@ -223,6 +227,8 @@ private fun DetailsContent(
     episodes: List<MediaItemEntity>,
     isFavorite: Boolean,
     onToggleFavorite: () -> Unit,
+    isWatched: Boolean,
+    onToggleWatched: () -> Unit,
     hasStartedWatching: Boolean,
     download: DownloadEntity?,
     downloads: Map<String, DownloadEntity>,
@@ -483,6 +489,45 @@ private fun DetailsContent(
                         ),
                         tint = favoriteTint,
                         modifier = Modifier.scale(favoriteScale.value)
+                    )
+                }
+            }
+
+            // The only remaining free corner - mirrors the favorite button's own styling exactly.
+            // Manual override for the player's automatic "last 5s of playback = watched" marking:
+            // covers watching elsewhere, skipping the credits before that threshold, or wanting to
+            // reset an item back to "not watched" without rewatching it.
+            val watchedSource = remember { MutableInteractionSource() }
+            val watchedScale = remember { Animatable(1f) }
+            val watchedScope = rememberCoroutineScope()
+            val watchedTint by animateColorAsState(
+                targetValue = if (isWatched) MaterialTheme.colorScheme.primary else Color.White,
+                label = "watchedTint"
+            )
+            IconButton(
+                onClick = {
+                    haptics.toggle(!isWatched)
+                    onToggleWatched()
+                    watchedScope.launch {
+                        watchedScale.snapTo(0.7f)
+                        watchedScale.animateTo(1f, animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow))
+                    }
+                },
+                interactionSource = watchedSource,
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(4.dp)
+                    .background(Color.Black.copy(alpha = 0.5f), CircleShape)
+                    .focusHighlight(watchedSource, color = Color.White)
+            ) {
+                Crossfade(targetState = isWatched, label = "watchedIcon") { watched ->
+                    Icon(
+                        imageVector = if (watched) Icons.Default.CheckCircle else Icons.Default.RadioButtonUnchecked,
+                        contentDescription = stringResource(
+                            if (watched) R.string.details_watched_remove else R.string.details_watched_add
+                        ),
+                        tint = watchedTint,
+                        modifier = Modifier.scale(watchedScale.value)
                     )
                 }
             }

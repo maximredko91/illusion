@@ -136,6 +136,16 @@ class DetailsViewModel(
         }
     }
 
+    fun toggleWatched() {
+        viewModelScope.launch {
+            val item = _state.value.item ?: return@launch
+            val alreadyWatched = watchProgress.value?.watched == true
+            val durationMs = watchProgress.value?.durationMs?.takeIf { it > 0 }
+                ?: (item.runtimeMinutes?.toLong()?.times(60_000L) ?: 0L)
+            watchProgressRepository.setWatched(stableId, !alreadyWatched, durationMs, System.currentTimeMillis())
+        }
+    }
+
     fun startDownload(context: Context) {
         WorkScheduler.enqueueDownload(context, stableId)
     }
