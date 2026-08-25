@@ -30,6 +30,17 @@ val tmdbApiKey = localProperties.getProperty("illusion.tmdb.apiKey") ?: ""
 // Empty string if unset; DevAccessStore falls back to its normal generate-and-show-once behavior.
 val devAccessPassword = localProperties.getProperty("illusion.devAccess.password") ?: ""
 
+// Release signing keystore - generated once via keytool, kept out of version control (app/*.jks
+// is gitignored) the same way as the secrets above. Losing this file or these values means any
+// future release build can no longer update an install already on a signed build (Android refuses
+// to install an update signed with a different key over an existing one without a full uninstall,
+// which would wipe a beta tester's SMB sources/downloads/watch history) - back it up.
+val signingStoreFile = localProperties.getProperty("illusion.signing.storeFile")?.let { file(it) }
+    ?.takeIf { it.exists() }
+val signingStorePassword = localProperties.getProperty("illusion.signing.storePassword")
+val signingKeyAlias = localProperties.getProperty("illusion.signing.keyAlias")
+val signingKeyPassword = localProperties.getProperty("illusion.signing.keyPassword")
+
 android {
     namespace = "com.illusion.app"
     compileSdk {
@@ -51,10 +62,26 @@ android {
         buildConfigField("String", "DEV_ACCESS_PASSWORD", "\"$devAccessPassword\"")
     }
 
+    signingConfigs {
+        if (signingStoreFile != null) {
+            create("release") {
+                storeFile = signingStoreFile
+                storePassword = signingStorePassword
+                keyAlias = signingKeyAlias
+                keyPassword = signingKeyPassword
+            }
+        }
+    }
     buildTypes {
         release {
             optimization {
                 enable = false
+            }
+            // Falls back to no signingConfig (Android Studio then signs "release" builds with the
+            // debug key) on a fresh checkout that hasn't generated app/illusion-release.jks yet -
+            // keeps `./gradlew assembleRelease` from hard-failing for a first-time contributor.
+            if (signingStoreFile != null) {
+                signingConfig = signingConfigs.getByName("release")
             }
         }
     }
