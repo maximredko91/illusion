@@ -106,8 +106,8 @@
     <string name="settings_downloads_recover_none">В выбранной папке не нашлось новых файлов</string>
     <string name="settings_downloads_recover_result">Восстановлено файлов: %1$d</string>
     <string name="settings_backup">Резервное копирование</string>
-    <string name="settings_version">Версия %1$s</string>
-    <string name="settings_build_number">Сборка %1$d</string>
+    <string name="settings_version">Версия: %1$s</string>
+    <string name="settings_build_number">Номер сборки: %1$d</string>
     <string name="settings_easter_egg_countdown">Ещё %1$d, и что-то произойдёт…</string>
     <string name="settings_easter_egg_message">Иллюзия раскрыта! Впрочем, это была просто пасхалка — секретных функций тут нет.</string>
     <string name="settings_about_tagline">Медиацентр для локальной SMB-библиотеки</string>
@@ -391,6 +391,8 @@
     <string name="details_image_viewer_close">Закрыть просмотр изображения</string>
     <string name="details_favorite_add">Добавить в избранное</string>
     <string name="details_favorite_remove">Убрать из избранного</string>
+    <string name="details_watched_add">Отметить просмотренным</string>
+    <string name="details_watched_remove">Снять отметку "просмотрено"</string>
     <string name="details_director">Режиссёр</string>
     <string name="details_actors">В ролях</string>
     <string name="details_collection">Другие части</string>

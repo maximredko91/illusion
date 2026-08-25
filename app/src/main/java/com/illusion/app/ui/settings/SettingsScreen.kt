@@ -476,6 +476,15 @@ fun SettingsScreen(
                             var buildNumberTapCount by remember { mutableStateOf(0) }
                             var lastBuildNumberTapAt by remember { mutableStateOf(0L) }
                             val eggContext = LocalContext.current
+                            // A fresh Toast.makeText().show() per tap QUEUES on Android instead of
+                            // replacing the previous one - confirmed on-device: tapping through the
+                            // 4/5/6 countdown fired 3 separate ~2s toasts back to back, so the real
+                            // punchline on tap 7 only appeared after several seconds of stacked
+                            // wait, and the system's rapid-toast rate limiting on top of that
+                            // visibly truncated/overlapped the text. Cancelling the previous Toast
+                            // before showing the next one collapses that into a single, instantly-
+                            // updating toast, same as a live countdown should look.
+                            var activeEggToast by remember { mutableStateOf<android.widget.Toast?>(null) }
                             val buildNumberSource = remember { MutableInteractionSource() }
                             ListItem(
                                 headlineContent = { Text(stringResource(R.string.settings_build_number, com.illusion.app.BuildConfig.VERSION_CODE)) },
@@ -490,20 +499,22 @@ fun SettingsScreen(
                                         when {
                                             buildNumberTapCount in 4..6 -> {
                                                 haptics.segmentTick()
-                                                android.widget.Toast.makeText(
+                                                activeEggToast?.cancel()
+                                                activeEggToast = android.widget.Toast.makeText(
                                                     eggContext,
                                                     eggContext.getString(R.string.settings_easter_egg_countdown, 7 - buildNumberTapCount),
                                                     android.widget.Toast.LENGTH_SHORT
-                                                ).show()
+                                                ).also { it.show() }
                                             }
                                             buildNumberTapCount >= 7 -> {
                                                 haptics.tick()
                                                 buildNumberTapCount = 0
-                                                android.widget.Toast.makeText(
+                                                activeEggToast?.cancel()
+                                                activeEggToast = android.widget.Toast.makeText(
                                                     eggContext,
                                                     R.string.settings_easter_egg_message,
                                                     android.widget.Toast.LENGTH_LONG
-                                                ).show()
+                                                ).also { it.show() }
                                             }
                                         }
                                     }
