@@ -260,6 +260,8 @@
     <string name="onboarding_display_name_help">Как источник будет называться в приложении, например «Диск в гостиной». На подключение не влияет</string>
     <string name="onboarding_share">Имя шары</string>
     <string name="onboarding_share_help">Имя общей папки на сервере, как оно видно в проводнике: в пути \\\\192.168.2.1\\Movies это «Movies»</string>
+    <string name="onboarding_advanced_show">Дополнительные поля</string>
+    <string name="onboarding_advanced_hide">Скрыть дополнительные поля</string>
     <string name="onboarding_root_path">Путь внутри шары (необязательно)</string>
     <string name="onboarding_root_path_help">Только если видео лежат не в корне шары, а во вложенной папке, например Films\\HD. Обычно можно оставить пустым</string>
     <string name="onboarding_domain">Домен (необязательно)</string>

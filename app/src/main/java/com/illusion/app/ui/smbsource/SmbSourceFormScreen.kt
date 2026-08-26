@@ -39,6 +39,8 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import com.illusion.app.R
+import com.illusion.app.domain.model.UiMode
+import com.illusion.app.ui.common.LocalUiMode
 import com.illusion.app.ui.common.dpadFieldNavigation
 import com.illusion.app.ui.common.focusHighlight
 
@@ -100,34 +102,57 @@ fun SmbSourceFormFields(
             suggestions = shareSuggestions,
             modifier = Modifier.fillMaxWidth()
         )
-        val rootPathSource = remember { MutableInteractionSource() }
-        OutlinedTextField(
-            value = state.rootPath,
-            onValueChange = onRootPathChange,
-            label = { Text(stringResource(R.string.onboarding_root_path)) },
-            supportingText = { Text(stringResource(R.string.onboarding_root_path_help)) },
-            interactionSource = rootPathSource,
-            modifier = Modifier.fillMaxWidth().focusHighlight(rootPathSource).dpadFieldNavigation()
-        )
-        val domainSource = remember { MutableInteractionSource() }
-        OutlinedTextField(
-            value = state.domain,
-            onValueChange = onDomainChange,
-            label = { Text(stringResource(R.string.onboarding_domain)) },
-            supportingText = { Text(stringResource(R.string.onboarding_domain_help)) },
-            interactionSource = domainSource,
-            modifier = Modifier.fillMaxWidth().focusHighlight(domainSource).dpadFieldNavigation()
-        )
-        val usernameSource = remember { MutableInteractionSource() }
-        OutlinedTextField(
-            value = state.username,
-            onValueChange = onUsernameChange,
-            label = { Text(stringResource(R.string.onboarding_username)) },
-            supportingText = { Text(stringResource(R.string.onboarding_username_help)) },
-            interactionSource = usernameSource,
-            modifier = Modifier.fillMaxWidth().focusHighlight(usernameSource).dpadFieldNavigation()
-        )
-        var passwordVisible by remember { mutableStateOf(false) }
+        // Collapsed by default on TV, expanded by default on phone (unchanged behavior there) -
+        // these four fields are all optional-in-practice (root path only matters when videos
+        // aren't at the share's own root; domain/username/password only for a non-guest share),
+        // but on a real Android TV every field is a full trip through the on-screen keyboard even
+        // to skip past it, per the user's own feedback that tabbing through all seven in a row
+        // (D-pad up/down, plus opening/closing the keyboard for each) before ever reaching
+        // Test/Save was tedious for fields most setups never touch.
+        val uiMode = LocalUiMode.current
+        var advancedExpanded by remember { mutableStateOf(uiMode != UiMode.TV) }
+        val advancedToggleSource = remember { MutableInteractionSource() }
+        androidx.compose.material3.TextButton(
+            onClick = { advancedExpanded = !advancedExpanded },
+            interactionSource = advancedToggleSource,
+            modifier = Modifier.focusHighlight(advancedToggleSource)
+        ) {
+            Text(
+                stringResource(
+                    if (advancedExpanded) R.string.onboarding_advanced_hide else R.string.onboarding_advanced_show
+                )
+            )
+        }
+        androidx.compose.animation.AnimatedVisibility(visible = advancedExpanded) {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                val rootPathSource = remember { MutableInteractionSource() }
+                OutlinedTextField(
+                    value = state.rootPath,
+                    onValueChange = onRootPathChange,
+                    label = { Text(stringResource(R.string.onboarding_root_path)) },
+                    supportingText = { Text(stringResource(R.string.onboarding_root_path_help)) },
+                    interactionSource = rootPathSource,
+                    modifier = Modifier.fillMaxWidth().focusHighlight(rootPathSource).dpadFieldNavigation()
+                )
+                val domainSource = remember { MutableInteractionSource() }
+                OutlinedTextField(
+                    value = state.domain,
+                    onValueChange = onDomainChange,
+                    label = { Text(stringResource(R.string.onboarding_domain)) },
+                    supportingText = { Text(stringResource(R.string.onboarding_domain_help)) },
+                    interactionSource = domainSource,
+                    modifier = Modifier.fillMaxWidth().focusHighlight(domainSource).dpadFieldNavigation()
+                )
+                val usernameSource = remember { MutableInteractionSource() }
+                OutlinedTextField(
+                    value = state.username,
+                    onValueChange = onUsernameChange,
+                    label = { Text(stringResource(R.string.onboarding_username)) },
+                    supportingText = { Text(stringResource(R.string.onboarding_username_help)) },
+                    interactionSource = usernameSource,
+                    modifier = Modifier.fillMaxWidth().focusHighlight(usernameSource).dpadFieldNavigation()
+                )
+                var passwordVisible by remember { mutableStateOf(false) }
         val passwordSource = remember { MutableInteractionSource() }
         val passwordVisibilitySource = remember { MutableInteractionSource() }
         OutlinedTextField(
@@ -152,6 +177,8 @@ fun SmbSourceFormFields(
             interactionSource = passwordSource,
             modifier = Modifier.fillMaxWidth().focusHighlight(passwordSource).dpadFieldNavigation()
         )
+            }
+        }
 
         if (state.host.isNotBlank() || state.share.isNotBlank()) {
             Text(

@@ -184,7 +184,27 @@ fun IllusionNavHost(
             modifier = Modifier.fillMaxSize(),
             color = MaterialTheme.colorScheme.background
         ) {
-            IllusionNavGraph(app, navController, modifier = Modifier.fillMaxSize())
+            // TV-mode-only overscan-safe margin - confirmed on a real Android TV (photos from the
+            // user: focus-highlight borders and list-row chevrons rendering right up to, and past,
+            // the physical bezel, "192.168.2.1" missing its leading "1" against the left edge)
+            // that this TV crops a real slice off every edge of the picture without compensating
+            // the reported display resolution for it - nothing this app draws in that strip is
+            // actually visible. Google's own historical TV design guidance calls this the
+            // "overscan-safe area" and puts it at 5% of each dimension, which is what this reserves
+            // - a phone/tablet never hits this branch, so nothing changes there.
+            if ((uiMode ?: UiMode.PHONE) == UiMode.TV) {
+                androidx.compose.foundation.layout.BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+                    IllusionNavGraph(
+                        app,
+                        navController,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(horizontal = maxWidth * 0.05f, vertical = maxHeight * 0.05f)
+                    )
+                }
+            } else {
+                IllusionNavGraph(app, navController, modifier = Modifier.fillMaxSize())
+            }
         }
     }
 }

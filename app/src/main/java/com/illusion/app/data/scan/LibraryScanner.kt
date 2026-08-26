@@ -153,31 +153,57 @@ class LibraryScanner(
         }
     }
 
+    /** [channel]'s connections plus the [info] that made them - [withConnection] needs [info] to reconnect a connection that died mid-scan, which a bare `Channel<SmbConnection>` had no way to carry. */
+    private class SmbPool(val channel: Channel<SmbConnection>, val info: SmbConnectionInfo)
+
     /** Opens [CONNECTION_POOL_SIZE] connections up front and closes all of them once [block] returns. */
-    private suspend fun <T> withConnectionPool(info: SmbConnectionInfo, block: suspend (Channel<SmbConnection>) -> T): T {
+    private suspend fun <T> withConnectionPool(info: SmbConnectionInfo, block: suspend (SmbPool) -> T): T {
         val connections = List(CONNECTION_POOL_SIZE) { smbClient.connect(info) }
-        val pool = Channel<SmbConnection>(CONNECTION_POOL_SIZE)
-        connections.forEach { pool.trySend(it) }
+        val channel = Channel<SmbConnection>(CONNECTION_POOL_SIZE)
+        connections.forEach { channel.trySend(it) }
         try {
-            return block(pool)
+            return block(SmbPool(channel, info))
         } finally {
-            connections.forEach { it.close() }
+            connections.forEach { runCatching { it.close() } }
         }
     }
 
-    /** Borrows one connection from [pool] for [block], returning it afterwards - never touches a connection concurrently from two coroutines. */
-    private suspend fun <T> withConnection(pool: Channel<SmbConnection>, block: suspend (SmbConnection) -> T): T {
-        val connection = pool.receive()
-        try {
-            return block(connection)
-        } finally {
-            pool.send(connection)
+    /**
+     * Borrows one connection from [pool] for [block], returning it afterwards - never touches a
+     * connection concurrently from two coroutines. A large scan (thousands of files, tens of
+     * minutes over Wi-Fi) can outlast a single connection's own session - confirmed on-device via
+     * a real crash report ("i11 has already been closed", an smbj internal class) partway through
+     * a 30000+-file walk, which then killed the ENTIRE scan for that source (one dead connection
+     * among [CONNECTION_POOL_SIZE] failing every call it touched, and any one coroutine throwing
+     * cancels every sibling under the shared coroutineScope in scanSource/walkConcurrent). The old
+     * version always returned the same connection to the pool in its `finally`, dead or not, so a
+     * single drop poisoned that pool slot for the rest of the scan. Now: on failure, open a fresh
+     * connection with the same [SmbPool.info] and retry [block] once before giving up - the fresh
+     * connection replaces the dead one in the pool either way, so a transient drop only costs one
+     * retry, not the whole source.
+     */
+    private suspend fun <T> withConnection(pool: SmbPool, block: suspend (SmbConnection) -> T): T {
+        val connection = pool.channel.receive()
+        val result = runCatching { block(connection) }
+        if (result.isSuccess) {
+            pool.channel.send(connection)
+            return result.getOrThrow()
+        }
+        runCatching { connection.close() }
+        val fresh = smbClient.connect(pool.info)
+        return try {
+            val retryResult = block(fresh)
+            pool.channel.send(fresh)
+            retryResult
+        } catch (retryFailure: Throwable) {
+            runCatching { fresh.close() }
+            throw retryFailure
         }
     }
 
     /** Recursively lists [path], fanning sibling sub-directories out across [pool]'s connections instead of one at a time. */
     private suspend fun walkConcurrent(
-        pool: Channel<SmbConnection>,
+        pool: SmbPool,
         path: String,
         discovered: AtomicInteger,
         onProgress: suspend (Int) -> Unit
