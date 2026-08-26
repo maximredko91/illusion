@@ -125,6 +125,7 @@ import com.illusion.app.data.local.entity.DownloadEntity
 import com.illusion.app.data.local.entity.DownloadStatus
 import com.illusion.app.data.local.entity.MediaItemEntity
 import com.illusion.app.data.local.entity.hasForcedSubtitles
+import com.illusion.app.domain.model.editionLabel
 import com.illusion.app.domain.model.videoQualityLabel
 import com.illusion.app.data.player.AudioTrackProber
 import com.illusion.app.data.repository.AudioTrackRepository
@@ -187,6 +188,7 @@ fun DetailsScreen(
                 clickablePersons = state.clickablePersons,
                 similar = state.similar,
                 collection = state.collection,
+                folderCollection = state.folderCollection,
                 episodes = state.episodes,
                 isFavorite = isFavorite,
                 onToggleFavorite = viewModel::toggleFavorite,
@@ -298,6 +300,7 @@ private fun DetailsContent(
     clickablePersons: Set<String>,
     similar: List<MediaItemEntity>,
     collection: List<MediaItemEntity>,
+    folderCollection: List<MediaItemEntity>,
     episodes: List<MediaItemEntity>,
     isFavorite: Boolean,
     onToggleFavorite: () -> Unit,
@@ -537,14 +540,29 @@ private fun DetailsContent(
                     // are on the screen's own themed background instead) and both tints now come
                     // from the color scheme so they read correctly in either light or dark theme,
                     // instead of a fixed white that would have washed out on a light background.
+                    // getString (not stringResource) since the hint text is picked inside an
+                    // onClick lambda, not composed directly - stringResource can't be called
+                    // from a non-composable callback.
+                    val hintContext = androidx.compose.ui.platform.LocalContext.current
+                    // ONE shared hint, not one per icon - two independent bubbles could both be
+                    // visible at once (tapping both icons in quick succession) and, since they
+                    // sit right next to each other in a narrow column with nowhere to go but
+                    // toward each other or off the screen edge, their text visibly overlapped.
+                    // Both buttons below now just update this single state instead of their own.
+                    var hintGeneration by remember { mutableStateOf(0) }
+                    var hintVisible by remember { mutableStateOf(false) }
+                    var hintText by remember { mutableStateOf("") }
+                    LaunchedEffect(hintGeneration) {
+                        if (hintGeneration == 0) return@LaunchedEffect
+                        hintVisible = true
+                        kotlinx.coroutines.delay(1500)
+                        hintVisible = false
+                    }
+                    Box {
                     Row(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         modifier = Modifier.fillMaxWidth().padding(top = 4.dp)
                     ) {
-                        // getString (not stringResource) since the hint text is picked inside an
-                        // onClick lambda, not composed directly - stringResource can't be called
-                        // from a non-composable callback.
-                        val hintContext = androidx.compose.ui.platform.LocalContext.current
                         val favoriteScale = remember { Animatable(1f) }
                         val favoriteScope = rememberCoroutineScope()
                         val favoriteTint by animateColorAsState(
@@ -552,37 +570,19 @@ private fun DetailsContent(
                             label = "favoriteTint"
                         )
                         val favoriteSource = remember { MutableInteractionSource() }
-                        // A brief bubble confirming what just happened, rather than only the
-                        // icon/color swap - per feedback, the swap alone wasn't a clear enough
-                        // confirmation. Keyed on a generation counter (not a plain boolean) so
-                        // mashing the button restarts the timer's LaunchedEffect each time instead
-                        // of the first tap's coroutine racing a stale hide against a later tap.
-                        var favoriteHintGeneration by remember { mutableStateOf(0) }
-                        var favoriteHintVisible by remember { mutableStateOf(false) }
-                        var favoriteHintText by remember { mutableStateOf("") }
-                        LaunchedEffect(favoriteHintGeneration) {
-                            if (favoriteHintGeneration == 0) return@LaunchedEffect
-                            favoriteHintVisible = true
-                            kotlinx.coroutines.delay(1500)
-                            favoriteHintVisible = false
-                        }
                         // Fixed size (matches IconButton's own default touch target) rather than
-                        // wrapping content - the hint bubble below is wider than the icon while
-                        // visible, and an implicitly-sized Box grows with its widest child, which
-                        // shifted this whole Box (a direct child of the SpaceBetween Row above)
-                        // sideways every time a hint appeared/disappeared, and could squeeze or
-                        // fully displace the sibling icon's Box when both animated at once. Fixing
-                        // the size lets the bubble visually overflow past it (alignment/offset
-                        // still place it outside these bounds fine) without perturbing the Row.
+                        // wrapping content - an implicitly-sized Box here would grow/shrink this
+                        // whole Box (a direct child of the SpaceBetween Row above) as its content
+                        // changed, shifting the Row's layout.
                         Box(modifier = Modifier.size(48.dp)) {
                             IconButton(
                                 onClick = {
                                     haptics.toggle(!isFavorite)
                                     onToggleFavorite()
-                                    favoriteHintText = hintContext.getString(
+                                    hintText = hintContext.getString(
                                         if (!isFavorite) R.string.details_favorite_added_hint else R.string.details_favorite_removed_hint
                                     )
-                                    favoriteHintGeneration++
+                                    hintGeneration++
                                     favoriteScope.launch {
                                         favoriteScale.snapTo(0.7f)
                                         favoriteScale.animateTo(1f, animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow))
@@ -602,23 +602,6 @@ private fun DetailsContent(
                                     )
                                 }
                             }
-                            ActionHintBubble(
-                                text = favoriteHintText,
-                                visible = favoriteHintVisible,
-                                // unbounded = true - this Box's own size is fixed at 48dp (see its
-                                // own comment above) so the Row it sits in never shifts, but that
-                                // same fixed size otherwise caps this child's own measurement to
-                                // 48dp too, wrapping/clipping the bubble's text. Ignoring the
-                                // incoming max constraint here lets it measure at its natural
-                                // (wider) width while the parent Box still reports 48dp upward.
-                                // Explicit Start alignment (not wrapContentWidth's own default of
-                                // CenterHorizontally) - centering the grown width around the 48dp
-                                // icon's own center pushed roughly half the bubble left past the
-                                // screen's physical edge, since this icon sits close to it. Start
-                                // keeps the bubble's left edge anchored at the icon's and grows
-                                // rightward, toward the poster's own center instead.
-                                modifier = Modifier.wrapContentWidth(Alignment.Start, unbounded = true).align(Alignment.TopStart).offset(y = (-28).dp)
-                            )
                         }
                         val watchedScale = remember { Animatable(1f) }
                         val watchedScope = rememberCoroutineScope()
@@ -627,32 +610,15 @@ private fun DetailsContent(
                             label = "watchedTint"
                         )
                         val watchedSource = remember { MutableInteractionSource() }
-                        var watchedHintGeneration by remember { mutableStateOf(0) }
-                        var watchedHintVisible by remember { mutableStateOf(false) }
-                        var watchedHintText by remember { mutableStateOf("") }
-                        LaunchedEffect(watchedHintGeneration) {
-                            if (watchedHintGeneration == 0) return@LaunchedEffect
-                            watchedHintVisible = true
-                            kotlinx.coroutines.delay(1500)
-                            watchedHintVisible = false
-                        }
-                        // Fixed size (matches IconButton's own default touch target) rather than
-                        // wrapping content - the hint bubble below is wider than the icon while
-                        // visible, and an implicitly-sized Box grows with its widest child, which
-                        // shifted this whole Box (a direct child of the SpaceBetween Row above)
-                        // sideways every time a hint appeared/disappeared, and could squeeze or
-                        // fully displace the sibling icon's Box when both animated at once. Fixing
-                        // the size lets the bubble visually overflow past it (alignment/offset
-                        // still place it outside these bounds fine) without perturbing the Row.
                         Box(modifier = Modifier.size(48.dp)) {
                             IconButton(
                                 onClick = {
                                     haptics.toggle(!isWatched)
                                     onToggleWatched()
-                                    watchedHintText = hintContext.getString(
+                                    hintText = hintContext.getString(
                                         if (!isWatched) R.string.details_watched_added_hint else R.string.details_watched_removed_hint
                                     )
-                                    watchedHintGeneration++
+                                    hintGeneration++
                                     watchedScope.launch {
                                         watchedScale.snapTo(0.7f)
                                         watchedScale.animateTo(1f, animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow))
@@ -672,14 +638,17 @@ private fun DetailsContent(
                                     )
                                 }
                             }
-                            ActionHintBubble(
-                                text = watchedHintText,
-                                visible = watchedHintVisible,
-                                // Mirrors the favorite bubble's own fix - End anchors the bubble's
-                                // right edge at this icon's and grows leftward.
-                                modifier = Modifier.wrapContentWidth(Alignment.End, unbounded = true).align(Alignment.TopEnd).offset(y = (-28).dp)
-                            )
                         }
+                    }
+                    // Single shared bubble, positioned above the whole row (not per-icon) -
+                    // anchored at its top-start and growing rightward into the open metadata
+                    // column regardless of which icon was tapped, since both icons sit in this
+                    // same narrow left-hand column with real room only to their right.
+                    ActionHintBubble(
+                        text = hintText,
+                        visible = hintVisible,
+                        modifier = Modifier.wrapContentWidth(Alignment.Start, unbounded = true).align(Alignment.TopStart).offset(y = (-24).dp)
+                    )
                     }
                 }
             }
@@ -730,7 +699,8 @@ private fun DetailsContent(
                         item.year?.toString(),
                         item.country,
                         item.runtimeMinutes?.let { "$it мин" },
-                        item.videoQualityLabel
+                        item.videoQualityLabel,
+                        item.editionLabel
                     ).joinToString(" · "),
                     style = MaterialTheme.typography.bodyMedium,
                     fontWeight = FontWeight.Medium,
@@ -975,6 +945,9 @@ private fun DetailsContent(
         // show a pointless one-poster row.
         if (collection.size > 1) {
             MediaRow(stringResource(R.string.details_collection), collection, onOpenItem, currentStableId = item.stableId)
+        }
+        if (folderCollection.size > 1) {
+            MediaRow(stringResource(R.string.details_folder_collection), folderCollection, onOpenItem, currentStableId = item.stableId)
         }
         if (similar.isNotEmpty()) {
             MediaRow(stringResource(R.string.details_similar), similar, onOpenItem)

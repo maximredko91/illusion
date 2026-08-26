@@ -1,5 +1,6 @@
 package com.illusion.app.ui.smbsource
 
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -38,6 +39,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import com.illusion.app.R
+import com.illusion.app.ui.common.dpadFieldNavigation
 import com.illusion.app.ui.common.focusHighlight
 
 @Composable
@@ -61,15 +63,26 @@ fun SmbSourceFormFields(
         modifier = modifier
             .verticalScroll(rememberScrollState())
             .imePadding()
-            .padding(24.dp),
+            .padding(24.dp)
+            .focusGroup(),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
+        // Every field below now has its own InteractionSource + focusHighlight, matching the
+        // pattern already used everywhere else in the app - this form only had it on its two
+        // bottom buttons. Confirmed on a real Android TV: without a visible focus indicator on
+        // each field, D-pad focus was still technically moving between them (Compose's default
+        // focus search doesn't need focusHighlight for that - see that modifier's own KDoc, it's
+        // purely a visual border/scale reacting to the same InteractionSource a control already
+        // has), but with nothing on screen to show WHERE focus currently was, it read as the
+        // remote doing nothing at all rather than a legible cursor moving through the form.
+        val displayNameSource = remember { MutableInteractionSource() }
         OutlinedTextField(
             value = state.displayName,
             onValueChange = onDisplayNameChange,
             label = { Text(stringResource(R.string.onboarding_display_name)) },
             supportingText = { Text(stringResource(R.string.onboarding_display_name_help)) },
-            modifier = Modifier.fillMaxWidth()
+            interactionSource = displayNameSource,
+            modifier = Modifier.fillMaxWidth().focusHighlight(displayNameSource).dpadFieldNavigation()
         )
         SuggestibleTextField(
             value = state.host,
@@ -87,35 +100,47 @@ fun SmbSourceFormFields(
             suggestions = shareSuggestions,
             modifier = Modifier.fillMaxWidth()
         )
+        val rootPathSource = remember { MutableInteractionSource() }
         OutlinedTextField(
             value = state.rootPath,
             onValueChange = onRootPathChange,
             label = { Text(stringResource(R.string.onboarding_root_path)) },
             supportingText = { Text(stringResource(R.string.onboarding_root_path_help)) },
-            modifier = Modifier.fillMaxWidth()
+            interactionSource = rootPathSource,
+            modifier = Modifier.fillMaxWidth().focusHighlight(rootPathSource).dpadFieldNavigation()
         )
+        val domainSource = remember { MutableInteractionSource() }
         OutlinedTextField(
             value = state.domain,
             onValueChange = onDomainChange,
             label = { Text(stringResource(R.string.onboarding_domain)) },
             supportingText = { Text(stringResource(R.string.onboarding_domain_help)) },
-            modifier = Modifier.fillMaxWidth()
+            interactionSource = domainSource,
+            modifier = Modifier.fillMaxWidth().focusHighlight(domainSource).dpadFieldNavigation()
         )
+        val usernameSource = remember { MutableInteractionSource() }
         OutlinedTextField(
             value = state.username,
             onValueChange = onUsernameChange,
             label = { Text(stringResource(R.string.onboarding_username)) },
             supportingText = { Text(stringResource(R.string.onboarding_username_help)) },
-            modifier = Modifier.fillMaxWidth()
+            interactionSource = usernameSource,
+            modifier = Modifier.fillMaxWidth().focusHighlight(usernameSource).dpadFieldNavigation()
         )
         var passwordVisible by remember { mutableStateOf(false) }
+        val passwordSource = remember { MutableInteractionSource() }
+        val passwordVisibilitySource = remember { MutableInteractionSource() }
         OutlinedTextField(
             value = state.password,
             onValueChange = onPasswordChange,
             label = { Text(stringResource(R.string.onboarding_password)) },
             visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
             trailingIcon = {
-                IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                IconButton(
+                    onClick = { passwordVisible = !passwordVisible },
+                    interactionSource = passwordVisibilitySource,
+                    modifier = Modifier.focusHighlight(passwordVisibilitySource)
+                ) {
                     Icon(
                         imageVector = if (passwordVisible) Icons.Filled.VisibilityOff else Icons.Filled.Visibility,
                         contentDescription = stringResource(
@@ -124,7 +149,8 @@ fun SmbSourceFormFields(
                     )
                 }
             },
-            modifier = Modifier.fillMaxWidth()
+            interactionSource = passwordSource,
+            modifier = Modifier.fillMaxWidth().focusHighlight(passwordSource).dpadFieldNavigation()
         )
 
         if (state.host.isNotBlank() || state.share.isNotBlank()) {
@@ -209,6 +235,7 @@ private fun SuggestibleTextField(
         onExpandedChange = { expanded = it },
         modifier = modifier
     ) {
+        val fieldSource = remember { MutableInteractionSource() }
         OutlinedTextField(
             value = value,
             onValueChange = {
@@ -218,10 +245,13 @@ private fun SuggestibleTextField(
             label = { Text(label) },
             supportingText = { Text(supportingText) },
             singleLine = true,
+            interactionSource = fieldSource,
             modifier = Modifier
                 .fillMaxWidth()
                 .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryEditable)
                 .onFocusChanged { if (it.isFocused && suggestions.isNotEmpty()) expanded = true }
+                .focusHighlight(fieldSource)
+                .dpadFieldNavigation()
         )
         ExposedDropdownMenu(expanded = menuVisible, onDismissRequest = { expanded = false }) {
             filtered.forEach { suggestion ->

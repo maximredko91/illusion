@@ -126,6 +126,16 @@ class LibraryScanner(
                         val item = withConnection(pool) { connection ->
                             toMediaItem(source, connection, file, subtitleFiles, imageFiles, trailerFiles, filesByPath, existingByPath, showNfoCache, force)
                         }
+                        // Upserted per-file as each one finishes, not batched into one call after
+                        // every file in the source has processed - confirmed on-device that losing
+                        // Wi-Fi partway through a large share (10000+ files) threw the whole scan
+                        // out via the source-level runCatching in scanAll, and since nothing had
+                        // been saved yet the next attempt (even once the network came back) had to
+                        // redo the entire source from zero instead of resuming. Committing each
+                        // item as it completes means everything already processed survives an
+                        // interruption, and a retry's own "unchanged since last scan" fast path
+                        // (see toMediaItem) then skips straight past it instead of re-parsing.
+                        libraryRepository.upsertAll(listOf(item))
                         onProgress(
                             ScanProgress(
                                 sourceIndex = sourceIndex,
@@ -139,7 +149,6 @@ class LibraryScanner(
                     }
                 }.awaitAll()
             }
-            libraryRepository.upsertAll(items)
             items.size
         }
     }
@@ -348,14 +357,15 @@ class LibraryScanner(
             plot = metadata?.plot,
             director = metadata?.director ?: emptyList(),
             actors = metadata?.actors ?: emptyList(),
-            // A "<Name> (Коллекция)" folder wins over the .nfo's own <set> tag when both exist,
-            // not just when <set> is blank - confirmed on-device that a reboot/spin-off's .nfo
-            // commonly has a real but DIFFERENT <set> value (its own separate TMDB collection,
-            // e.g. RoboCop 2014's own collection vs the 1987 trilogy's), so falling back only on
-            // a blank tag left exactly the mismatched-string case this feature exists for
-            // unfixed. An explicit NAS folder is a deliberate, hand-organized signal - it should
-            // override whatever a scraper happened to write per-file, not just fill a gap.
-            collectionName = collectionFolderName(file.path) ?: metadata?.collectionName,
+            // Kept separate from folderCollectionName below (not folder-wins-over-nfo, as an
+            // earlier version of this had it) - per feedback, Details wants these as two distinct
+            // rows ("Другие части" from whatever the .nfo scraper linked, "Коллекция" from how
+            // the files are actually organized on the NAS), which commonly disagree (a reboot's
+            // own separate TMDB collection vs. the whole franchise folder) - collapsing them into
+            // one value only ever showed one of the two.
+            collectionName = metadata?.collectionName,
+            // See MediaItemEntity.folderCollectionName's own KDoc.
+            folderCollectionName = collectionFolderName(file.path),
             posterPath = localPosterPath ?: metadata?.posterUrl?.takeIf { it.startsWith("http://") || it.startsWith("https://") },
             fanartPath = localFanartPath ?: metadata?.fanartUrl?.takeIf { it.startsWith("http://") || it.startsWith("https://") },
             episodeThumbPath = localEpisodeThumbPath
@@ -383,7 +393,10 @@ class LibraryScanner(
             // this app fetches anyway). Genuinely per-file, unlike genre/year above - no
             // showMetadata fallback, since a per-episode nfo carries its own streamdetails too.
             videoWidth = metadata?.videoWidth,
-            videoHeight = metadata?.videoHeight
+            videoHeight = metadata?.videoHeight,
+            // Per-file only, same as videoWidth/videoHeight above - a movie's own edition never
+            // comes from the show-level tvshow.nfo.
+            edition = metadata?.edition
         )
     }
 

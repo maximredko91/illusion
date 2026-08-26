@@ -1,5 +1,6 @@
 package com.illusion.app.data.update
 
+import android.os.Build
 import java.io.IOException
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.Dispatchers
@@ -93,7 +94,7 @@ class UpdateChecker(
 
     /**
      * A release attaches one .apk per ABI (build.gradle.kts' `splits.abi`), so more than one
-     * .apk asset is the normal case, not an error. [android.os.Build.SUPPORTED_ABIS] lists every
+     * .apk asset is the normal case, not an error. [Build.SUPPORTED_ABIS] lists every
      * ABI this exact device can run, most-preferred first (e.g. a 64-bit device that can also run
      * 32-bit code lists both, arm64 first) - matching against it in order means a device capable
      * of more than one of this app's ABIs always gets its best one, not whichever happened to
@@ -105,7 +106,7 @@ class UpdateChecker(
     private fun selectApkForDevice(assets: List<GitHubReleaseAsset>): GitHubReleaseAsset? {
         val apks = assets.filter { it.name.endsWith(".apk", ignoreCase = true) }
         if (apks.size <= 1) return apks.firstOrNull()
-        return android.os.Build.SUPPORTED_ABIS.firstNotNullOfOrNull { abi ->
+        return Build.SUPPORTED_ABIS.firstNotNullOfOrNull { abi ->
             apks.firstOrNull { it.name.contains(abi, ignoreCase = true) }
         } ?: apks.first()
     }

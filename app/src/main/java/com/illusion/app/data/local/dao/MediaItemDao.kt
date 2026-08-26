@@ -90,12 +90,17 @@ interface MediaItemDao {
     @Query("SELECT * FROM media_items WHERE seriesStableId = :seriesStableId ORDER BY seasonNumber, episodeNumber")
     fun observeEpisodes(seriesStableId: String): Flow<List<MediaItemEntity>>
 
+    /** .nfo <set>-based - Details' own "Другие части" row. */
     @Query("SELECT * FROM media_items WHERE collectionName = :collectionName AND isOrphanedDownload = 0")
     fun observeByCollection(collectionName: String): Flow<List<MediaItemEntity>>
 
-    /** Every item that belongs to some collection, for the Home/Library "Коллекции" row - grouped and reduced to one representative + a count per collectionName in [LibraryRepository.observeCollections], not here, since that grouping logic is shared with nothing else SQL-side would make simpler. Deliberately narrower than a full-table observeAll() - most libraries have far fewer collection members than total items. */
-    @Query("SELECT * FROM media_items WHERE collectionName IS NOT NULL AND isOrphanedDownload = 0")
-    fun observeAllInCollections(): Flow<List<MediaItemEntity>>
+    /** "<Name> (Коллекция)" NAS-folder-based - Details' own "Коллекция" row, deliberately separate from the .nfo-based [observeByCollection] above (see MediaItemEntity.folderCollectionName's own KDoc for why). */
+    @Query("SELECT * FROM media_items WHERE folderCollectionName = :folderCollectionName AND isOrphanedDownload = 0")
+    fun observeByFolderCollection(folderCollectionName: String): Flow<List<MediaItemEntity>>
+
+    /** Every item that belongs to some folder-based collection, for the Home "Коллекции" row - grouped and reduced to one representative + a count per folderCollectionName in [LibraryRepository.observeCollections], not here, since that grouping logic is shared with nothing else SQL-side would make simpler. Deliberately narrower than a full-table observeAll() - most libraries have far fewer collection members than total items. Folder-based (not .nfo <set>-based) since that's the reliable, physically-organized signal a franchise-browsing row should key off. */
+    @Query("SELECT * FROM media_items WHERE folderCollectionName IS NOT NULL AND isOrphanedDownload = 0")
+    fun observeAllInFolderCollections(): Flow<List<MediaItemEntity>>
 
     @Query("SELECT * FROM media_items WHERE category = :category AND isOrphanedDownload = 0")
     suspend fun getByCategory(category: Category): List<MediaItemEntity>

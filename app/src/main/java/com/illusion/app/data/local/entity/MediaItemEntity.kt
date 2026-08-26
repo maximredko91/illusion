@@ -74,7 +74,19 @@ data class MediaItemEntity(
     val videoWidth: Int? = null,
     val videoHeight: Int? = null,
     /** Mirrors [introStartMs]/[introEndMs]'s manual-marking approach but for the credits at the END of an episode - runs to EOF so only a start is needed, not a range. Drives the "skip credits / next episode" banner (see PlayerViewModel.isWithinOutro). */
-    val outroStartMs: Long? = null
+    val outroStartMs: Long? = null,
+    /** Raw .nfo <edition> code (e.g. "DIRECTORS_CUT") - see [com.illusion.app.domain.model.editionLabel] for the Russian display mapping, never shown as-is. */
+    val edition: String? = null,
+    /**
+     * A "<Name> (Коллекция)" NAS folder anywhere in this file's path (see LibraryScanner's
+     * collectionFolderName) - kept SEPARATE from [collectionName] (which stays .nfo <set>-only
+     * again, per feedback) rather than one field with folder winning, since Details wants two
+     * distinct rows: "Другие части" for whatever the .nfo scraper linked together, and
+     * "Коллекция" for however the files are actually organized on the NAS - these commonly
+     * disagree (a reboot's own separate TMDB collection vs. the whole franchise folder), and
+     * collapsing them into one value only ever showed one of the two.
+     */
+    val folderCollectionName: String? = null
 )
 
 /** True if any sidecar subtitle file follows the "forced" naming convention (e.g. "Movie.forced.srt") - the file itself isn't parsed, just its name. */

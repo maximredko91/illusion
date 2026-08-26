@@ -411,6 +411,7 @@
     <string name="details_director">Режиссёр</string>
     <string name="details_actors">В ролях</string>
     <string name="details_collection">Другие части</string>
+    <string name="details_folder_collection">Коллекция</string>
     <string name="details_collection_current">Смотрите сейчас</string>
     <string name="details_similar">Похожие</string>
     <string name="details_not_found">Не удалось найти этот элемент библиотеки</string>

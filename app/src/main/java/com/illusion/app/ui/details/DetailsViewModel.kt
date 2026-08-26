@@ -30,7 +30,10 @@ import kotlinx.coroutines.withContext
 data class DetailsUiState(
     val item: MediaItemEntity? = null,
     val similar: List<MediaItemEntity> = emptyList(),
+    /** .nfo <set>-based - "Другие части". */
     val collection: List<MediaItemEntity> = emptyList(),
+    /** "<Name> (Коллекция)" NAS-folder-based - "Коллекция", deliberately separate from [collection] above (see MediaItemEntity.folderCollectionName's own KDoc). */
+    val folderCollection: List<MediaItemEntity> = emptyList(),
     val episodes: List<MediaItemEntity> = emptyList(),
     /** Director/actor names with more than one title in the library - only these are worth opening a filmography for. */
     val clickablePersons: Set<String> = emptySet(),
@@ -90,10 +93,14 @@ class DetailsViewModel(
                 ?.let { libraryRepository.observeByCollection(it).first() }
                 ?.sortedBy { it.year ?: Int.MAX_VALUE }
                 ?: emptyList()
+            val folderCollection = item.folderCollectionName
+                ?.let { libraryRepository.observeByFolderCollection(it).first() }
+                ?.sortedBy { it.year ?: Int.MAX_VALUE }
+                ?: emptyList()
             val episodes = item.seriesStableId
                 ?.let { libraryRepository.observeEpisodes(it).first() }
                 ?: emptyList()
-            _state.update { it.copy(similar = similar, collection = collection, episodes = episodes) }
+            _state.update { it.copy(similar = similar, collection = collection, folderCollection = folderCollection, episodes = episodes) }
             // Independent launches (not sequential suspend calls in this same coroutine) - loadAudioTracks
             // can involve a real SMB round trip (audioTrackProber.probe), and clickable names were
             // waiting on that to finish first before their own (unrelated) library scan even started,

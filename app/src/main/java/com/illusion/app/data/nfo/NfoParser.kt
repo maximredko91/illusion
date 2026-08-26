@@ -37,6 +37,7 @@ class NfoParser {
         var premiered: String? = null
         var imdbId: String? = null
         var tmdbId: String? = null
+        var edition: String? = null
         var videoWidth: Int? = null
         var videoHeight: Int? = null
 
@@ -110,6 +111,7 @@ class NfoParser {
                             // instead of <uniqueid> - only trust it when it actually looks like an
                             // IMDb id, since <id> is a generic tag name that could mean anything else.
                             "id" -> if (text.startsWith("tt")) imdbId = imdbId ?: text
+                            "edition" -> edition = text
                             "uniqueid" -> when (currentUniqueIdType) {
                                 "imdb" -> imdbId = imdbId ?: text
                                 "tmdb" -> tmdbId = tmdbId ?: text
@@ -165,6 +167,7 @@ class NfoParser {
             premiered = premiered,
             imdbId = imdbId,
             tmdbId = tmdbId,
+            edition = edition,
             videoWidth = videoWidth,
             videoHeight = videoHeight
         )
