@@ -2,20 +2,20 @@ package com.illusion.app.data.player
 
 import android.content.Intent
 import android.net.Uri
-import com.illusion.app.data.local.entity.SmbSourceEntity
 
 /**
  * Builds an ACTION_VIEW Intent to hand playback off to whatever external video player the user
- * picks (VLC, MX Player, ...), instead of this app's own SmbDataSource-based player.
+ * picks (VLC, MX Player, Samsung's own Video Player, ...), instead of this app's own
+ * SmbDataSource-based player.
  *
  * A completed download already has a real local `content://` Uri any player can open directly.
  * A still-SMB-only item has no such Uri - this app's own playback path is a custom Media3
- * DataSource, not a real file or content provider an external app could read from - so instead
- * this builds a literal `smb://user:pass@host/share/path` Uri, which players that support SMB
- * network shares natively (VLC, MX Player) can open themselves. That does mean the source's SMB
- * credentials are placed in the Intent, visible to whichever single app is launched to handle it
- * (not broadcast) - acceptable for a home NAS on the local network, and no different in kind from
- * this app already holding those same credentials to stream it itself.
+ * DataSource, not a real file or content provider an external app could read from - so that case
+ * goes through [StreamingService] instead, which re-serves the SMB file as a plain loopback HTTP
+ * URL any player understands, same shape as [forUrl] below. A literal `smb://user:pass@host/...`
+ * Uri was tried first, but only VLC/MX Player implement their own SMB client to actually open one
+ * - every other player (Samsung's stock Video Player included, confirmed on-device) simply has no
+ * intent-filter for that scheme at all, so it never resolved to anything for them.
  */
 object ExternalPlayer {
     /**
@@ -24,32 +24,16 @@ object ExternalPlayer {
      * show its own disambiguation dialog when more than one app matches, or launch the sole match
      * directly.
      */
-    fun forDownload(contentUri: String, title: String, packageName: String? = null): Intent =
+    fun forUrl(uri: Uri, title: String, packageName: String? = null, grantReadPermission: Boolean = false): Intent =
         Intent(Intent.ACTION_VIEW).apply {
-            setDataAndType(Uri.parse(contentUri), "video/*")
-            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
+            setDataAndType(uri, "video/*")
+            var flags = Intent.FLAG_ACTIVITY_NEW_TASK
+            if (grantReadPermission) flags = flags or Intent.FLAG_GRANT_READ_URI_PERMISSION
+            addFlags(flags)
             putExtra("title", title)
             packageName?.let { setPackage(it) }
         }
 
-    fun forSmbSource(
-        source: SmbSourceEntity,
-        password: String?,
-        filePath: String,
-        title: String,
-        packageName: String? = null
-    ): Intent {
-        val encodedPath = filePath
-            .trimStart('/')
-            .split('/')
-            .joinToString("/") { Uri.encode(it) }
-        val userInfo = "${Uri.encode(source.username)}:${Uri.encode(password.orEmpty())}"
-        val url = "smb://$userInfo@${source.host}/${Uri.encode(source.share)}/$encodedPath"
-        return Intent(Intent.ACTION_VIEW).apply {
-            setDataAndType(Uri.parse(url), "video/*")
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            putExtra("title", title)
-            packageName?.let { setPackage(it) }
-        }
-    }
+    fun forDownload(contentUri: String, title: String, packageName: String? = null): Intent =
+        forUrl(Uri.parse(contentUri), title, packageName, grantReadPermission = true)
 }

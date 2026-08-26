@@ -122,6 +122,14 @@
                 <action android:name="androidx.media3.session.MediaSessionService" />
             </intent-filter>
         </service>
+
+        <!-- Loopback-only HTTP bridge (data/player/StreamingService.kt) that re-serves an SMB
+             file as a plain http://127.0.0.1 URL so external video players without their own SMB
+             client can play a not-yet-downloaded item at all. -->
+        <service
+            android:name=".data.player.StreamingService"
+            android:exported="false"
+            android:foregroundServiceType="mediaPlayback" />
     </application>
 
 </manifest>

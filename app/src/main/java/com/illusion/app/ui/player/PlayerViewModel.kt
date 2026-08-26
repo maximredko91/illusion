@@ -664,9 +664,15 @@ class PlayerViewModel(
         val intent = if (download != null) {
             ExternalPlayer.forDownload(download.contentUri, item.title, packageName)
         } else {
-            val source = smbSourceRepository.getById(item.sourceId) ?: return null
-            val password = credentialStore.getPassword(source.id)
-            ExternalPlayer.forSmbSource(source, password, item.filePath, item.title, packageName)
+            // Not downloaded - no real local Uri exists for an external app to read directly, so
+            // StreamingService re-serves this SMB file over a loopback-only HTTP url instead of a
+            // literal smb:// one (see ExternalPlayer's own KDoc for why that raw scheme approach
+            // didn't actually work for anything but VLC/MX Player).
+            smbSourceRepository.getById(item.sourceId) ?: return null
+            val streamUrl = com.illusion.app.data.player.StreamingService.streamUrl(
+                appContext, item.sourceId, item.filePath, item.sizeBytes
+            )
+            ExternalPlayer.forUrl(Uri.parse(streamUrl), item.title, packageName)
         }
         return intent.takeIf { it.resolvesToRealApp() }
     }

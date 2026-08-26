@@ -126,6 +126,10 @@ class IllusionApplication : Application(), Configuration.Provider, SingletonImag
         // One-time cleanup: downloads used to live in this app-private dir before moving to public
         // Downloads/Illusion (content Uris) - those old files are now orphaned dead weight.
         java.io.File(filesDir, "downloads").let { if (it.exists()) it.deleteRecursively() }
+        // StreamingService (the external-player HTTP bridge) is a plain Service, which can't take
+        // constructor args - it only ever needs this one process-wide factory, the same one
+        // internal playback already shares.
+        com.illusion.app.data.player.StreamingService.dataSourceFactory = smbDataSourceFactory
     }
 
     override fun newImageLoader(context: PlatformContext): ImageLoader =

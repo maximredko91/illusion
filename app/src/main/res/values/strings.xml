@@ -321,6 +321,10 @@
     <string name="download_progress_starting">Подготовка…</string>
     <string name="download_progress_percent">Загружено %1$d%%</string>
 
+    <string name="streaming_notification_channel_name">Воспроизведение во внешнем плеере</string>
+    <string name="streaming_notification_text">Передача файла внешнему плееру</string>
+    <string name="streaming_notification_stop">Остановить</string>
+
     <string name="settings_add_source">Добавить источник</string>
     <string name="settings_no_sources">Источники не добавлены</string>
     <string name="settings_delete_source">Удалить</string>

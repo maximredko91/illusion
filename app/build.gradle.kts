@@ -57,8 +57,8 @@ android {
         // 2026-08-25 once the repo went public and beta testers started using the in-app updater -
         // restarted the counter at beta1 rather than continuing the alpha sequence's number, since
         // jumping straight to "beta73" would misleadingly imply 72 prior beta builds existed.
-        versionCode = 89
-        versionName = "0.1.0-beta16"
+        versionCode = 90
+        versionName = "0.1.0-beta17"
 
         // The real bulk of a universal APK's size turned out to be native .so libs bundled per-ABI
         // (ML Kit's on-device tag-translation library alone is ~17MB *per architecture*) - R8
@@ -186,6 +186,13 @@ dependencies {
     implementation(libs.smbj)
     implementation(libs.androidx.security.crypto)
     implementation(libs.okhttp)
+
+    // Loopback-only HTTP bridge (data/player/LocalStreamingServer.kt) so external video players
+    // that don't implement their own smb:// client (i.e. everything except VLC/MX Player) can
+    // still play a not-yet-downloaded item, by handing them an ordinary http://127.0.0.1:port/...
+    // URL instead. Small/well-established, same library the previous HomeCinema app used for
+    // exactly this.
+    implementation("org.nanohttpd:nanohttpd:2.3.1")
 
     // On-device EN->RU translation for freeform .nfo <tag> values (data/translation/TagTranslator.kt) -
     // model downloads once (needs network), then runs fully offline, same one-time-network shape
