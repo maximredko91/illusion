@@ -19,7 +19,11 @@ import okhttp3.Request
  *
  * Release convention this depends on: tag the GitHub release so it contains the build's
  * versionCode as a run of digits (e.g. "v70" or "70") - [versionCodeFromTag] strips everything
- * else, so either form works. The release must also have exactly one .apk asset attached.
+ * else, so either form works. Since the build produces one .apk per ABI (see app/build.gradle.kts'
+ * own `splits.abi` block), each release attaches one .apk asset per ABI, its filename containing
+ * that ABI's own name (e.g. "illusion-81-arm64-v8a.apk") - [selectApkForDevice] picks the one
+ * matching the running device. A release with only a single unmarked .apk (the old one-file
+ * convention) still works too, falling straight through as the only candidate.
  */
 class UpdateChecker(
     private val owner: String = "maximredko91",
@@ -47,8 +51,7 @@ class UpdateChecker(
         if (release.draft || release.prerelease) return@withContext UpdateCheckResult.UpToDate
         val versionCode = versionCodeFromTag(release.tagName) ?: return@withContext UpdateCheckResult.UpToDate
         if (versionCode <= currentVersionCode) return@withContext UpdateCheckResult.UpToDate
-        val apk = release.assets.firstOrNull { it.name.endsWith(".apk", ignoreCase = true) }
-            ?: return@withContext UpdateCheckResult.UpToDate
+        val apk = selectApkForDevice(release.assets) ?: return@withContext UpdateCheckResult.UpToDate
         UpdateCheckResult.Available(
             UpdateInfo(
                 versionCode = versionCode,
@@ -87,4 +90,23 @@ class UpdateChecker(
 
     private fun versionCodeFromTag(tag: String): Int? =
         tag.filter { it.isDigit() }.takeIf { it.isNotEmpty() }?.toIntOrNull()
+
+    /**
+     * A release attaches one .apk per ABI (build.gradle.kts' `splits.abi`), so more than one
+     * .apk asset is the normal case, not an error. [android.os.Build.SUPPORTED_ABIS] lists every
+     * ABI this exact device can run, most-preferred first (e.g. a 64-bit device that can also run
+     * 32-bit code lists both, arm64 first) - matching against it in order means a device capable
+     * of more than one of this app's ABIs always gets its best one, not whichever happened to
+     * sort first among the release's assets. Falls back to the release's only .apk (or simply the
+     * first one, if for some reason none of the names match any supported ABI) rather than
+     * failing the whole check - an old single-file release, or an unmarked asset, should still be
+     * offered as an update instead of silently reporting up to date.
+     */
+    private fun selectApkForDevice(assets: List<GitHubReleaseAsset>): GitHubReleaseAsset? {
+        val apks = assets.filter { it.name.endsWith(".apk", ignoreCase = true) }
+        if (apks.size <= 1) return apks.firstOrNull()
+        return android.os.Build.SUPPORTED_ABIS.firstNotNullOfOrNull { abi ->
+            apks.firstOrNull { it.name.contains(abi, ignoreCase = true) }
+        } ?: apks.first()
+    }
 }

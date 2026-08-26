@@ -64,17 +64,41 @@ android {
         // (ML Kit's on-device tag-translation library alone is ~17MB *per architecture*) - R8
         // shrinking can't touch precompiled native code at all. Distribution here is a flat APK via
         // GitHub Releases, not Play Store's automatic per-device App Bundle splitting, so this app
-        // has to pick its own ABI(s) - both real targets (the developer's phone, the Xiaomi TV Box)
-        // are arm64. armeabi-v7a/x86/x86_64 were only ever relevant for very old devices or the
-        // emulator, and this project has never actually tested on an emulator (always the real
-        // on-device workflow - see CLAUDE.md's own testing conventions).
-        ndk {
-            abiFilters += "arm64-v8a"
-        }
+        // has to pick its own ABI(s).
+        //
+        // armeabi-v7a added back (2026-08-26) - install failed on a real Xiaomi Smart TV
+        // (MiTV-AFKR0, Android TV 11) with the generic "приложение не установлено" toast and no
+        // way to get the real PackageManager error (no network ADB on that TV's build, no USB
+        // adb from this machine either) - can't confirm the exact cause, but an arm64-only APK
+        // silently failing to install with zero explanation on an ARM-family TV chip whose exact
+        // bitness isn't confirmed is the single most likely explanation. Rather than bundling
+        // both ABIs' native libs into one bigger universal APK, `splits.abi` below produces a
+        // separate small APK per ABI instead - see that block's own comment for why, and
+        // UpdateChecker.selectApkForDevice for how the in-app updater picks the right one.
+        // x86/x86_64 still excluded - no real Xiaomi Smart TV model uses an x86 SoC.
+        //
+        // The ABI list itself lives in `splits.abi.include` below, not a defaultConfig.ndk block -
+        // AGP rejects having both set at once ("Conflicting configuration").
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("String", "TMDB_API_KEY", "\"$tmdbApiKey\"")
         buildConfigField("String", "DEV_ACCESS_PASSWORD", "\"$devAccessPassword\"")
+    }
+
+    // Per-ABI APKs instead of one universal APK bundling both architectures' native libs - the
+    // phone and the (confirmed arm64) Xiaomi TV Box stay on the small arm64-only download they
+    // already had, and the 32-bit-ARM fallback for the newly-hit Xiaomi Smart TV case only grows
+    // ITS OWN apk, not everyone else's. isUniversalApk = false - no combined fallback APK, since
+    // this app's own updater (UpdateChecker.selectApkForDevice) always has both split APKs to
+    // pick from and doesn't need one; a plain manual download from someone with neither device
+    // profile in mind is already an edge case this app's GitHub-only distribution doesn't target.
+    splits {
+        abi {
+            isEnable = true
+            reset()
+            include("arm64-v8a", "armeabi-v7a")
+            isUniversalApk = false
+        }
     }
 
     signingConfigs {

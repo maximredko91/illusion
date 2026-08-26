@@ -157,7 +157,8 @@ fun ScanProgressScreen(
                     when (currentPhase) {
                         ScanPhase.STARTING -> Text(
                             stringResource(R.string.scan_progress_starting),
-                            modifier = Modifier.padding(top = 8.dp)
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
                         )
                         // `progress` (unlike `currentPhase`) is read live from the enclosing scope,
                         // not frozen to whatever it was when this branch's fade-out started -
@@ -170,27 +171,47 @@ fun ScanProgressScreen(
                         ScanPhase.LISTING -> progress?.let { p ->
                             Text(
                                 stringResource(R.string.scan_progress_source, p.sourceIndex + 1, p.sourceCount, p.currentSourceName),
-                                modifier = Modifier.padding(top = 8.dp)
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
                             )
-                            Text(stringResource(R.string.scan_progress_listing, p.filesScanned))
+                            Text(
+                                stringResource(R.string.scan_progress_listing, p.filesScanned),
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier.fillMaxWidth()
+                            )
                         }
                         ScanPhase.INDEXING -> progress?.let { p ->
                             Text(
                                 stringResource(R.string.scan_progress_source, p.sourceIndex + 1, p.sourceCount, p.currentSourceName),
-                                modifier = Modifier.padding(top = 8.dp)
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
                             )
-                            Text(stringResource(R.string.scan_progress_files, p.filesScanned, p.filesTotal))
+                            Text(
+                                stringResource(R.string.scan_progress_files, p.filesScanned, p.filesTotal),
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier.fillMaxWidth()
+                            )
                         }
                         ScanPhase.SUCCEEDED -> {
                             val total = workInfo?.outputData?.getInt(LibraryScanWorker.KEY_TOTAL_INDEXED, 0) ?: 0
+                            // fillMaxWidth + textAlign (not just the Column's own
+                            // horizontalAlignment) - the enclosing Crossfade's animateContentSize
+                            // animates the container's width from the previous phase's (narrower)
+                            // content up to this text's own natural width, and centering relative
+                            // to a still-growing container briefly rendered this pinned toward the
+                            // left, only snapping to true center once the width animation caught
+                            // up. Centering within a width that's already full from the first
+                            // frame has nothing left to animate around.
                             Text(
                                 stringResource(R.string.scan_progress_done_count, total),
-                                modifier = Modifier.padding(top = 8.dp)
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
                             )
                             workInfo?.outputData?.getString(LibraryScanWorker.KEY_PARTIAL_ERROR)?.let { partialError ->
                                 Text(
                                     stringResource(R.string.scan_progress_partial_error, partialError),
-                                    modifier = Modifier.padding(top = 4.dp)
+                                    textAlign = TextAlign.Center,
+                                    modifier = Modifier.fillMaxWidth().padding(top = 4.dp)
                                 )
                             }
                             val continueSource = remember { MutableInteractionSource() }
@@ -206,7 +227,8 @@ fun ScanProgressScreen(
                             val errorMessage = workInfo?.outputData?.getString(LibraryScanWorker.KEY_ERROR)
                             Text(
                                 errorMessage ?: stringResource(R.string.scan_progress_failed),
-                                modifier = Modifier.padding(top = 8.dp)
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
                             )
                             val continueSource = remember { MutableInteractionSource() }
                             Button(
@@ -335,8 +357,18 @@ private fun ScanTipsCarousel(modifier: Modifier = Modifier) {
     // returning used to leave the old pager visibly torn between two tips (its delay() kept
     // ticking with no frames to animate across while stopped). Restarting fresh on RESUME avoids
     // reintroducing that with whatever timer state accumulated while backgrounded.
+    //
+    // Keyed on tips.size (a stable Int), NOT on `tips` itself - stringArrayResource returns a
+    // fresh Array<String> on every call, and a plain Kotlin Array uses reference equality, so
+    // keying on the array directly restarted this LaunchedEffect on every single recomposition of
+    // this composable. During active scanning that's many times a second (the progress ticker
+    // recomposes the whole screen on every file discovered) - each restart cancelled whatever
+    // animateScrollToPage() was already mid-flight, which is exactly why the tip carousel was seen
+    // animating partway and then freezing stuck between two tips instead of completing the slide,
+    // repeating on every subsequent auto-advance too. tips.size never changes at runtime (a fixed
+    // string-array resource), so this effect now only restarts on a real lifecycle change.
     val lifecycleOwner = LocalLifecycleOwner.current
-    LaunchedEffect(tips, lifecycleOwner) {
+    LaunchedEffect(tips.size, lifecycleOwner) {
         lifecycleOwner.repeatOnLifecycle(Lifecycle.State.RESUMED) {
             while (isActive) {
                 delay(6000)
