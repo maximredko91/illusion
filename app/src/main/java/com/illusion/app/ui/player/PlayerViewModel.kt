@@ -646,15 +646,29 @@ class PlayerViewModel(
     }
 
     /** Intent to hand [item] off to an external video player app - null if there's no compatible app or its SMB source no longer exists. */
+    /** Returns null (never an unresolvable [Intent]) if the pinned app is gone (uninstalled since
+     * it was chosen in Settings) or, with no pinned app, nothing on the device declares itself able
+     * to view smb://-scheme content at all - `resolveActivity` is what ACTION_VIEW's own dispatch
+     * uses internally, so this mirrors exactly what startActivity would actually do rather than
+     * guessing. Without this check, [load]'s "fall through to internal playback" comment was a lie -
+     * a stale/uninstalled pinned package, or a fresh device with no SMB-capable player installed at
+     * all, produced an Intent that resolved to nothing, and startActivity's resulting
+     * ActivityNotFoundException just dumped the user out to a "no app found" toast and back to
+     * Details instead of ever reaching internal playback. */
+    private fun Intent.resolvesToRealApp(): Boolean =
+        resolveActivity(appContext.packageManager) != null
+
     private suspend fun resolveExternalPlayerIntent(item: MediaItemEntity): Intent? {
         val packageName = settingsRepository.externalPlayerPackage.first()
         val download = completedDownload(item.stableId)
-        if (download != null) {
-            return ExternalPlayer.forDownload(download.contentUri, item.title, packageName)
+        val intent = if (download != null) {
+            ExternalPlayer.forDownload(download.contentUri, item.title, packageName)
+        } else {
+            val source = smbSourceRepository.getById(item.sourceId) ?: return null
+            val password = credentialStore.getPassword(source.id)
+            ExternalPlayer.forSmbSource(source, password, item.filePath, item.title, packageName)
         }
-        val source = smbSourceRepository.getById(item.sourceId) ?: return null
-        val password = credentialStore.getPassword(source.id)
-        return ExternalPlayer.forSmbSource(source, password, item.filePath, item.title, packageName)
+        return intent.takeIf { it.resolvesToRealApp() }
     }
 
     private suspend fun loadThumbnailFrames(stableId: String) {
