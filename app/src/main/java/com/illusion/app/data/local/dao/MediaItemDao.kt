@@ -93,6 +93,10 @@ interface MediaItemDao {
     @Query("SELECT * FROM media_items WHERE collectionName = :collectionName AND isOrphanedDownload = 0")
     fun observeByCollection(collectionName: String): Flow<List<MediaItemEntity>>
 
+    /** Every item that belongs to some collection, for the Home/Library "Коллекции" row - grouped and reduced to one representative + a count per collectionName in [LibraryRepository.observeCollections], not here, since that grouping logic is shared with nothing else SQL-side would make simpler. Deliberately narrower than a full-table observeAll() - most libraries have far fewer collection members than total items. */
+    @Query("SELECT * FROM media_items WHERE collectionName IS NOT NULL AND isOrphanedDownload = 0")
+    fun observeAllInCollections(): Flow<List<MediaItemEntity>>
+
     @Query("SELECT * FROM media_items WHERE category = :category AND isOrphanedDownload = 0")
     suspend fun getByCategory(category: Category): List<MediaItemEntity>
 

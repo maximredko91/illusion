@@ -1,5 +1,6 @@
 package com.illusion.app.ui.home
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -51,6 +52,7 @@ import com.illusion.app.ui.common.posterCardMinWidth
 fun HomeScreen(
     continueWatching: List<ContinueWatchingItem>,
     randomPicks: List<MediaItemEntity>,
+    collections: List<com.illusion.app.data.repository.LibraryRepository.CollectionSummary>,
     onRefreshRandomPicks: () -> Unit,
     onOpenSettings: () -> Unit,
     onOpenFavorites: () -> Unit,
@@ -140,6 +142,68 @@ fun HomeScreen(
                 onOpenItem = onOpenItem,
                 onRefresh = onRefreshRandomPicks
             )
+            if (collections.isNotEmpty()) {
+                CollectionCarousel(collections = collections, onOpenItem = onOpenItem)
+            }
+        }
+    }
+}
+
+/**
+ * One card per franchise (see LibraryRepository.observeCollections' own KDoc for why this row
+ * exists) - tapping jumps straight to the representative item's own Details screen, which already
+ * renders every member of the same collection in its own "Коллекция" row (see DetailsScreen), so
+ * this deliberately doesn't need a dedicated collection-browsing screen of its own to be useful.
+ */
+@Composable
+private fun CollectionCarousel(
+    collections: List<com.illusion.app.data.repository.LibraryRepository.CollectionSummary>,
+    onOpenItem: (String) -> Unit
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(
+            stringResource(R.string.home_collections),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
+        )
+        LazyRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            contentPadding = PaddingValues(horizontal = 16.dp),
+            modifier = Modifier.focusGroup()
+        ) {
+            items(collections, key = { it.name }) { collection ->
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.width(posterCardMinWidth())
+                ) {
+                    androidx.compose.foundation.layout.Box {
+                        PosterCard(
+                            item = collection.representative,
+                            onClick = { onOpenItem(collection.representative.stableId) },
+                            modifier = Modifier.width(posterCardMinWidth())
+                        )
+                        Text(
+                            stringResource(R.string.home_collection_item_count, collection.itemCount),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onPrimary,
+                            modifier = Modifier
+                                .align(Alignment.TopEnd)
+                                .padding(6.dp)
+                                .background(
+                                    MaterialTheme.colorScheme.primary,
+                                    androidx.compose.foundation.shape.RoundedCornerShape(50)
+                                )
+                                .padding(horizontal = 8.dp, vertical = 2.dp)
+                        )
+                    }
+                    Text(
+                        collection.name,
+                        style = MaterialTheme.typography.bodySmall,
+                        maxLines = 1,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(top = 4.dp)
+                    )
+                }
+            }
         }
     }
 }

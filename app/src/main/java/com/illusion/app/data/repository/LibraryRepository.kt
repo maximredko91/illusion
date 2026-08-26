@@ -53,6 +53,27 @@ class LibraryRepository(private val dao: MediaItemDao) {
     fun observeByCollection(collectionName: String): Flow<List<MediaItemEntity>> =
         dao.observeByCollection(collectionName)
 
+    /**
+     * One card per collection for the Home/Library "Коллекции" row - browsing a big franchise
+     * folder (see LibraryScanner's own "(Коллекция)" folder support) as dozens of individual
+     * poster cards buried the ones a user actually wants (e.g. "Капитан Марвел" lost somewhere
+     * in 30+ MCU cards) with no way to jump straight to the whole set. [representative] is
+     * whichever member has the earliest [MediaItemEntity.year] (falls back to the first one found
+     * if none have a year) - same "earliest first" convention [collapseSeriesToRepresentatives]
+     * already uses for a series' own representative card.
+     */
+    data class CollectionSummary(val name: String, val representative: MediaItemEntity, val itemCount: Int)
+
+    fun observeCollections(): Flow<List<CollectionSummary>> =
+        dao.observeAllInCollections().map { items ->
+            items.groupBy { it.collectionName!! }
+                .map { (name, members) ->
+                    val representative = members.minByOrNull { it.year ?: Int.MAX_VALUE } ?: members.first()
+                    CollectionSummary(name, representative, members.size)
+                }
+                .sortedBy { it.name }
+        }
+
     fun search(query: String): Flow<List<MediaItemEntity>> =
         dao.search(query, com.illusion.app.domain.model.russianGenreToEnglish(query))
 

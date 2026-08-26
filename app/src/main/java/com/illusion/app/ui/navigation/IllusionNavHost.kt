@@ -730,9 +730,11 @@ private fun TabsHost(
             )
             val continueWatching by homeViewModel.continueWatching.collectAsState()
             val randomPicks by homeViewModel.randomPicks.collectAsState()
+            val collections by homeViewModel.collections.collectAsState()
             HomeScreen(
                 continueWatching = continueWatching,
                 randomPicks = randomPicks,
+                collections = collections,
                 onRefreshRandomPicks = homeViewModel::refreshRandomPicks,
                 onOpenSettings = { navController.navigate(Destination.Settings) },
                 onOpenFavorites = { navController.navigate(Destination.Favorites) },

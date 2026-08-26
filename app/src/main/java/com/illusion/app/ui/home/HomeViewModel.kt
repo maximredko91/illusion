@@ -44,6 +44,9 @@ class HomeViewModel(
     private val _randomPicks = MutableStateFlow<List<MediaItemEntity>>(emptyList())
     val randomPicks: StateFlow<List<MediaItemEntity>> = _randomPicks.asStateFlow()
 
+    val collections: StateFlow<List<LibraryRepository.CollectionSummary>> = libraryRepository.observeCollections()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
     init {
         refreshRandomPicks()
     }
