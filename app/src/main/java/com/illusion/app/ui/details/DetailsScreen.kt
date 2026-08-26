@@ -451,88 +451,9 @@ private fun DetailsContent(
                 )
             }
 
-            // Moved here from the play-button row below (per user feedback) - top-right on the
-            // fanart mirrors the back button's placement on the left, and reads as a standard
-            // "favorite this" corner action the way most media apps place it, rather than
-            // competing for space with Play/Trailer/Download in one row.
-            val haptics = LocalHapticFeedback.current
-            val favoriteSource = remember { MutableInteractionSource() }
-            val favoriteScale = remember { Animatable(1f) }
-            val favoriteScope = rememberCoroutineScope()
-            val favoriteTint by animateColorAsState(
-                targetValue = if (isFavorite) Color(0xFFE53935) else Color.White,
-                label = "favoriteTint"
-            )
-            IconButton(
-                onClick = {
-                    haptics.toggle(!isFavorite)
-                    onToggleFavorite()
-                    // A little bounce every tap - in either direction (add or remove) - gives the
-                    // action some tactile weight beyond just the icon/color swap underneath it.
-                    favoriteScope.launch {
-                        favoriteScale.snapTo(0.7f)
-                        favoriteScale.animateTo(1f, animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow))
-                    }
-                },
-                interactionSource = favoriteSource,
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(4.dp)
-                    .background(Color.Black.copy(alpha = 0.5f), CircleShape)
-                    .focusHighlight(favoriteSource, color = Color.White)
-            ) {
-                Crossfade(targetState = isFavorite, label = "favoriteIcon") { favorite ->
-                    Icon(
-                        imageVector = if (favorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                        contentDescription = stringResource(
-                            if (favorite) R.string.details_favorite_remove else R.string.details_favorite_add
-                        ),
-                        tint = favoriteTint,
-                        modifier = Modifier.scale(favoriteScale.value)
-                    )
-                }
-            }
-
-            // The only remaining free corner - mirrors the favorite button's own styling exactly.
-            // Manual override for the player's automatic "last 5s of playback = watched" marking:
-            // covers watching elsewhere, skipping the credits before that threshold, or wanting to
-            // reset an item back to "not watched" without rewatching it.
-            val watchedSource = remember { MutableInteractionSource() }
-            val watchedScale = remember { Animatable(1f) }
-            val watchedScope = rememberCoroutineScope()
-            val watchedTint by animateColorAsState(
-                targetValue = if (isWatched) MaterialTheme.colorScheme.primary else Color.White,
-                label = "watchedTint"
-            )
-            IconButton(
-                onClick = {
-                    haptics.toggle(!isWatched)
-                    onToggleWatched()
-                    watchedScope.launch {
-                        watchedScale.snapTo(0.7f)
-                        watchedScale.animateTo(1f, animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow))
-                    }
-                },
-                interactionSource = watchedSource,
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(4.dp)
-                    .background(Color.Black.copy(alpha = 0.5f), CircleShape)
-                    .focusHighlight(watchedSource, color = Color.White)
-            ) {
-                Crossfade(targetState = isWatched, label = "watchedIcon") { watched ->
-                    Icon(
-                        imageVector = if (watched) Icons.Default.CheckCircle else Icons.Default.RadioButtonUnchecked,
-                        contentDescription = stringResource(
-                            if (watched) R.string.details_watched_remove else R.string.details_watched_add
-                        ),
-                        tint = watchedTint,
-                        modifier = Modifier.scale(watchedScale.value)
-                    )
-                }
-            }
         }
 
+        val haptics = LocalHapticFeedback.current
         Row(modifier = Modifier.padding(horizontal = 16.dp)) {
             val poster = item.posterModel
             if (poster != null) {
@@ -551,29 +472,102 @@ private fun DetailsContent(
                 // which leaves the title column narrower, which wraps the title onto even more
                 // lines, which grows the column taller still. The title itself is now capped at 4
                 // lines below instead, which keeps the column from running away in the first place.
-                var posterModifier = Modifier
-                    .width(132.dp)
-                    .aspectRatio(2f / 3f)
                 val posterSource = remember { MutableInteractionSource() }
-                posterModifier = posterModifier
-                    .focusHighlight(posterSource)
-                    .clickable(interactionSource = posterSource, indication = LocalIndication.current) { zoomedImage = poster; zoomedImageIsFanart = false }
-                Box(modifier = posterModifier) {
-                    var posterLoading by remember { mutableStateOf(true) }
-                    AsyncImage(
-                        model = poster,
-                        contentDescription = item.title,
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize(),
-                        onLoading = { posterLoading = true },
-                        onSuccess = { posterLoading = false },
-                        onError = { posterLoading = false }
-                    )
-                    if (posterLoading) {
-                        Box(modifier = Modifier.fillMaxSize().shimmer())
+                Column(modifier = Modifier.width(132.dp)) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .aspectRatio(2f / 3f)
+                            .focusHighlight(posterSource)
+                            .clickable(interactionSource = posterSource, indication = LocalIndication.current) { zoomedImage = poster; zoomedImageIsFanart = false }
+                    ) {
+                        var posterLoading by remember { mutableStateOf(true) }
+                        AsyncImage(
+                            model = poster,
+                            contentDescription = item.title,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize(),
+                            onLoading = { posterLoading = true },
+                            onSuccess = { posterLoading = false },
+                            onError = { posterLoading = false }
+                        )
+                        if (posterLoading) {
+                            Box(modifier = Modifier.fillMaxSize().shimmer())
+                        }
+                        item.rating?.let { rating ->
+                            RatingBadge(rating, modifier = Modifier.align(Alignment.TopStart).padding(6.dp))
+                        }
                     }
-                    item.rating?.let { rating ->
-                        RatingBadge(rating, modifier = Modifier.align(Alignment.TopStart).padding(6.dp))
+                    // Moved down here from two floating corner buttons on the fanart (per user
+                    // feedback) - no more translucent circle backdrop (that was only ever needed to
+                    // stay legible over an arbitrary photo; sitting under the poster, both buttons
+                    // are on the screen's own themed background instead) and both tints now come
+                    // from the color scheme so they read correctly in either light or dark theme,
+                    // instead of a fixed white that would have washed out on a light background.
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        modifier = Modifier.fillMaxWidth().padding(top = 4.dp)
+                    ) {
+                        val favoriteScale = remember { Animatable(1f) }
+                        val favoriteScope = rememberCoroutineScope()
+                        val favoriteTint by animateColorAsState(
+                            targetValue = if (isFavorite) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
+                            label = "favoriteTint"
+                        )
+                        val favoriteSource = remember { MutableInteractionSource() }
+                        IconButton(
+                            onClick = {
+                                haptics.toggle(!isFavorite)
+                                onToggleFavorite()
+                                favoriteScope.launch {
+                                    favoriteScale.snapTo(0.7f)
+                                    favoriteScale.animateTo(1f, animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow))
+                                }
+                            },
+                            interactionSource = favoriteSource,
+                            modifier = Modifier.focusHighlight(favoriteSource)
+                        ) {
+                            Crossfade(targetState = isFavorite, label = "favoriteIcon") { favorite ->
+                                Icon(
+                                    imageVector = if (favorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                                    contentDescription = stringResource(
+                                        if (favorite) R.string.details_favorite_remove else R.string.details_favorite_add
+                                    ),
+                                    tint = favoriteTint,
+                                    modifier = Modifier.scale(favoriteScale.value)
+                                )
+                            }
+                        }
+                        val watchedScale = remember { Animatable(1f) }
+                        val watchedScope = rememberCoroutineScope()
+                        val watchedTint by animateColorAsState(
+                            targetValue = if (isWatched) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                            label = "watchedTint"
+                        )
+                        val watchedSource = remember { MutableInteractionSource() }
+                        IconButton(
+                            onClick = {
+                                haptics.toggle(!isWatched)
+                                onToggleWatched()
+                                watchedScope.launch {
+                                    watchedScale.snapTo(0.7f)
+                                    watchedScale.animateTo(1f, animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow))
+                                }
+                            },
+                            interactionSource = watchedSource,
+                            modifier = Modifier.focusHighlight(watchedSource)
+                        ) {
+                            Crossfade(targetState = isWatched, label = "watchedIcon") { watched ->
+                                Icon(
+                                    imageVector = if (watched) Icons.Default.CheckCircle else Icons.Default.RadioButtonUnchecked,
+                                    contentDescription = stringResource(
+                                        if (watched) R.string.details_watched_remove else R.string.details_watched_add
+                                    ),
+                                    tint = watchedTint,
+                                    modifier = Modifier.scale(watchedScale.value)
+                                )
+                            }
+                        }
                     }
                 }
             }

@@ -17,6 +17,10 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.calculateEndPadding
+import androidx.compose.foundation.layout.calculateStartPadding
+import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -65,6 +69,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -185,6 +190,18 @@ fun LibraryScreen(
     // No longer read by a TopAppBar's `windowInsets` param (there's no TopAppBar here anymore) -
     // applied directly as windowInsetsPadding() on the header content below instead.
     val topBarInsets = com.illusion.app.ui.common.rememberLatchedStatusBarsInsets()
+
+    // In landscape a punch-hole camera cutout sits on a *side* edge, not the top - the header
+    // above already dodges it (topBarInsets unions in displayCutout), but that's the grid's own
+    // first item, which scrolls away with everything else. Every ordinary poster card below it
+    // used a flat 8dp start/end contentPadding with no idea the cutout existed, so once scrolled
+    // past the header, cards could sit directly behind the hole - there was always room to shift
+    // them clear of it (this device's TV-mode NavigationRail already claims the true left edge,
+    // leaving slack between it and the cutout), the grid just never accounted for it.
+    val cutoutPadding = WindowInsets.displayCutout.asPaddingValues()
+    val layoutDirection = LocalLayoutDirection.current
+    val gridStartPadding = 8.dp + cutoutPadding.calculateStartPadding(layoutDirection)
+    val gridEndPadding = 8.dp + cutoutPadding.calculateEndPadding(layoutDirection)
 
     // Scroll-to-top FAB: appears once the user has scrolled a few rows down, so they can jump
     // straight back to the top of a long library instead of flinging repeatedly - per feedback,
@@ -336,7 +353,7 @@ fun LibraryScreen(
                     // "the grid got heavy, I have to swipe hard to get anywhere" rather
                     // than smoother. Platform default fling is the correct baseline here.
                     modifier = Modifier.fillMaxSize().focusGroup(),
-                    contentPadding = PaddingValues(bottom = 8.dp, start = 8.dp, end = 8.dp)
+                    contentPadding = PaddingValues(bottom = 8.dp, start = gridStartPadding, end = gridEndPadding)
                 ) {
                     // The header rides away with the rest of the scroll (see this function's
                     // top comment) - full-width span so it doesn't get squeezed into one column.
