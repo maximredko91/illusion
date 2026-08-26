@@ -490,7 +490,31 @@ private fun DetailsContent(
             }
         }
 
-        Row(modifier = Modifier.padding(horizontal = 16.dp)) {
+        // getString (not stringResource) since the hint text is picked inside an onClick lambda,
+        // not composed directly - stringResource can't be called from a non-composable callback.
+        val hintContext = androidx.compose.ui.platform.LocalContext.current
+        // ONE shared hint, not one per icon - two independent bubbles could both be visible at
+        // once (tapping both icons in quick succession) and, sitting right next to each other in
+        // a narrow column, their text visibly overlapped. Both icon buttons below update this
+        // single state instead of their own.
+        var hintGeneration by remember { mutableStateOf(0) }
+        var hintVisible by remember { mutableStateOf(false) }
+        var hintText by remember { mutableStateOf("") }
+        LaunchedEffect(hintGeneration) {
+            if (hintGeneration == 0) return@LaunchedEffect
+            hintVisible = true
+            kotlinx.coroutines.delay(1500)
+            hintVisible = false
+        }
+        // The bubble itself is rendered as this Box's LAST child, below - Compose draws a Box's
+        // children in declaration order, so being last guarantees it paints on top of *both* the
+        // poster column (which owns the icon buttons that trigger it) and the metadata column
+        // next to it. It used to live inside the poster column's own local Box instead - that
+        // subtree draws before the metadata column's (declared right after it in the outer Row),
+        // so wherever the bubble grew far enough right to visually reach the genre chips, those
+        // chips (painted later) rendered on top of it instead of the other way around.
+        Box(modifier = Modifier.padding(horizontal = 16.dp)) {
+        Row {
             val poster = item.posterModel
             if (poster != null) {
                 // Shared-element bounds-morph from the grid poster removed (per user feedback -
@@ -540,25 +564,6 @@ private fun DetailsContent(
                     // are on the screen's own themed background instead) and both tints now come
                     // from the color scheme so they read correctly in either light or dark theme,
                     // instead of a fixed white that would have washed out on a light background.
-                    // getString (not stringResource) since the hint text is picked inside an
-                    // onClick lambda, not composed directly - stringResource can't be called
-                    // from a non-composable callback.
-                    val hintContext = androidx.compose.ui.platform.LocalContext.current
-                    // ONE shared hint, not one per icon - two independent bubbles could both be
-                    // visible at once (tapping both icons in quick succession) and, since they
-                    // sit right next to each other in a narrow column with nowhere to go but
-                    // toward each other or off the screen edge, their text visibly overlapped.
-                    // Both buttons below now just update this single state instead of their own.
-                    var hintGeneration by remember { mutableStateOf(0) }
-                    var hintVisible by remember { mutableStateOf(false) }
-                    var hintText by remember { mutableStateOf("") }
-                    LaunchedEffect(hintGeneration) {
-                        if (hintGeneration == 0) return@LaunchedEffect
-                        hintVisible = true
-                        kotlinx.coroutines.delay(1500)
-                        hintVisible = false
-                    }
-                    Box {
                     Row(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         modifier = Modifier.fillMaxWidth().padding(top = 4.dp)
@@ -640,16 +645,6 @@ private fun DetailsContent(
                             }
                         }
                     }
-                    // Single shared bubble, positioned above the whole row (not per-icon) -
-                    // anchored at its top-start and growing rightward into the open metadata
-                    // column regardless of which icon was tapped, since both icons sit in this
-                    // same narrow left-hand column with real room only to their right.
-                    ActionHintBubble(
-                        text = hintText,
-                        visible = hintVisible,
-                        modifier = Modifier.wrapContentWidth(Alignment.Start, unbounded = true).align(Alignment.TopStart).offset(y = (-24).dp)
-                    )
-                    }
                 }
             }
             Column(
@@ -729,6 +724,19 @@ private fun DetailsContent(
                     }
                 }
             }
+        }
+        // Anchored to this Box's own top-start (which now carries the 16dp horizontal padding
+        // that used to live on the Row directly above, so this shares the same coordinate frame
+        // as the icon row rather than landing 16dp off from it) - the vertical offset is derived,
+        // not eyeballed: poster width is a fixed 132dp at a fixed 2:3 aspect ratio, so its image
+        // is exactly 198dp tall; the icon row sits right below it with 4dp of its own top padding,
+        // putting the icon row's own top edge at 202dp. 28dp above that (174dp) lands the bubble
+        // just above the icons, same visual gap the old per-icon placement used.
+        ActionHintBubble(
+            text = hintText,
+            visible = hintVisible,
+            modifier = Modifier.wrapContentWidth(Alignment.Start, unbounded = true).align(Alignment.TopStart).offset(y = 174.dp)
+        )
         }
 
         // Tagline and studio moved out of the narrow column next to the poster (where studio used

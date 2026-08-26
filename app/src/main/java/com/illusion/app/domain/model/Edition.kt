@@ -13,6 +13,13 @@ import com.illusion.app.data.local.entity.MediaItemEntity
 val MediaItemEntity.editionLabel: String?
     get() = edition?.trim()?.takeIf { it.isNotEmpty() }?.let { raw ->
         when (raw.uppercase().replace(' ', '_')) {
+            // "NONE" is Kodi/tinyMediaManager's own explicit "no particular edition" value, not
+            // an unrecognized code - confirmed on-device it shows up in real .nfo files (a
+            // scraper writes it even when there's genuinely nothing to say here). Showing the
+            // literal word "NONE" on a movie card read as a real (blank) edition, not "there
+            // isn't one" - null here means the whole meta line just omits it, same as any other
+            // absent field.
+            "NONE" -> return@let null
             "DIRECTORS_CUT", "DIRECTOR'S_CUT" -> "Режиссёрская версия"
             "EXTENDED_EDITION", "EXTENDED_CUT", "EXTENDED" -> "Расширенная версия"
             "THEATRICAL_CUT", "THEATRICAL_EDITION", "THEATRICAL" -> "Театральная версия"
