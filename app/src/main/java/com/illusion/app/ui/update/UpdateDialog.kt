@@ -34,12 +34,30 @@ fun UpdatePrompt(viewModel: UpdateViewModel) {
     val context = LocalContext.current
     val uiState by viewModel.state.collectAsState()
     var installPromptDismissed by remember(uiState.downloadedFile) { mutableStateOf(false) }
+    // Both of these used to swallow a failed startActivity() with a bare runCatching{} - on a
+    // device with no package-installer UI at all (some Android TV boxes), pressing "Установить"
+    // then did visibly nothing, leaving the user to assume it hadn't worked and back out/retry the
+    // whole update from scratch. Surfacing the failure explicitly at least tells them why, instead
+    // of a silent no-op that looked indistinguishable from a hang.
+    var launchFailed by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
-        viewModel.installIntent.collect { intent -> runCatching { context.startActivity(intent) } }
+        viewModel.installIntent.collect { intent ->
+            runCatching { context.startActivity(intent) }.onFailure { launchFailed = true }
+        }
     }
     LaunchedEffect(Unit) {
-        viewModel.permissionSettingsIntent.collect { intent -> runCatching { context.startActivity(intent) } }
+        viewModel.permissionSettingsIntent.collect { intent ->
+            runCatching { context.startActivity(intent) }.onFailure { launchFailed = true }
+        }
+    }
+    if (launchFailed) {
+        AlertDialog(
+            onDismissRequest = { launchFailed = false },
+            title = { Text("Не удалось запустить установку") },
+            text = { Text("На этом устройстве нет приложения для установки APK. Скачайте файл вручную со страницы релизов на GitHub и установите через файловый менеджер.") },
+            confirmButton = { TextButton(onClick = { launchFailed = false }) { Text("Понятно") } }
+        )
     }
 
     val update = uiState.update

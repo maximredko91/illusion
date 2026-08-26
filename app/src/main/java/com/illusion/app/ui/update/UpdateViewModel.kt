@@ -149,6 +149,18 @@ class UpdateViewModel(
 
     fun startDownload() {
         val update = _state.value.update ?: return
+        // A previous attempt may have already downloaded this exact version - e.g. install()
+        // failed silently (no package installer / no "install unknown apps" screen at all on some
+        // Android TV boxes) and the user, seeing nothing happen, backed out and re-triggered the
+        // whole flow from Settings. Re-downloading over what can be a slow home-network link for
+        // no reason (WorkScheduler.enqueueUpdateDownload's REPLACE policy would otherwise always
+        // restart from scratch) is exactly the "скачивалось заново" symptom reported on-device -
+        // skip straight to the install-ready state if the file is already sitting there intact.
+        val existing = File(UpdateDownloadWorker.apkDir(appContext), "illusion-${update.versionCode}.apk")
+        if (existing.exists() && existing.length() > 0L) {
+            _state.update { it.copy(isDownloading = false, downloadProgress = 1f, downloadedFile = existing, error = null) }
+            return
+        }
         WorkScheduler.enqueueUpdateDownload(appContext, update.apkDownloadUrl, update.versionCode)
         _state.update { it.copy(isDownloading = true, downloadProgress = 0f, error = null) }
     }

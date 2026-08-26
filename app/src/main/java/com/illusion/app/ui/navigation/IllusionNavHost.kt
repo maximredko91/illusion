@@ -172,6 +172,15 @@ fun IllusionNavHost(
         LocalHapticFeedback provides gatedHapticFeedback
     ) {
         val navController = rememberNavController()
+        // Player is deliberately exempt from the overscan margin below - it's a fullscreen
+        // immersive video surface with its own gesture zones/controls math built around actually
+        // filling the screen, not general UI chrome. Squeezing it into an 84%-size box broke
+        // playback outright on-device (reported: "ни один фильм нельзя посмотреть, сломана
+        // верстка") rather than just looking letterboxed - video content also tolerates a sliver
+        // of physical overscan cropping at the true edge far better than text/icons do, which is
+        // the entire reason the margin exists for the rest of the UI in the first place.
+        val currentBackStackEntry by navController.currentBackStackEntryAsState()
+        val isPlayerScreen = currentBackStackEntry?.destination?.hasRoute<Destination.Player>() == true
         // Destinations with no Scaffold of their own (Details, Person, ...) render straight onto
         // whatever is behind them and rely on LocalContentColor for their default (unspecified)
         // Text colors - previously an outer Scaffold (removed when tab-switching moved off
@@ -194,7 +203,7 @@ fun IllusionNavHost(
             // user reported icons still clipped (and visible spare room past them) at 5% on this
             // specific panel, whose real crop is evidently bigger than the guideline's baseline.
             // A phone/tablet never hits this branch, so nothing changes there.
-            if ((uiMode ?: UiMode.PHONE) == UiMode.TV) {
+            if ((uiMode ?: UiMode.PHONE) == UiMode.TV && !isPlayerScreen) {
                 androidx.compose.foundation.layout.BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
                     IllusionNavGraph(
                         app,
