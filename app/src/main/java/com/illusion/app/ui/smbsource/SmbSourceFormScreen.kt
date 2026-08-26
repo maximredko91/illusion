@@ -111,6 +111,9 @@ fun SmbSourceFormFields(
         // Test/Save was tedious for fields most setups never touch.
         val uiMode = LocalUiMode.current
         var advancedExpanded by remember { mutableStateOf(uiMode != UiMode.TV) }
+        // Declared here (not next to the password field itself, further down) so both that field
+        // and the Save button below can reset it back to hidden.
+        var passwordVisible by remember { mutableStateOf(false) }
         val advancedToggleSource = remember { MutableInteractionSource() }
         androidx.compose.material3.TextButton(
             onClick = { advancedExpanded = !advancedExpanded },
@@ -152,7 +155,6 @@ fun SmbSourceFormFields(
                     interactionSource = usernameSource,
                     modifier = Modifier.fillMaxWidth().focusHighlight(usernameSource).dpadFieldNavigation()
                 )
-                var passwordVisible by remember { mutableStateOf(false) }
         val passwordSource = remember { MutableInteractionSource() }
         val passwordVisibilitySource = remember { MutableInteractionSource() }
         OutlinedTextField(
@@ -177,6 +179,14 @@ fun SmbSourceFormFields(
             interactionSource = passwordSource,
             modifier = Modifier.fillMaxWidth().focusHighlight(passwordSource).dpadFieldNavigation()
         )
+        // Revealing the password to double-check what was typed used to stay revealed
+        // indefinitely afterwards - nothing ever re-hid it, so a successful test (the form stays
+        // open afterwards, unlike a successful save which navigates away) left the actual
+        // password sitting in plain text on screen for anyone glancing at the device. Re-hides on
+        // a successful test, the moment there's no longer any real reason left to have it visible.
+        androidx.compose.runtime.LaunchedEffect(state.testState) {
+            if (state.testState == TestConnectionState.Success) passwordVisible = false
+        }
             }
         }
 
@@ -222,7 +232,10 @@ fun SmbSourceFormFields(
 
         val saveSource = remember { MutableInteractionSource() }
         Button(
-            onClick = onSave,
+            // Also re-hides here (belt and suspenders alongside the successful-test case above) -
+            // a failed save (validation, etc.) keeps this screen open with the password still
+            // revealed otherwise.
+            onClick = { passwordVisible = false; onSave() },
             enabled = state.canSave,
             interactionSource = saveSource,
             modifier = Modifier.fillMaxWidth().focusHighlight(saveSource)
