@@ -10,6 +10,7 @@ import androidx.compose.animation.core.spring
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.LocalIndication
@@ -54,9 +55,9 @@ import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.RadioButtonUnchecked
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Theaters
 import androidx.compose.material3.AlertDialog
@@ -134,6 +135,7 @@ import com.illusion.app.ui.common.ThumbnailImage
 import com.illusion.app.ui.common.shimmer
 import com.illusion.app.ui.common.ZoomableImageViewer
 import com.illusion.app.ui.common.focusHighlight
+import com.illusion.app.ui.common.tick
 import com.illusion.app.ui.common.toggle
 import com.illusion.app.ui.theme.IllusionTheme
 
@@ -307,6 +309,7 @@ private fun DetailsContent(
             .verticalScroll(rememberScrollState())
             .padding(horizontal = cutoutHorizontalDp)
     ) {
+        val haptics = LocalHapticFeedback.current
         Box {
             val fanart = item.fanartModel
             val fanartSource = remember { MutableInteractionSource() }
@@ -411,49 +414,56 @@ private fun DetailsContent(
                     )
                 }
             }
+            // No more translucent circle backdrop - per feedback a theme-driven black/white tint
+            // still risked blending into whatever the fanart happened to show underneath (e.g. a
+            // white icon over a bright sky), so both now use the accent color instead, which reads
+            // as a distinct UI control against any photo rather than trying to match it.
+            val cornerIconTint = MaterialTheme.colorScheme.primary
             val backSource = remember { MutableInteractionSource() }
             IconButton(
-                onClick = onBack,
+                onClick = {
+                    haptics.tick()
+                    onBack()
+                },
                 interactionSource = backSource,
                 modifier = Modifier
                     .padding(4.dp)
-                    // A plain white icon washes out on a bright fanart (same problem the poster
-                    // corner badges already solve) - same translucent-black pill treatment as
-                    // RatingBadge/MpaaBadge, so it stays legible regardless of the image underneath.
-                    .background(Color.Black.copy(alpha = 0.5f), CircleShape)
-                    .focusHighlight(backSource, color = Color.White)
+                    .focusHighlight(backSource, color = cornerIconTint)
             ) {
                 Icon(
                     Icons.AutoMirrored.Filled.ArrowBack,
                     contentDescription = stringResource(R.string.details_back),
-                    tint = Color.White
+                    tint = cornerIconTint
                 )
             }
 
             // Escape hatch for drilling several Similar/series hops deep (Movie -> part 2 -> part
             // 3 -> ...) - onBack still steps back one card at a time (so returning to the card the
             // user actually came from works normally), this jumps straight to the main screen
-            // instead of requiring one "Назад" per hop.
+            // instead of requiring one "Назад" per hop. Moved to the top-right corner per feedback
+            // (was bottom-left) - top-right is otherwise unused now that favorite/watched moved
+            // under the poster.
             val homeSource = remember { MutableInteractionSource() }
             IconButton(
-                onClick = onGoHome,
+                onClick = {
+                    haptics.tick()
+                    onGoHome()
+                },
                 interactionSource = homeSource,
                 modifier = Modifier
-                    .align(Alignment.BottomStart)
+                    .align(Alignment.TopEnd)
                     .padding(4.dp)
-                    .background(Color.Black.copy(alpha = 0.5f), CircleShape)
-                    .focusHighlight(homeSource, color = Color.White)
+                    .focusHighlight(homeSource, color = cornerIconTint)
             ) {
                 Icon(
                     Icons.Default.Home,
                     contentDescription = stringResource(R.string.details_go_home),
-                    tint = Color.White
+                    tint = cornerIconTint
                 )
             }
 
         }
 
-        val haptics = LocalHapticFeedback.current
         Row(modifier = Modifier.padding(horizontal = 16.dp)) {
             val poster = item.posterModel
             if (poster != null) {
@@ -505,38 +515,67 @@ private fun DetailsContent(
                     // from the color scheme so they read correctly in either light or dark theme,
                     // instead of a fixed white that would have washed out on a light background.
                     Row(
-                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
                         modifier = Modifier.fillMaxWidth().padding(top = 4.dp)
                     ) {
+                        // getString (not stringResource) since the hint text is picked inside an
+                        // onClick lambda, not composed directly - stringResource can't be called
+                        // from a non-composable callback.
+                        val hintContext = androidx.compose.ui.platform.LocalContext.current
                         val favoriteScale = remember { Animatable(1f) }
                         val favoriteScope = rememberCoroutineScope()
                         val favoriteTint by animateColorAsState(
-                            targetValue = if (isFavorite) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
+                            targetValue = if (isFavorite) Color(0xFFE53935) else MaterialTheme.colorScheme.onSurfaceVariant,
                             label = "favoriteTint"
                         )
                         val favoriteSource = remember { MutableInteractionSource() }
-                        IconButton(
-                            onClick = {
-                                haptics.toggle(!isFavorite)
-                                onToggleFavorite()
-                                favoriteScope.launch {
-                                    favoriteScale.snapTo(0.7f)
-                                    favoriteScale.animateTo(1f, animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow))
+                        // A brief bubble confirming what just happened, rather than only the
+                        // icon/color swap - per feedback, the swap alone wasn't a clear enough
+                        // confirmation. Keyed on a generation counter (not a plain boolean) so
+                        // mashing the button restarts the timer's LaunchedEffect each time instead
+                        // of the first tap's coroutine racing a stale hide against a later tap.
+                        var favoriteHintGeneration by remember { mutableStateOf(0) }
+                        var favoriteHintVisible by remember { mutableStateOf(false) }
+                        var favoriteHintText by remember { mutableStateOf("") }
+                        LaunchedEffect(favoriteHintGeneration) {
+                            if (favoriteHintGeneration == 0) return@LaunchedEffect
+                            favoriteHintVisible = true
+                            kotlinx.coroutines.delay(1500)
+                            favoriteHintVisible = false
+                        }
+                        Box {
+                            IconButton(
+                                onClick = {
+                                    haptics.toggle(!isFavorite)
+                                    onToggleFavorite()
+                                    favoriteHintText = hintContext.getString(
+                                        if (!isFavorite) R.string.details_favorite_added_hint else R.string.details_favorite_removed_hint
+                                    )
+                                    favoriteHintGeneration++
+                                    favoriteScope.launch {
+                                        favoriteScale.snapTo(0.7f)
+                                        favoriteScale.animateTo(1f, animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow))
+                                    }
+                                },
+                                interactionSource = favoriteSource,
+                                modifier = Modifier.focusHighlight(favoriteSource)
+                            ) {
+                                Crossfade(targetState = isFavorite, label = "favoriteIcon") { favorite ->
+                                    Icon(
+                                        imageVector = if (favorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                                        contentDescription = stringResource(
+                                            if (favorite) R.string.details_favorite_remove else R.string.details_favorite_add
+                                        ),
+                                        tint = favoriteTint,
+                                        modifier = Modifier.scale(favoriteScale.value)
+                                    )
                                 }
-                            },
-                            interactionSource = favoriteSource,
-                            modifier = Modifier.focusHighlight(favoriteSource)
-                        ) {
-                            Crossfade(targetState = isFavorite, label = "favoriteIcon") { favorite ->
-                                Icon(
-                                    imageVector = if (favorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                                    contentDescription = stringResource(
-                                        if (favorite) R.string.details_favorite_remove else R.string.details_favorite_add
-                                    ),
-                                    tint = favoriteTint,
-                                    modifier = Modifier.scale(favoriteScale.value)
-                                )
                             }
+                            ActionHintBubble(
+                                text = favoriteHintText,
+                                visible = favoriteHintVisible,
+                                modifier = Modifier.align(Alignment.TopStart).offset(y = (-28).dp)
+                            )
                         }
                         val watchedScale = remember { Animatable(1f) }
                         val watchedScope = rememberCoroutineScope()
@@ -545,28 +584,48 @@ private fun DetailsContent(
                             label = "watchedTint"
                         )
                         val watchedSource = remember { MutableInteractionSource() }
-                        IconButton(
-                            onClick = {
-                                haptics.toggle(!isWatched)
-                                onToggleWatched()
-                                watchedScope.launch {
-                                    watchedScale.snapTo(0.7f)
-                                    watchedScale.animateTo(1f, animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow))
+                        var watchedHintGeneration by remember { mutableStateOf(0) }
+                        var watchedHintVisible by remember { mutableStateOf(false) }
+                        var watchedHintText by remember { mutableStateOf("") }
+                        LaunchedEffect(watchedHintGeneration) {
+                            if (watchedHintGeneration == 0) return@LaunchedEffect
+                            watchedHintVisible = true
+                            kotlinx.coroutines.delay(1500)
+                            watchedHintVisible = false
+                        }
+                        Box {
+                            IconButton(
+                                onClick = {
+                                    haptics.toggle(!isWatched)
+                                    onToggleWatched()
+                                    watchedHintText = hintContext.getString(
+                                        if (!isWatched) R.string.details_watched_added_hint else R.string.details_watched_removed_hint
+                                    )
+                                    watchedHintGeneration++
+                                    watchedScope.launch {
+                                        watchedScale.snapTo(0.7f)
+                                        watchedScale.animateTo(1f, animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow))
+                                    }
+                                },
+                                interactionSource = watchedSource,
+                                modifier = Modifier.focusHighlight(watchedSource)
+                            ) {
+                                Crossfade(targetState = isWatched, label = "watchedIcon") { watched ->
+                                    Icon(
+                                        imageVector = if (watched) Icons.Default.Visibility else Icons.Default.VisibilityOff,
+                                        contentDescription = stringResource(
+                                            if (watched) R.string.details_watched_remove else R.string.details_watched_add
+                                        ),
+                                        tint = watchedTint,
+                                        modifier = Modifier.scale(watchedScale.value)
+                                    )
                                 }
-                            },
-                            interactionSource = watchedSource,
-                            modifier = Modifier.focusHighlight(watchedSource)
-                        ) {
-                            Crossfade(targetState = isWatched, label = "watchedIcon") { watched ->
-                                Icon(
-                                    imageVector = if (watched) Icons.Default.CheckCircle else Icons.Default.RadioButtonUnchecked,
-                                    contentDescription = stringResource(
-                                        if (watched) R.string.details_watched_remove else R.string.details_watched_add
-                                    ),
-                                    tint = watchedTint,
-                                    modifier = Modifier.scale(watchedScale.value)
-                                )
                             }
+                            ActionHintBubble(
+                                text = watchedHintText,
+                                visible = watchedHintVisible,
+                                modifier = Modifier.align(Alignment.TopEnd).offset(y = (-28).dp)
+                            )
                         }
                     }
                 }
@@ -876,6 +935,31 @@ private fun DetailsContent(
             onDismiss = { zoomedImage = null },
             imageLoader = if (zoomedImageIsFanart) fanartImageLoader else null
         )
+    }
+}
+
+/** Small transient confirmation ("Добавлено в избранное", ...) anchored next to the favorite/watched buttons - the icon/color swap alone wasn't a clear enough confirmation on its own per feedback. */
+@Composable
+private fun ActionHintBubble(text: String, visible: Boolean, modifier: Modifier = Modifier) {
+    AnimatedVisibility(
+        visible = visible,
+        enter = fadeIn() + scaleIn(initialScale = 0.85f),
+        exit = fadeOut(),
+        modifier = modifier
+    ) {
+        Surface(
+            shape = RoundedCornerShape(8.dp),
+            color = MaterialTheme.colorScheme.inverseSurface,
+            tonalElevation = 4.dp
+        ) {
+            Text(
+                text,
+                color = MaterialTheme.colorScheme.inverseOnSurface,
+                style = MaterialTheme.typography.labelSmall,
+                maxLines = 1,
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+            )
+        }
     }
 }
 

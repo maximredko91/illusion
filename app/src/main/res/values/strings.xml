@@ -393,6 +393,10 @@
     <string name="details_favorite_remove">Убрать из избранного</string>
     <string name="details_watched_add">Отметить просмотренным</string>
     <string name="details_watched_remove">Снять отметку "просмотрено"</string>
+    <string name="details_favorite_added_hint">Добавлено в избранное</string>
+    <string name="details_favorite_removed_hint">Убрано из избранного</string>
+    <string name="details_watched_added_hint">Отмечено просмотренным</string>
+    <string name="details_watched_removed_hint">Отмечено непросмотренным</string>
     <string name="details_director">Режиссёр</string>
     <string name="details_actors">В ролях</string>
     <string name="details_collection">Другие части</string>
