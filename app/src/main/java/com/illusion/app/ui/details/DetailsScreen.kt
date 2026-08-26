@@ -32,6 +32,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
@@ -200,18 +202,88 @@ fun DetailsScreen(
                 onRemoveEpisodeDownload = { id -> viewModel.removeDownload(context, id) },
                 onRemoveSeasonDownloads = { ids -> viewModel.removeSeasonDownloads(context, ids) },
                 onDownloadError = { message -> scope.launch { snackbarHostState.showSnackbar(message) } },
-                onPlay = onPlay,
-                onPlayTrailer = onPlayTrailer,
+                // Previously this just always navigated straight into the player, which then
+                // errored on its own SMB connection attempt if there was no Wi-Fi - a real "no
+                // Wi-Fi" state read as a broken player. A completed download plays from a local
+                // file regardless of network, so it's the one case allowed through unconditionally.
+                onPlay = {
+                    if (download?.status == DownloadStatus.COMPLETED || com.illusion.app.ui.common.isOnLocalNetwork(context)) {
+                        onPlay(item.stableId)
+                    } else {
+                        scope.launch { snackbarHostState.showSnackbar(context.getString(R.string.details_offline_warning)) }
+                    }
+                },
+                onPlayTrailer = {
+                    // Trailers are never downloaded (see the app's own README/CLAUDE notes - TMDB
+                    // has no downloadable file), so there's no local-file exception here.
+                    if (com.illusion.app.ui.common.isOnLocalNetwork(context)) {
+                        onPlayTrailer(item.stableId)
+                    } else {
+                        scope.launch { snackbarHostState.showSnackbar(context.getString(R.string.details_offline_warning)) }
+                    }
+                },
                 onOpenPerson = onOpenPerson,
-                onOpenItem = onOpenItem,
-                onBack = onBack,
-                onGoHome = onGoHome
+                onOpenItem = onOpenItem
             )
             state.isLoading -> CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
             else -> Text(
                 stringResource(R.string.details_not_found),
                 modifier = Modifier.align(Alignment.Center).padding(24.dp)
             )
+        }
+        // Sits here (a sibling of the scrolling DetailsContent, not inside it) so it stays fixed
+        // on screen instead of scrolling away with the fanart - per feedback. A translucent accent
+        // pill backdrop (rather than the earlier opaque black one) stays legible over any photo
+        // while still reading as glass rather than a solid UI chrome bar, and the icon itself keeps
+        // its own theme-driven tint independent of the pill's color.
+        val haptics = LocalHapticFeedback.current
+        val cornerIconTint = if (MaterialTheme.colorScheme.background.luminance() > 0.5f) Color.Black else Color.White
+        val cornerPillColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.35f)
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .windowInsetsPadding(com.illusion.app.ui.common.rememberLatchedStatusBarsInsets())
+                .padding(4.dp),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            val backSource = remember { MutableInteractionSource() }
+            IconButton(
+                onClick = {
+                    haptics.tick()
+                    onBack()
+                },
+                interactionSource = backSource,
+                modifier = Modifier
+                    .background(cornerPillColor, CircleShape)
+                    .focusHighlight(backSource, color = cornerIconTint)
+            ) {
+                Icon(
+                    Icons.AutoMirrored.Filled.ArrowBack,
+                    contentDescription = stringResource(R.string.details_back),
+                    tint = cornerIconTint
+                )
+            }
+            // Escape hatch for drilling several Similar/series hops deep (Movie -> part 2 -> part
+            // 3 -> ...) - onBack still steps back one card at a time (so returning to the card the
+            // user actually came from works normally), this jumps straight to the main screen
+            // instead of requiring one "Назад" per hop.
+            val homeSource = remember { MutableInteractionSource() }
+            IconButton(
+                onClick = {
+                    haptics.tick()
+                    onGoHome()
+                },
+                interactionSource = homeSource,
+                modifier = Modifier
+                    .background(cornerPillColor, CircleShape)
+                    .focusHighlight(homeSource, color = cornerIconTint)
+            ) {
+                Icon(
+                    Icons.Default.Home,
+                    contentDescription = stringResource(R.string.details_go_home),
+                    tint = cornerIconTint
+                )
+            }
         }
         SnackbarHost(snackbarHostState, modifier = Modifier.align(Alignment.BottomCenter))
     }
@@ -244,9 +316,7 @@ private fun DetailsContent(
     onPlay: (String) -> Unit,
     onPlayTrailer: (String) -> Unit,
     onOpenPerson: (String) -> Unit,
-    onOpenItem: (String) -> Unit,
-    onBack: () -> Unit,
-    onGoHome: () -> Unit
+    onOpenItem: (String) -> Unit
 ) {
     var zoomedImage by remember { mutableStateOf<Any?>(null) }
     var zoomedImageIsFanart by remember { mutableStateOf(false) }
@@ -313,9 +383,10 @@ private fun DetailsContent(
         Box {
             val fanart = item.fanartModel
             val fanartSource = remember { MutableInteractionSource() }
-            // Back/home/favorite all anchor to this box's corners - matches their own footprint
-            // (IconButton's default touch target) so the dead zone below lines up with where a
-            // near-miss on one of them actually lands.
+            // Matches the floating back/home buttons' own footprint (IconButton's default touch
+            // target) - they float on top of this fanart now rather than living inside it (see
+            // DetailsScreen's own overlay), but the dead zone here still needs to line up with
+            // where a near-miss on one of them actually lands.
             val cornerButtonSize = 48.dp
             Box(
                 modifier = Modifier
@@ -414,54 +485,6 @@ private fun DetailsContent(
                     )
                 }
             }
-            // No more translucent circle backdrop - per feedback a theme-driven black/white tint
-            // still risked blending into whatever the fanart happened to show underneath (e.g. a
-            // white icon over a bright sky), so both now use the accent color instead, which reads
-            // as a distinct UI control against any photo rather than trying to match it.
-            val cornerIconTint = MaterialTheme.colorScheme.primary
-            val backSource = remember { MutableInteractionSource() }
-            IconButton(
-                onClick = {
-                    haptics.tick()
-                    onBack()
-                },
-                interactionSource = backSource,
-                modifier = Modifier
-                    .padding(4.dp)
-                    .focusHighlight(backSource, color = cornerIconTint)
-            ) {
-                Icon(
-                    Icons.AutoMirrored.Filled.ArrowBack,
-                    contentDescription = stringResource(R.string.details_back),
-                    tint = cornerIconTint
-                )
-            }
-
-            // Escape hatch for drilling several Similar/series hops deep (Movie -> part 2 -> part
-            // 3 -> ...) - onBack still steps back one card at a time (so returning to the card the
-            // user actually came from works normally), this jumps straight to the main screen
-            // instead of requiring one "Назад" per hop. Moved to the top-right corner per feedback
-            // (was bottom-left) - top-right is otherwise unused now that favorite/watched moved
-            // under the poster.
-            val homeSource = remember { MutableInteractionSource() }
-            IconButton(
-                onClick = {
-                    haptics.tick()
-                    onGoHome()
-                },
-                interactionSource = homeSource,
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(4.dp)
-                    .focusHighlight(homeSource, color = cornerIconTint)
-            ) {
-                Icon(
-                    Icons.Default.Home,
-                    contentDescription = stringResource(R.string.details_go_home),
-                    tint = cornerIconTint
-                )
-            }
-
         }
 
         Row(modifier = Modifier.padding(horizontal = 16.dp)) {
@@ -543,7 +566,15 @@ private fun DetailsContent(
                             kotlinx.coroutines.delay(1500)
                             favoriteHintVisible = false
                         }
-                        Box {
+                        // Fixed size (matches IconButton's own default touch target) rather than
+                        // wrapping content - the hint bubble below is wider than the icon while
+                        // visible, and an implicitly-sized Box grows with its widest child, which
+                        // shifted this whole Box (a direct child of the SpaceBetween Row above)
+                        // sideways every time a hint appeared/disappeared, and could squeeze or
+                        // fully displace the sibling icon's Box when both animated at once. Fixing
+                        // the size lets the bubble visually overflow past it (alignment/offset
+                        // still place it outside these bounds fine) without perturbing the Row.
+                        Box(modifier = Modifier.size(48.dp)) {
                             IconButton(
                                 onClick = {
                                     haptics.toggle(!isFavorite)
@@ -574,7 +605,19 @@ private fun DetailsContent(
                             ActionHintBubble(
                                 text = favoriteHintText,
                                 visible = favoriteHintVisible,
-                                modifier = Modifier.align(Alignment.TopStart).offset(y = (-28).dp)
+                                // unbounded = true - this Box's own size is fixed at 48dp (see its
+                                // own comment above) so the Row it sits in never shifts, but that
+                                // same fixed size otherwise caps this child's own measurement to
+                                // 48dp too, wrapping/clipping the bubble's text. Ignoring the
+                                // incoming max constraint here lets it measure at its natural
+                                // (wider) width while the parent Box still reports 48dp upward.
+                                // Explicit Start alignment (not wrapContentWidth's own default of
+                                // CenterHorizontally) - centering the grown width around the 48dp
+                                // icon's own center pushed roughly half the bubble left past the
+                                // screen's physical edge, since this icon sits close to it. Start
+                                // keeps the bubble's left edge anchored at the icon's and grows
+                                // rightward, toward the poster's own center instead.
+                                modifier = Modifier.wrapContentWidth(Alignment.Start, unbounded = true).align(Alignment.TopStart).offset(y = (-28).dp)
                             )
                         }
                         val watchedScale = remember { Animatable(1f) }
@@ -593,7 +636,15 @@ private fun DetailsContent(
                             kotlinx.coroutines.delay(1500)
                             watchedHintVisible = false
                         }
-                        Box {
+                        // Fixed size (matches IconButton's own default touch target) rather than
+                        // wrapping content - the hint bubble below is wider than the icon while
+                        // visible, and an implicitly-sized Box grows with its widest child, which
+                        // shifted this whole Box (a direct child of the SpaceBetween Row above)
+                        // sideways every time a hint appeared/disappeared, and could squeeze or
+                        // fully displace the sibling icon's Box when both animated at once. Fixing
+                        // the size lets the bubble visually overflow past it (alignment/offset
+                        // still place it outside these bounds fine) without perturbing the Row.
+                        Box(modifier = Modifier.size(48.dp)) {
                             IconButton(
                                 onClick = {
                                     haptics.toggle(!isWatched)
@@ -624,7 +675,9 @@ private fun DetailsContent(
                             ActionHintBubble(
                                 text = watchedHintText,
                                 visible = watchedHintVisible,
-                                modifier = Modifier.align(Alignment.TopEnd).offset(y = (-28).dp)
+                                // Mirrors the favorite bubble's own fix - End anchors the bubble's
+                                // right edge at this icon's and grows leftward.
+                                modifier = Modifier.wrapContentWidth(Alignment.End, unbounded = true).align(Alignment.TopEnd).offset(y = (-28).dp)
                             )
                         }
                     }

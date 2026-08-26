@@ -348,7 +348,13 @@ class LibraryScanner(
             plot = metadata?.plot,
             director = metadata?.director ?: emptyList(),
             actors = metadata?.actors ?: emptyList(),
-            collectionName = metadata?.collectionName,
+            // .nfo's own <set> tag wins when present (an explicit scraper-assigned collection);
+            // falls back to a "<Name> (Коллекция)" folder anywhere in the path otherwise - lets a
+            // franchise be grouped just by how it's organized on the NAS, without needing every
+            // movie's own .nfo hand-edited to agree on the exact same collection string (which is
+            // how a folder full of sequels/reboots with inconsistent or missing <set> tags ends up
+            // NOT grouped today - see collectionFolderName's own KDoc).
+            collectionName = metadata?.collectionName?.takeIf { it.isNotBlank() } ?: collectionFolderName(file.path),
             posterPath = localPosterPath ?: metadata?.posterUrl?.takeIf { it.startsWith("http://") || it.startsWith("https://") },
             fanartPath = localFanartPath ?: metadata?.fanartUrl?.takeIf { it.startsWith("http://") || it.startsWith("https://") },
             episodeThumbPath = localEpisodeThumbPath
@@ -394,6 +400,20 @@ class LibraryScanner(
         }
     }
 
+    /**
+     * Looks for a "<Name> (Коллекция)" path segment anywhere between the source root and the
+     * video file - the fallback for a franchise organized as a real NAS folder (e.g.
+     * "Люди в чёрном (Коллекция)\Люди в чёрном (1997)\movie.mp4") whose individual movies' own
+     * .nfo files don't (or can't consistently) carry a matching <set> tag - a sequel/reboot's .nfo
+     * commonly has an empty or differently-worded <set>, or none at all, which is exactly why
+     * that film silently fails to group under the app's original nfo-only matching. Purely a path
+     * string check on data the directory walk already has in memory - no extra SMB round trip.
+     */
+    private fun collectionFolderName(path: String): String? =
+        path.split('\\').firstNotNullOfOrNull { segment ->
+            COLLECTION_FOLDER_REGEX.find(segment)?.groupValues?.get(1)?.trim()?.takeIf { it.isNotBlank() }
+        }
+
     private data class CategoryMatch(val category: Category, val categoryFolderIndex: Int)
 
     /**
@@ -425,5 +445,7 @@ class LibraryScanner(
         private const val CONNECTION_POOL_SIZE = 6
 
         private const val STABLE_ID_SAMPLE_BYTES = 65536
+
+        private val COLLECTION_FOLDER_REGEX = Regex("""^(.+?)\s*\(Коллекция\)$""", RegexOption.IGNORE_CASE)
     }
 }

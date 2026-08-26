@@ -595,6 +595,11 @@ class PlayerViewModel(
         currentItem = null
         currentTrailerItem = item
         nextEpisode = null
+        // Trailers always play internally with no player-mode gate (see load()'s own comment) -
+        // nothing else on this path ever sets this true the way playInternally() does for the main
+        // item, so without it the video surface never renders even though playback itself starts
+        // fine (confirmed: black screen, audio playing).
+        _state.update { it.copy(readyForInternalPlayback = true) }
         playTrailerItem(item, startPositionMs = 0L, autoPlay = true)
     }
 
@@ -623,7 +628,13 @@ class PlayerViewModel(
                 subtitleTextColor = it.subtitleTextColor,
                 subtitleBackgroundOpacity = it.subtitleBackgroundOpacity,
                 subtitleTextSizePercent = it.subtitleTextSizePercent,
-                sleepTimerRemainingMs = it.sleepTimerRemainingMs
+                sleepTimerRemainingMs = it.sleepTimerRemainingMs,
+                // Missing here (unlike playItem's own reconstruction, which explicitly carries
+                // this forward) meant every trailer playback silently reset it to the class
+                // default of false - the video surface never became "ready" from the UI's
+                // perspective, so it stayed black while ExoPlayer itself decoded/played audio
+                // completely normally underneath, invisible to anything gating on this flag.
+                readyForInternalPlayback = it.readyForInternalPlayback
             )
         }
     }
