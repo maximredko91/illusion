@@ -190,8 +190,10 @@ fun IllusionNavHost(
             // that this TV crops a real slice off every edge of the picture without compensating
             // the reported display resolution for it - nothing this app draws in that strip is
             // actually visible. Google's own historical TV design guidance calls this the
-            // "overscan-safe area" and puts it at 5% of each dimension, which is what this reserves
-            // - a phone/tablet never hits this branch, so nothing changes there.
+            // "overscan-safe area" and starts at 5% of each dimension - bumped to 8% after the
+            // user reported icons still clipped (and visible spare room past them) at 5% on this
+            // specific panel, whose real crop is evidently bigger than the guideline's baseline.
+            // A phone/tablet never hits this branch, so nothing changes there.
             if ((uiMode ?: UiMode.PHONE) == UiMode.TV) {
                 androidx.compose.foundation.layout.BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
                     IllusionNavGraph(
@@ -199,7 +201,7 @@ fun IllusionNavHost(
                         navController,
                         modifier = Modifier
                             .fillMaxSize()
-                            .padding(horizontal = maxWidth * 0.05f, vertical = maxHeight * 0.05f)
+                            .padding(horizontal = maxWidth * 0.08f, vertical = maxHeight * 0.08f)
                     )
                 }
             } else {

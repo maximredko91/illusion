@@ -20,14 +20,22 @@ import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.unit.dp
+import com.illusion.app.domain.model.UiMode
 
 /**
  * D-pad/remote focus feedback for the TV Box target. Material3's default ripple only reacts to
  * press/hover, not focus-by-itself, so without this a remote user moving between cards/buttons
  * sees no indication of where focus currently is. Reads focus off the same [interactionSource]
  * already passed to the caller's clickable/selectable - no extra focusable() node, so it doesn't
- * disturb focus traversal order. Inert on touch-only devices: focus only moves there via an
- * explicit click, which is already visualized by the ripple.
+ * disturb focus traversal order.
+ *
+ * Explicitly gated on [UiMode.TV] (not just "inert on touch" as originally written) - once this
+ * got applied to every field in the SMB source form for the D-pad fix, a phone user tapping into
+ * a field to type kept it focused for as long as they were typing, unlike a button's brief
+ * click-then-unfocus, so this border+scale stayed up the whole time instead of blipping past like
+ * the ripple it was meant to sit alongside - confirmed on-device as a real regression ("огромная
+ * рамка" appearing on every text field tap). A phone/tablet already has Material3's own built-in
+ * focused-state styling on interactive controls; this is purely the TV-only addition on top.
  */
 @Composable
 fun Modifier.focusHighlight(
@@ -35,6 +43,7 @@ fun Modifier.focusHighlight(
     shape: Shape = RoundedCornerShape(8.dp),
     color: Color = MaterialTheme.colorScheme.primary
 ): Modifier {
+    if (LocalUiMode.current != UiMode.TV) return this
     val isFocused by interactionSource.collectIsFocusedAsState()
     val scale by animateFloatAsState(if (isFocused) 1.08f else 1f, label = "tvFocusScale")
     return this
