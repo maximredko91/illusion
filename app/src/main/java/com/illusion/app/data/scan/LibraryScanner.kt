@@ -348,13 +348,14 @@ class LibraryScanner(
             plot = metadata?.plot,
             director = metadata?.director ?: emptyList(),
             actors = metadata?.actors ?: emptyList(),
-            // .nfo's own <set> tag wins when present (an explicit scraper-assigned collection);
-            // falls back to a "<Name> (Коллекция)" folder anywhere in the path otherwise - lets a
-            // franchise be grouped just by how it's organized on the NAS, without needing every
-            // movie's own .nfo hand-edited to agree on the exact same collection string (which is
-            // how a folder full of sequels/reboots with inconsistent or missing <set> tags ends up
-            // NOT grouped today - see collectionFolderName's own KDoc).
-            collectionName = metadata?.collectionName?.takeIf { it.isNotBlank() } ?: collectionFolderName(file.path),
+            // A "<Name> (Коллекция)" folder wins over the .nfo's own <set> tag when both exist,
+            // not just when <set> is blank - confirmed on-device that a reboot/spin-off's .nfo
+            // commonly has a real but DIFFERENT <set> value (its own separate TMDB collection,
+            // e.g. RoboCop 2014's own collection vs the 1987 trilogy's), so falling back only on
+            // a blank tag left exactly the mismatched-string case this feature exists for
+            // unfixed. An explicit NAS folder is a deliberate, hand-organized signal - it should
+            // override whatever a scraper happened to write per-file, not just fill a gap.
+            collectionName = collectionFolderName(file.path) ?: metadata?.collectionName,
             posterPath = localPosterPath ?: metadata?.posterUrl?.takeIf { it.startsWith("http://") || it.startsWith("https://") },
             fanartPath = localFanartPath ?: metadata?.fanartUrl?.takeIf { it.startsWith("http://") || it.startsWith("https://") },
             episodeThumbPath = localEpisodeThumbPath

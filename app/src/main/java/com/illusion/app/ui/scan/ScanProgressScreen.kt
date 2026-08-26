@@ -20,6 +20,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -317,17 +319,17 @@ private fun ScanIllustration(modifier: Modifier = Modifier) {
 
 /**
  * Rotates through a "did you know" tip about the app every few seconds - a scan can take a while
- * with nothing else on screen to read in the meantime. Was a swipeable HorizontalPager, replaced
- * per feedback that its slide transition read as an abrupt "sliding out" rather than a soft
- * change - a plain Crossfade reads as gentler for an auto-advance nobody is actively dragging
- * through. Loses manual swipe-between-tips as a result; the 6s interval (long enough to read a
- * whole tip, per the original feedback that motivated a pace the user controls) is the tradeoff
- * for that now, not a swipe gesture.
+ * with nothing else on screen to read in the meantime. Auto-advance alone (a Crossfade, no
+ * gesture) was tried per earlier feedback about the pager's slide reading as abrupt, but per
+ * later feedback the user wanted to be able to page through the (now longer) tip list at their
+ * own pace too, not just wait through the fixed interval - back to a real HorizontalPager, whose
+ * own default page-to-page transition is a plain slide rather than anything more jarring, which
+ * is what actually prompted the original swap.
  */
 @Composable
 private fun ScanTipsCarousel(modifier: Modifier = Modifier) {
     val tips = stringArrayResource(R.array.scan_tips)
-    var currentPage by remember { mutableIntStateOf(0) }
+    val pagerState = rememberPagerState(pageCount = { tips.size })
 
     // repeatOnLifecycle (not a plain LaunchedEffect) - backgrounding the app during a scan and
     // returning used to leave the old pager visibly torn between two tips (its delay() kept
@@ -338,7 +340,10 @@ private fun ScanTipsCarousel(modifier: Modifier = Modifier) {
         lifecycleOwner.repeatOnLifecycle(Lifecycle.State.RESUMED) {
             while (isActive) {
                 delay(6000)
-                currentPage = (currentPage + 1) % tips.size
+                // Continues auto-advancing from wherever the user last swiped to, rather than
+                // fighting a manual page choice - animateScrollToPage always targets "one past
+                // pagerState's own current page", so a manual swipe just becomes the new baseline.
+                pagerState.animateScrollToPage((pagerState.currentPage + 1) % tips.size)
             }
         }
     }
@@ -346,9 +351,8 @@ private fun ScanTipsCarousel(modifier: Modifier = Modifier) {
     Column(modifier = modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
         // Fixed height (not wrap-content) so the card doesn't resize/jump between a short tip and
         // a longer one.
-        Crossfade(
-            targetState = currentPage,
-            animationSpec = tween(600),
+        HorizontalPager(
+            state = pagerState,
             modifier = Modifier
                 .fillMaxWidth()
                 // Was 110dp with 20dp padding (70dp of actual content height) - the longest tip in
@@ -356,10 +360,15 @@ private fun ScanTipsCarousel(modifier: Modifier = Modifier) {
                 // word at that height. Bumped both the box and the text size down a notch so even
                 // that tip has real margin, not just enough for the tips that happened to be short.
                 .height(130.dp)
-                .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(16.dp)),
-            label = "scanTip"
         ) { page ->
-            Box(modifier = Modifier.fillMaxSize().padding(16.dp), contentAlignment = Alignment.Center) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 4.dp)
+                    .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(16.dp))
+                    .padding(16.dp),
+                contentAlignment = Alignment.Center
+            ) {
                 Text(
                     tips[page],
                     textAlign = TextAlign.Center,
@@ -373,7 +382,7 @@ private fun ScanTipsCarousel(modifier: Modifier = Modifier) {
             modifier = Modifier.padding(top = 12.dp)
         ) {
             repeat(tips.size) { page ->
-                val isCurrent = page == currentPage
+                val isCurrent = page == pagerState.currentPage
                 Box(
                     modifier = Modifier
                         .size(if (isCurrent) 8.dp else 6.dp)
