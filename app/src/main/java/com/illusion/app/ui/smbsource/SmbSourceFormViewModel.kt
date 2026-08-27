@@ -73,6 +73,15 @@ class SmbSourceFormViewModel(
     val shareSuggestions: StateFlow<List<String>> = smbSourceRepository.observeSources()
         .map { sources -> (listOf(SEED_SHARE) + sources.map { it.share }).distinct() }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), listOf(SEED_SHARE))
+    val rootPathSuggestions: StateFlow<List<String>> = smbSourceRepository.observeSources()
+        .map { sources -> (listOf(SEED_ROOT_PATH) + sources.mapNotNull { it.rootPath.ifBlank { null } }).distinct() }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), listOf(SEED_ROOT_PATH))
+    val displayNameSuggestions: StateFlow<List<String>> = smbSourceRepository.observeSources()
+        .map { sources -> (listOf(SEED_DISPLAY_NAME) + sources.map { it.displayName }).distinct() }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), listOf(SEED_DISPLAY_NAME))
+    val usernameSuggestions: StateFlow<List<String>> = smbSourceRepository.observeSources()
+        .map { sources -> (listOf(SEED_USERNAME) + sources.mapNotNull { it.username.ifBlank { null } }).distinct() }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), listOf(SEED_USERNAME))
 
     fun updateDisplayName(value: String) = _state.update { it.copy(displayName = value) }
     fun updateHost(value: String) = _state.update { it.copy(host = value) }
@@ -143,6 +152,9 @@ class SmbSourceFormViewModel(
         private const val TAG = "SmbSourceForm"
         private const val SEED_HOST = "192.168.2.1"
         private const val SEED_SHARE = "Movies"
+        private const val SEED_ROOT_PATH = "Movies"
+        private const val SEED_DISPLAY_NAME = "NAS"
+        private const val SEED_USERNAME = "admin"
 
         fun factory(smbSourceRepository: SmbSourceRepository, existingSource: SmbSourceEntity? = null) = viewModelFactory {
             initializer { SmbSourceFormViewModel(smbSourceRepository, existingSource) }

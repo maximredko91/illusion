@@ -59,7 +59,10 @@ fun SmbSourceFormFields(
     saveLabel: String,
     modifier: Modifier = Modifier,
     hostSuggestions: List<String> = emptyList(),
-    shareSuggestions: List<String> = emptyList()
+    shareSuggestions: List<String> = emptyList(),
+    rootPathSuggestions: List<String> = emptyList(),
+    displayNameSuggestions: List<String> = emptyList(),
+    usernameSuggestions: List<String> = emptyList()
 ) {
     Column(
         modifier = modifier
@@ -77,14 +80,13 @@ fun SmbSourceFormFields(
         // purely a visual border/scale reacting to the same InteractionSource a control already
         // has), but with nothing on screen to show WHERE focus currently was, it read as the
         // remote doing nothing at all rather than a legible cursor moving through the form.
-        val displayNameSource = remember { MutableInteractionSource() }
-        OutlinedTextField(
+        SuggestibleTextField(
             value = state.displayName,
             onValueChange = onDisplayNameChange,
-            label = { Text(stringResource(R.string.onboarding_display_name)) },
-            supportingText = { Text(stringResource(R.string.onboarding_display_name_help)) },
-            interactionSource = displayNameSource,
-            modifier = Modifier.fillMaxWidth().focusHighlight(displayNameSource).dpadFieldNavigation()
+            label = stringResource(R.string.onboarding_display_name),
+            supportingText = stringResource(R.string.onboarding_display_name_help),
+            suggestions = displayNameSuggestions,
+            modifier = Modifier.fillMaxWidth()
         )
         SuggestibleTextField(
             value = state.host,
@@ -128,14 +130,13 @@ fun SmbSourceFormFields(
         }
         androidx.compose.animation.AnimatedVisibility(visible = advancedExpanded) {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                val rootPathSource = remember { MutableInteractionSource() }
-                OutlinedTextField(
+                SuggestibleTextField(
                     value = state.rootPath,
                     onValueChange = onRootPathChange,
-                    label = { Text(stringResource(R.string.onboarding_root_path)) },
-                    supportingText = { Text(stringResource(R.string.onboarding_root_path_help)) },
-                    interactionSource = rootPathSource,
-                    modifier = Modifier.fillMaxWidth().focusHighlight(rootPathSource).dpadFieldNavigation()
+                    label = stringResource(R.string.onboarding_root_path),
+                    supportingText = stringResource(R.string.onboarding_root_path_help),
+                    suggestions = rootPathSuggestions,
+                    modifier = Modifier.fillMaxWidth()
                 )
                 val domainSource = remember { MutableInteractionSource() }
                 OutlinedTextField(
@@ -146,14 +147,13 @@ fun SmbSourceFormFields(
                     interactionSource = domainSource,
                     modifier = Modifier.fillMaxWidth().focusHighlight(domainSource).dpadFieldNavigation()
                 )
-                val usernameSource = remember { MutableInteractionSource() }
-                OutlinedTextField(
+                SuggestibleTextField(
                     value = state.username,
                     onValueChange = onUsernameChange,
-                    label = { Text(stringResource(R.string.onboarding_username)) },
-                    supportingText = { Text(stringResource(R.string.onboarding_username_help)) },
-                    interactionSource = usernameSource,
-                    modifier = Modifier.fillMaxWidth().focusHighlight(usernameSource).dpadFieldNavigation()
+                    label = stringResource(R.string.onboarding_username),
+                    supportingText = stringResource(R.string.onboarding_username_help),
+                    suggestions = usernameSuggestions,
+                    modifier = Modifier.fillMaxWidth()
                 )
         val passwordSource = remember { MutableInteractionSource() }
         val passwordVisibilitySource = remember { MutableInteractionSource() }
