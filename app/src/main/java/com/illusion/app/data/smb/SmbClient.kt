@@ -304,7 +304,12 @@ fun classifySmbError(e: Throwable): String = when (e) {
             // the credentials at all - produced this same misleading message.
             message.contains("STATUS_LOGON_FAILURE", ignoreCase = true) -> "Неверный логин или пароль"
             message.contains("STATUS_ACCESS_DENIED", ignoreCase = true) ->
-                "Доступ запрещён - проверьте права этого пользователя на папку на роутере (логин и пароль верны, дело не в них)"
+                // Keeps the original exception message (smbj includes the exact remote path it
+                // was denied on, e.g. "Create failed for \\host\share\Movies\...") rather than
+                // just a generic "check your permissions" - that path is exactly what's needed to
+                // find the one folder with the wrong ACL on the router, not just that one exists
+                // somewhere in the tree.
+                "Доступ запрещён (логин и пароль верны, дело не в них - проверьте права этого пользователя на роутере): $message"
             message.contains("STATUS_BAD_NETWORK_NAME", ignoreCase = true) -> "Шара с таким именем не найдена на сервере"
             else -> "Не удалось подключиться: $message"
         }
