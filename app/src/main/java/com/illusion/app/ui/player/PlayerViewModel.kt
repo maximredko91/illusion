@@ -192,11 +192,21 @@ class PlayerViewModel(
         target.addListener(object : Player.Listener {
             override fun onIsPlayingChanged(isPlaying: Boolean) {
                 _state.update { it.copy(isPlaying = isPlaying) }
-                if (isPlaying) startTicker() else stopTicker()
+                // Only stop here when genuinely idle (paused, not buffering) - onPlaybackStateChanged
+                // below is what keeps it running through STATE_BUFFERING, and isPlaying flips false
+                // for that too (STATE_BUFFERING implies !isPlaying), so unconditionally stopping it
+                // here would immediately undo that and this ticker would never survive a buffering
+                // window at all - which is exactly the window the buffered% display needs it for.
+                if (isPlaying) startTicker() else if (player.playbackState != Player.STATE_BUFFERING) stopTicker()
             }
 
             override fun onPlaybackStateChanged(playbackState: Int) {
                 _state.update { it.copy(isLoading = playbackState == Player.STATE_BUFFERING) }
+                // bufferedPositionMs/durationMs (the buffering-percent display) only ever updated
+                // while actually playing - during the initial buffer, before playback has started
+                // even once, isPlaying is always false, so the ticker never ran and the percent
+                // could never appear (reported on-device: spinner with no number, on every file).
+                if (playbackState == Player.STATE_BUFFERING) startTicker()
                 if (playbackState == Player.STATE_ENDED) onPlaybackEnded()
             }
 
