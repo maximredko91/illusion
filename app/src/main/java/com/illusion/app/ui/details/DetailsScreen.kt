@@ -961,8 +961,12 @@ private fun DetailsContent(
 
         // > 1, not just non-empty - the current item is now included in this list (see
         // DetailsViewModel), so a collection of just itself (no real other parts) would otherwise
-        // show a pointless one-poster row.
-        if (collection.size > 1) {
+        // show a pointless one-poster row. Also skip the nfo-based "Другие части" row entirely
+        // when it has the same item count as the folder-based "Коллекция" row below it - in
+        // practice that means the two are the same set of movies (the folder collection already
+        // wins over nfo on any real disagreement, see LibraryScanner), so showing both was just
+        // the same row twice under different labels (reported on-device as visibly duplicated).
+        if (collection.size > 1 && collection.size != folderCollection.size) {
             MediaRow(stringResource(R.string.details_collection), collection, onOpenItem, currentStableId = item.stableId)
         }
         if (folderCollection.size > 1) {

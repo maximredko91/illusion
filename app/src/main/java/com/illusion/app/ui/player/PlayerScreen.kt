@@ -11,6 +11,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -247,6 +248,19 @@ fun PlayerScreen(
         }
     }
 
+    // The unlock icon itself used to have no auto-hide at all - once locked, it sat on screen
+    // permanently for as long as playback stayed locked (confirmed on-device: "замочек не
+    // пропадает"), unlike every other piece of player chrome, which fades after a few seconds of
+    // no interaction. Mirrors the controlsVisible countdown above - fades out the same way, and a
+    // tap anywhere on the locked screen (LockedOverlay's own tap-catcher below) brings it back.
+    var lockIconVisible by remember { mutableStateOf(true) }
+    LaunchedEffect(isLocked, lockIconVisible) {
+        if (isLocked && lockIconVisible) {
+            delay(3500)
+            lockIconVisible = false
+        }
+    }
+
     // Gated on readyForInternalPlayback (not unconditional on entering this screen) - otherwise
     // PlayerMode.EXTERNAL's brief async hand-off window flagged isPlayerActive = true too, and
     // backgrounding the app to launch the external app's Intent made onUserLeaveHint think a real
@@ -343,9 +357,11 @@ fun PlayerScreen(
         // available height. Only falls back to true screen center when there's no play button
         // shown to line up with.
         if (uiState.isLoading && uiState.error == null && (isInPip || !controlsVisible || isLocked)) {
-            CircularProgressIndicator(
-                modifier = Modifier.align(Alignment.Center),
-                color = Color.White
+            BufferingIndicator(
+                bufferedPositionMs = uiState.bufferedPositionMs,
+                durationMs = uiState.durationMs,
+                color = Color.White,
+                modifier = Modifier.align(Alignment.Center)
             )
         }
 
@@ -373,7 +389,11 @@ fun PlayerScreen(
             }
 
             if (isLocked) {
-                LockedOverlay(onUnlock = { isLocked = false; controlsVisible = true })
+                LockedOverlay(
+                    iconVisible = lockIconVisible,
+                    onTap = { lockIconVisible = true },
+                    onUnlock = { isLocked = false; controlsVisible = true }
+                )
             }
             AnimatedVisibility(
                 visible = controlsVisible && !isLocked,
@@ -401,7 +421,11 @@ fun PlayerScreen(
                     )
                     Box(modifier = Modifier.fillMaxSize().weight(1f), contentAlignment = Alignment.Center) {
                         if (uiState.isLoading && uiState.error == null && !isLocked) {
-                            CircularProgressIndicator(color = Color.White)
+                            BufferingIndicator(
+                                bufferedPositionMs = uiState.bufferedPositionMs,
+                                durationMs = uiState.durationMs,
+                                color = Color.White
+                            )
                         }
                         CenterTransportControls(
                             isPlaying = uiState.isPlaying,
@@ -417,7 +441,7 @@ fun PlayerScreen(
                         isLocked = isLocked,
                         onSeekTo = { position -> bumpInteraction(); viewModel.seekTo(position) },
                         onNextEpisode = { bumpInteraction(); viewModel.playNext() },
-                        onToggleLock = { bumpInteraction(); isLocked = true; controlsVisible = false }
+                        onToggleLock = { bumpInteraction(); isLocked = true; lockIconVisible = true; controlsVisible = false }
                     )
                 }
             }
@@ -515,16 +539,46 @@ fun PlayerScreen(
     }
 }
 
+/** Plain spinner used to just sit there indefinitely with zero feedback on how far along the
+ * initial buffer actually was - indistinguishable from a genuine hang (reported on-device for a
+ * large 4K file that turned out to be stuck, but nothing on screen could tell the user that vs.
+ * "just slow"). [durationMs] is 0 until the container's metadata has actually loaded - real
+ * percent stays hidden until then rather than showing a misleading 0%. */
 @Composable
-private fun LockedOverlay(onUnlock: () -> Unit) {
-    Box(modifier = Modifier.fillMaxSize()) {
-        val unlockSource = remember { MutableInteractionSource() }
-        IconButton(
-            onClick = onUnlock,
-            interactionSource = unlockSource,
-            modifier = Modifier.align(Alignment.BottomEnd).padding(24.dp).focusHighlight(unlockSource, color = Color.White)
+private fun BufferingIndicator(bufferedPositionMs: Long, durationMs: Long, color: Color, modifier: Modifier = Modifier) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = modifier) {
+        CircularProgressIndicator(color = color)
+        if (durationMs > 0) {
+            val percent = ((bufferedPositionMs.toFloat() / durationMs) * 100).toInt().coerceIn(0, 100)
+            Text("$percent%", color = color, modifier = Modifier.padding(top = 8.dp))
+        }
+    }
+}
+
+@Composable
+private fun LockedOverlay(iconVisible: Boolean, onTap: () -> Unit, onUnlock: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            // The screen is otherwise fully inert while locked (GestureLayer itself is disabled -
+            // that's the whole point of locking), so this is the only way to bring a
+            // faded-out unlock icon back once its own auto-hide timer clears it.
+            .clickable(indication = null, interactionSource = remember { MutableInteractionSource() }) { onTap() }
+    ) {
+        AnimatedVisibility(
+            visible = iconVisible,
+            enter = fadeIn(),
+            exit = fadeOut(),
+            modifier = Modifier.align(Alignment.BottomEnd)
         ) {
-            Icon(Icons.Default.Lock, contentDescription = stringResource(R.string.player_unlock), tint = Color.White)
+            val unlockSource = remember { MutableInteractionSource() }
+            IconButton(
+                onClick = onUnlock,
+                interactionSource = unlockSource,
+                modifier = Modifier.padding(24.dp).focusHighlight(unlockSource, color = Color.White)
+            ) {
+                Icon(Icons.Default.Lock, contentDescription = stringResource(R.string.player_unlock), tint = Color.White)
+            }
         }
     }
 }
