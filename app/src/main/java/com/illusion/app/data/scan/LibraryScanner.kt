@@ -18,6 +18,7 @@ import com.illusion.app.data.smb.isSubtitle
 import com.illusion.app.data.smb.isTrailer
 import com.illusion.app.data.smb.isVideo
 import com.illusion.app.domain.model.Category
+import java.io.IOException
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.coroutines.Dispatchers
@@ -156,10 +157,31 @@ class LibraryScanner(
     /** [channel]'s connections plus the [info] that made them - [withConnection] needs [info] to reconnect a connection that died mid-scan, which a bare `Channel<SmbConnection>` had no way to carry. */
     private class SmbPool(val channel: Channel<SmbConnection>, val info: SmbConnectionInfo)
 
-    /** Opens [CONNECTION_POOL_SIZE] connections up front and closes all of them once [block] returns. */
+    /**
+     * Opens up to [CONNECTION_POOL_SIZE] connections up front and closes all of them once [block]
+     * returns. Tolerates individual connect() failures instead of letting one bad attempt fail
+     * the whole pool - some SMB servers cap concurrent sessions per user account (confirmed
+     * on-device: a NAS with a newly-restricted, non-admin user rejected this app's 5th/6th
+     * simultaneous login with the SAME correct credentials that a single "Test Connection" had
+     * just accepted moments earlier, surfaced as a login-failure error rather than anything
+     * mentioning a session limit - "Проверить соединение" succeeds, then starting a real scan
+     * immediately fails with "неверный логин/пароль" even though nothing about the credentials
+     * changed). Keeps whichever connections did succeed (down to a minimum of 1) rather than
+     * treating a partial failure as fatal - only rethrows if EVERY attempt failed, since that's
+     * still a genuine "can't reach this source at all" case worth surfacing as an error.
+     */
     private suspend fun <T> withConnectionPool(info: SmbConnectionInfo, block: suspend (SmbPool) -> T): T {
-        val connections = List(CONNECTION_POOL_SIZE) { smbClient.connect(info) }
-        val channel = Channel<SmbConnection>(CONNECTION_POOL_SIZE)
+        val connections = mutableListOf<SmbConnection>()
+        var lastError: Exception? = null
+        repeat(CONNECTION_POOL_SIZE) {
+            try {
+                connections.add(smbClient.connect(info))
+            } catch (e: Exception) {
+                lastError = e
+            }
+        }
+        if (connections.isEmpty()) throw lastError ?: IOException("Unable to connect to $info")
+        val channel = Channel<SmbConnection>(connections.size)
         connections.forEach { channel.trySend(it) }
         try {
             return block(SmbPool(channel, info))
