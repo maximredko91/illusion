@@ -291,16 +291,26 @@ private fun SuggestibleTextField(
                 .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryEditable)
                 .onFocusChanged { if (it.isFocused && suggestions.isNotEmpty()) expanded = true }
                 .focusHighlight(fieldSource)
-                .dpadFieldNavigation()
+                // dpadFieldNavigation() unconditionally hijacks DirectionDown to jump to the next
+                // field - fine normally, but with the suggestion dropdown open that meant Down
+                // NEVER reached the dropdown itself: it always skipped straight past the
+                // suggestions to whatever field came after (confirmed on-device: D-pad couldn't
+                // select a suggestion at all). Only attach it while there's no dropdown to navigate
+                // into - with the dropdown open, Down should do its normal job of moving focus
+                // down into the popup's first item instead.
+                .let { if (!menuVisible) it.dpadFieldNavigation() else it }
         )
         ExposedDropdownMenu(expanded = menuVisible, onDismissRequest = { expanded = false }) {
             filtered.forEach { suggestion ->
+                val itemSource = remember { MutableInteractionSource() }
                 DropdownMenuItem(
                     text = { Text(suggestion) },
                     onClick = {
                         onValueChange(suggestion)
                         expanded = false
-                    }
+                    },
+                    interactionSource = itemSource,
+                    modifier = Modifier.focusHighlight(itemSource)
                 )
             }
         }
