@@ -150,9 +150,9 @@ class UpdateViewModel(
                 is UpdateCheckResult.UpToDate -> {
                     if (force) {
                         _upToDateMessage.value = if (result.checkedVersionInfo != null) {
-                            "У вас последняя версия (${result.checkedVersionInfo})"
+                            "У вас последняя версия! (${result.checkedVersionInfo})"
                         } else {
-                            "У вас последняя версия"
+                            "У вас последняя версия!"
                         }
                     }
                 }

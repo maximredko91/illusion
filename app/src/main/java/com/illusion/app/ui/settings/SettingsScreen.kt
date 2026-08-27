@@ -8,6 +8,7 @@ import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
@@ -549,7 +550,28 @@ fun SettingsScreen(
                                             kotlinx.coroutines.delay(4000)
                                             onDismissUpToDateMessage()
                                         }
-                                        Text(upToDateMessage)
+                                        // Only the "already up to date" success message gets the
+                                        // green pill treatment - a failure message (no internet,
+                                        // manifest not found, ...) shares this same
+                                        // supportingContent slot and should never look like a
+                                        // success by association.
+                                        val successPrefix = "У вас последняя версия!"
+                                        if (upToDateMessage.startsWith(successPrefix)) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .clip(RoundedCornerShape(50))
+                                                    .background(Color(0xFF2E7D32).copy(alpha = 0.15f))
+                                                    .padding(horizontal = 10.dp, vertical = 4.dp)
+                                            ) {
+                                                Text(
+                                                    upToDateMessage,
+                                                    color = Color(0xFF2E7D32),
+                                                    style = MaterialTheme.typography.labelMedium
+                                                )
+                                            }
+                                        } else {
+                                            Text(upToDateMessage)
+                                        }
                                     }
                                 } else null,
                                 trailingContent = {
