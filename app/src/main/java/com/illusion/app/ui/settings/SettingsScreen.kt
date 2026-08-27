@@ -585,6 +585,19 @@ fun SettingsScreen(
                             if (currentUpdateSource == com.illusion.app.domain.model.UpdateSource.LOCAL) {
                                 SettingsDivider()
                                 val currentLocalUpdateSourceId by localUpdateSourceId.collectAsState(initial = null)
+                                // Switching the row above to "Локально" without also picking a
+                                // specific source here (an easy thing to miss - two separate
+                                // dropdowns, only the first one is obviously "the switch") left
+                                // localUpdateSourceId null, and the actual check silently failed
+                                // with "не выбран источник" - confirmed on-device. Auto-picks the
+                                // first configured source instead of requiring that second tap
+                                // whenever there's an unambiguous default (exactly one, or none
+                                // chosen yet) to pick.
+                                LaunchedEffect(currentUpdateSource, sources) {
+                                    if (currentLocalUpdateSourceId == null && sources.isNotEmpty()) {
+                                        onLocalUpdateSourceIdChange(sources.first().id)
+                                    }
+                                }
                                 ListItem(
                                     headlineContent = { Text(stringResource(R.string.settings_local_update_source)) },
                                     supportingContent = {
