@@ -83,7 +83,7 @@ class MainActivity : ComponentActivity() {
                     AppSplashOverlay()
                     val updateViewModel: UpdateViewModel = viewModel(
                         viewModelStoreOwner = this@MainActivity,
-                        factory = UpdateViewModel.factory(app, app.updateChecker, app.settingsRepository)
+                        factory = UpdateViewModel.factory(app, app.updateChecker, app.localUpdateChecker, app.settingsRepository)
                     )
                     LaunchedEffect(Unit) { updateViewModel.checkForUpdate() }
                     UpdatePrompt(updateViewModel)

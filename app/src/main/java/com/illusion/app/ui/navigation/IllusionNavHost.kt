@@ -529,7 +529,7 @@ private fun IllusionNavGraph(app: IllusionApplication, navController: NavHostCon
                 // ever sees rendered.
                 val updateViewModel: com.illusion.app.ui.update.UpdateViewModel = viewModel(
                     viewModelStoreOwner = context as androidx.activity.ComponentActivity,
-                    factory = com.illusion.app.ui.update.UpdateViewModel.factory(app, app.updateChecker, app.settingsRepository)
+                    factory = com.illusion.app.ui.update.UpdateViewModel.factory(app, app.updateChecker, app.localUpdateChecker, app.settingsRepository)
                 )
                 val upToDateMessage by updateViewModel.upToDateMessage.collectAsState()
                 SettingsScreen(
@@ -617,6 +617,10 @@ private fun IllusionNavGraph(app: IllusionApplication, navController: NavHostCon
                     onDismissUpToDateMessage = { updateViewModel.dismissUpToDateMessage() },
                     updateCheckIntervalHours = updateViewModel.updateCheckIntervalHours,
                     onUpdateCheckIntervalChange = { hours -> updateViewModel.setUpdateCheckIntervalHours(hours) },
+                    updateSource = updateViewModel.updateSource,
+                    onUpdateSourceChange = { source -> updateViewModel.setUpdateSource(source) },
+                    localUpdateSourceId = updateViewModel.localUpdateSourceId,
+                    onLocalUpdateSourceIdChange = { sourceId -> updateViewModel.setLocalUpdateSourceId(sourceId) },
                     onBack = { navController.popBackStack() }
                 )
             }

@@ -58,6 +58,8 @@ class SettingsRepository(private val context: Context) {
         val LAST_UPDATE_CHECK_AT_MS = longPreferencesKey("last_update_check_at_ms")
         val UPDATE_CHECK_INTERVAL_HOURS = intPreferencesKey("update_check_interval_hours")
         val TV_OVERSCAN_MARGIN_PERCENT = intPreferencesKey("tv_overscan_margin_percent")
+        val UPDATE_SOURCE = stringPreferencesKey("update_source")
+        val LOCAL_UPDATE_SOURCE_ID = longPreferencesKey("local_update_source_id")
     }
 
     val requireChargingForHeavyTasks: Flow<Boolean> = context.dataStore.data.map {
@@ -328,5 +330,24 @@ class SettingsRepository(private val context: Context) {
 
     suspend fun setUpdateCheckIntervalHours(hours: Int) {
         context.dataStore.edit { it[Keys.UPDATE_CHECK_INTERVAL_HOURS] = hours }
+    }
+
+    /** GitHub (default, needs internet) or a manifest+APKs published to a local SMB source (see
+     * LocalUpdateChecker) - lets a device with flaky/no internet but a working connection to the
+     * home NAS still get updates. */
+    val updateSource: Flow<com.illusion.app.domain.model.UpdateSource> = context.dataStore.data.map {
+        it[Keys.UPDATE_SOURCE]?.let { name -> runCatching { com.illusion.app.domain.model.UpdateSource.valueOf(name) }.getOrNull() }
+            ?: com.illusion.app.domain.model.UpdateSource.GITHUB
+    }
+
+    suspend fun setUpdateSource(source: com.illusion.app.domain.model.UpdateSource) {
+        context.dataStore.edit { it[Keys.UPDATE_SOURCE] = source.name }
+    }
+
+    /** Which configured SMB source hosts the update manifest, when [updateSource] is LOCAL - null until the user picks one in Settings. */
+    val localUpdateSourceId: Flow<Long?> = context.dataStore.data.map { it[Keys.LOCAL_UPDATE_SOURCE_ID] }
+
+    suspend fun setLocalUpdateSourceId(sourceId: Long) {
+        context.dataStore.edit { it[Keys.LOCAL_UPDATE_SOURCE_ID] = sourceId }
     }
 }

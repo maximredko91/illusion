@@ -169,6 +169,10 @@ fun SettingsScreen(
     upToDateMessage: String?,
     onDismissUpToDateMessage: () -> Unit,
     updateCheckIntervalHours: Flow<Int>,
+    updateSource: Flow<com.illusion.app.domain.model.UpdateSource>,
+    onUpdateSourceChange: (com.illusion.app.domain.model.UpdateSource) -> Unit,
+    localUpdateSourceId: Flow<Long?>,
+    onLocalUpdateSourceIdChange: (Long) -> Unit,
     onUpdateCheckIntervalChange: (Int) -> Unit,
     onBack: () -> Unit,
     modifier: Modifier = Modifier
@@ -569,6 +573,38 @@ fun SettingsScreen(
                                 colors = ListItemDefaults.colors(containerColor = Color.Transparent),
                                 modifier = Modifier.fillMaxWidth()
                             )
+                            SettingsDivider()
+                            val currentUpdateSource by updateSource.collectAsState(initial = com.illusion.app.domain.model.UpdateSource.GITHUB)
+                            ListItem(
+                                headlineContent = { Text(stringResource(R.string.settings_update_source)) },
+                                supportingContent = { Text(stringResource(R.string.settings_update_source_hint)) },
+                                trailingContent = { UpdateSourceMenu(currentUpdateSource, onUpdateSourceChange) },
+                                colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                            if (currentUpdateSource == com.illusion.app.domain.model.UpdateSource.LOCAL) {
+                                SettingsDivider()
+                                val currentLocalUpdateSourceId by localUpdateSourceId.collectAsState(initial = null)
+                                ListItem(
+                                    headlineContent = { Text(stringResource(R.string.settings_local_update_source)) },
+                                    supportingContent = {
+                                        Text(
+                                            if (sources.isEmpty()) {
+                                                stringResource(R.string.settings_local_update_source_none)
+                                            } else {
+                                                stringResource(R.string.settings_local_update_source_path_hint)
+                                            }
+                                        )
+                                    },
+                                    trailingContent = {
+                                        if (sources.isNotEmpty()) {
+                                            LocalUpdateSourceMenu(sources, currentLocalUpdateSourceId, onLocalUpdateSourceIdChange)
+                                        }
+                                    },
+                                    colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                            }
                             SettingsDivider()
                             val developerSource = remember { MutableInteractionSource() }
                             ListItem(
@@ -1766,6 +1802,71 @@ private fun PlayerModeMenu(current: com.illusion.app.domain.model.PlayerMode, on
                     onClick = {
                         haptics.segmentTick()
                         onChange(mode)
+                        expanded = false
+                    },
+                    interactionSource = itemSource,
+                    modifier = Modifier.focusHighlight(itemSource)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun UpdateSourceMenu(current: com.illusion.app.domain.model.UpdateSource, onChange: (com.illusion.app.domain.model.UpdateSource) -> Unit) {
+    var expanded by remember { mutableStateOf(false) }
+    val haptics = LocalHapticFeedback.current
+    Box {
+        val triggerSource = remember { MutableInteractionSource() }
+        OutlinedButton(onClick = { expanded = true }, interactionSource = triggerSource, modifier = Modifier.focusHighlight(triggerSource)) {
+            Text(updateSourceLabel(current))
+        }
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            com.illusion.app.domain.model.UpdateSource.entries.forEach { source ->
+                val itemSource = remember { MutableInteractionSource() }
+                DropdownMenuItem(
+                    text = { Text(updateSourceLabel(source)) },
+                    onClick = {
+                        haptics.segmentTick()
+                        onChange(source)
+                        expanded = false
+                    },
+                    interactionSource = itemSource,
+                    modifier = Modifier.focusHighlight(itemSource)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun updateSourceLabel(source: com.illusion.app.domain.model.UpdateSource): String = when (source) {
+    com.illusion.app.domain.model.UpdateSource.GITHUB -> stringResource(R.string.settings_update_source_github)
+    com.illusion.app.domain.model.UpdateSource.LOCAL -> stringResource(R.string.settings_update_source_local)
+}
+
+@Composable
+private fun LocalUpdateSourceMenu(
+    sources: List<SmbSourceEntity>,
+    currentId: Long?,
+    onChange: (Long) -> Unit
+) {
+    var expanded by remember { mutableStateOf(false) }
+    val haptics = LocalHapticFeedback.current
+    val current = sources.firstOrNull { it.id == currentId }
+    Box {
+        val triggerSource = remember { MutableInteractionSource() }
+        OutlinedButton(onClick = { expanded = true }, interactionSource = triggerSource, modifier = Modifier.focusHighlight(triggerSource)) {
+            Text(current?.displayName ?: stringResource(R.string.settings_local_update_source_pick))
+        }
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            sources.forEach { source ->
+                val itemSource = remember { MutableInteractionSource() }
+                DropdownMenuItem(
+                    text = { Text(source.displayName) },
+                    onClick = {
+                        haptics.segmentTick()
+                        onChange(source.id)
                         expanded = false
                     },
                     interactionSource = itemSource,

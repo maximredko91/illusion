@@ -329,6 +329,15 @@
     <string name="player_sharpen_on_label">Резкость включена</string>
     <string name="player_sharpen_off_label">Резкость выключена</string>
 
+    <string name="settings_update_source">Источник обновлений</string>
+    <string name="settings_update_source_hint">GitHub — нужен интернет. Локально — читает манифест с NAS по SMB</string>
+    <string name="settings_update_source_github">GitHub</string>
+    <string name="settings_update_source_local">Локально (NAS)</string>
+    <string name="settings_local_update_source">Источник для обновлений</string>
+    <string name="settings_local_update_source_none">Сначала добавьте SMB-источник</string>
+    <string name="settings_local_update_source_pick">Выбрать</string>
+    <string name="settings_local_update_source_path_hint">Манифест ожидается в папке IllusionUpdates\\manifest.json</string>
+
     <string name="settings_tv_overscan_margin">Отступ от края экрана</string>
     <string name="settings_tv_overscan_margin_hint">Если интерфейс обрезается краем телевизора — увеличьте. Если по краям пустые чёрные полосы — уменьшите</string>
     <string name="settings_tv_overscan_margin_off">Без отступа</string>

@@ -38,7 +38,7 @@ class IllusionWorkerFactory(
         UploadWorker::class.java.name ->
             UploadWorker(appContext, workerParameters, smbSourceRepository, smbClient)
         UpdateDownloadWorker::class.java.name ->
-            UpdateDownloadWorker(appContext, workerParameters)
+            UpdateDownloadWorker(appContext, workerParameters, smbSourceRepository, smbClient)
         else -> null
     }
 }

@@ -9,10 +9,12 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import androidx.work.WorkInfo
 import com.illusion.app.BuildConfig
 import com.illusion.app.data.settings.SettingsRepository
+import com.illusion.app.data.update.LocalUpdateChecker
 import com.illusion.app.data.update.UpdateCheckResult
 import com.illusion.app.data.update.UpdateChecker
 import com.illusion.app.data.update.UpdateInfo
 import com.illusion.app.data.update.UpdateInstaller
+import com.illusion.app.domain.model.UpdateSource
 import com.illusion.app.work.UpdateDownloadWorker
 import com.illusion.app.work.WorkScheduler
 import java.io.File
@@ -39,12 +41,23 @@ data class UpdateUiState(
 class UpdateViewModel(
     private val appContext: Context,
     private val updateChecker: UpdateChecker,
+    private val localUpdateChecker: LocalUpdateChecker,
     private val settingsRepository: SettingsRepository
 ) : ViewModel() {
     private val _state = MutableStateFlow(UpdateUiState())
     val state: StateFlow<UpdateUiState> = _state.asStateFlow()
 
     val updateCheckIntervalHours: Flow<Int> = settingsRepository.updateCheckIntervalHours
+    val updateSource: Flow<UpdateSource> = settingsRepository.updateSource
+    val localUpdateSourceId: Flow<Long?> = settingsRepository.localUpdateSourceId
+
+    fun setUpdateSource(source: UpdateSource) {
+        viewModelScope.launch { settingsRepository.setUpdateSource(source) }
+    }
+
+    fun setLocalUpdateSourceId(sourceId: Long) {
+        viewModelScope.launch { settingsRepository.setLocalUpdateSourceId(sourceId) }
+    }
 
     /** Set when a manual check (Settings' "Проверить обновления" button) finds nothing newer - a one-shot toast-style message, not part of [state] since it has nothing to do with the update dialog itself. */
     private val _upToDateMessage = MutableStateFlow<String?>(null)
@@ -113,9 +126,26 @@ class UpdateViewModel(
                 if (System.currentTimeMillis() - lastCheckedAt < intervalHours * 60 * 60 * 1000L) return@launch
             }
             settingsRepository.setLastUpdateCheckAtMs(System.currentTimeMillis())
-            when (val result = updateChecker.checkForUpdate(BuildConfig.VERSION_CODE)) {
+            val source = settingsRepository.updateSource.first()
+            val result = if (source == UpdateSource.LOCAL) {
+                val sourceId = settingsRepository.localUpdateSourceId.first()
+                if (sourceId == null) {
+                    if (force) _upToDateMessage.value = "Не выбран источник для локальных обновлений"
+                    return@launch
+                }
+                localUpdateChecker.checkForUpdate(sourceId, BuildConfig.VERSION_CODE)
+            } else {
+                updateChecker.checkForUpdate(BuildConfig.VERSION_CODE)
+            }
+            when (result) {
                 is UpdateCheckResult.Failed -> {
-                    if (force) _upToDateMessage.value = "Не удалось проверить обновления — нет подключения к интернету"
+                    if (force) {
+                        _upToDateMessage.value = if (source == UpdateSource.LOCAL) {
+                            "Не удалось проверить обновления: ${result.message}"
+                        } else {
+                            "Не удалось проверить обновления — нет подключения к интернету"
+                        }
+                    }
                 }
                 is UpdateCheckResult.UpToDate -> {
                     if (force) _upToDateMessage.value = "У вас последняя версия"
@@ -178,8 +208,13 @@ class UpdateViewModel(
     }
 
     companion object {
-        fun factory(context: Context, updateChecker: UpdateChecker, settingsRepository: SettingsRepository) = viewModelFactory {
-            initializer { UpdateViewModel(context.applicationContext, updateChecker, settingsRepository) }
+        fun factory(
+            context: Context,
+            updateChecker: UpdateChecker,
+            localUpdateChecker: LocalUpdateChecker,
+            settingsRepository: SettingsRepository
+        ) = viewModelFactory {
+            initializer { UpdateViewModel(context.applicationContext, updateChecker, localUpdateChecker, settingsRepository) }
         }
     }
 }

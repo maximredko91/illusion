@@ -98,6 +98,9 @@ class IllusionApplication : Application(), Configuration.Provider, SingletonImag
     }
     val nfoWriter: NfoWriter by lazy { NfoWriter() }
     val updateChecker: com.illusion.app.data.update.UpdateChecker by lazy { com.illusion.app.data.update.UpdateChecker() }
+    val localUpdateChecker: com.illusion.app.data.update.LocalUpdateChecker by lazy {
+        com.illusion.app.data.update.LocalUpdateChecker(smbSourceRepository, smbClient)
+    }
 
     override val workManagerConfiguration: Configuration
         get() = Configuration.Builder()
