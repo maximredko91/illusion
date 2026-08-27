@@ -294,8 +294,17 @@ fun classifySmbError(e: Throwable): String = when (e) {
     else -> {
         val message = e.message ?: e::class.simpleName ?: "неизвестная ошибка"
         when {
-            message.contains("STATUS_LOGON_FAILURE", ignoreCase = true) ||
-                message.contains("STATUS_ACCESS_DENIED", ignoreCase = true) -> "Неверный логин или пароль"
+            // These two used to be collapsed into one "wrong password" message - a genuinely
+            // different failure (STATUS_ACCESS_DENIED, the current credentials authenticate fine
+            // but this specific file/folder is off-limits per the NAS's own per-folder ACL) read
+            // exactly like a credential problem, sending the user to keep re-entering the same
+            // already-correct password. Confirmed on-device twice this session: once opening a
+            // single file whose folder had incomplete per-user permissions, once during a full
+            // library scan where the same class of error on some OTHER folder in the tree - not
+            // the credentials at all - produced this same misleading message.
+            message.contains("STATUS_LOGON_FAILURE", ignoreCase = true) -> "Неверный логин или пароль"
+            message.contains("STATUS_ACCESS_DENIED", ignoreCase = true) ->
+                "Доступ запрещён - проверьте права этого пользователя на папку на роутере (логин и пароль верны, дело не в них)"
             message.contains("STATUS_BAD_NETWORK_NAME", ignoreCase = true) -> "Шара с таким именем не найдена на сервере"
             else -> "Не удалось подключиться: $message"
         }
