@@ -325,6 +325,10 @@
     <string name="streaming_notification_text">Передача файла внешнему плееру</string>
     <string name="streaming_notification_stop">Остановить</string>
 
+    <string name="settings_tv_overscan_margin">Отступ от края экрана</string>
+    <string name="settings_tv_overscan_margin_hint">Если интерфейс обрезается краем телевизора — увеличьте. Если по краям пустые чёрные полосы — уменьшите</string>
+    <string name="settings_tv_overscan_margin_off">Без отступа</string>
+
     <string name="settings_add_source">Добавить источник</string>
     <string name="settings_no_sources">Источники не добавлены</string>
     <string name="settings_delete_source">Удалить</string>

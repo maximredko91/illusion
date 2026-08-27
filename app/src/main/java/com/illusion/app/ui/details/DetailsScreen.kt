@@ -18,6 +18,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusGroup
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -137,6 +138,7 @@ import com.illusion.app.ui.common.RatingBadge
 import com.illusion.app.ui.common.ThumbnailImage
 import com.illusion.app.ui.common.shimmer
 import com.illusion.app.ui.common.ZoomableImageViewer
+import com.illusion.app.ui.common.bridgeFocusDown
 import com.illusion.app.ui.common.focusHighlight
 import com.illusion.app.ui.common.tick
 import com.illusion.app.ui.common.toggle
@@ -177,6 +179,10 @@ fun DetailsScreen(
     val context = LocalContext.current
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
+    // See TvFocus.bridgeFocusDown's own KDoc - back/home float outside the scrollable content
+    // below them, which stranded D-pad focus on just those two buttons with no way to reach
+    // anything else on a real Android TV.
+    val contentFocusRequester = remember { androidx.compose.ui.focus.FocusRequester() }
 
     Box(modifier = modifier.fillMaxSize()) {
         val item = state.item
@@ -225,7 +231,8 @@ fun DetailsScreen(
                     }
                 },
                 onOpenPerson = onOpenPerson,
-                onOpenItem = onOpenItem
+                onOpenItem = onOpenItem,
+                contentFocusRequester = contentFocusRequester
             )
             state.isLoading -> CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
             else -> Text(
@@ -258,6 +265,7 @@ fun DetailsScreen(
                 modifier = Modifier
                     .background(cornerPillColor, CircleShape)
                     .focusHighlight(backSource, color = cornerIconTint)
+                    .bridgeFocusDown(contentFocusRequester)
             ) {
                 Icon(
                     Icons.AutoMirrored.Filled.ArrowBack,
@@ -279,6 +287,7 @@ fun DetailsScreen(
                 modifier = Modifier
                     .background(cornerPillColor, CircleShape)
                     .focusHighlight(homeSource, color = cornerIconTint)
+                    .bridgeFocusDown(contentFocusRequester)
             ) {
                 Icon(
                     Icons.Default.Home,
@@ -319,7 +328,8 @@ private fun DetailsContent(
     onPlay: (String) -> Unit,
     onPlayTrailer: (String) -> Unit,
     onOpenPerson: (String) -> Unit,
-    onOpenItem: (String) -> Unit
+    onOpenItem: (String) -> Unit,
+    contentFocusRequester: androidx.compose.ui.focus.FocusRequester? = null
 ) {
     var zoomedImage by remember { mutableStateOf<Any?>(null) }
     var zoomedImageIsFanart by remember { mutableStateOf(false) }
@@ -483,6 +493,7 @@ private fun DetailsContent(
                         modifier = Modifier
                             .fillMaxSize()
                             .padding(cornerButtonSize)
+                            .let { if (contentFocusRequester != null) it.focusRequester(contentFocusRequester) else it }
                             .focusHighlight(fanartSource)
                             .clickable(interactionSource = fanartSource, indication = LocalIndication.current) { zoomedImage = fanart; zoomedImageIsFanart = true }
                     )

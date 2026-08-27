@@ -57,6 +57,7 @@ class SettingsRepository(private val context: Context) {
         val SKIPPED_UPDATE_VERSION_CODE = intPreferencesKey("skipped_update_version_code")
         val LAST_UPDATE_CHECK_AT_MS = longPreferencesKey("last_update_check_at_ms")
         val UPDATE_CHECK_INTERVAL_HOURS = intPreferencesKey("update_check_interval_hours")
+        val TV_OVERSCAN_MARGIN_PERCENT = intPreferencesKey("tv_overscan_margin_percent")
     }
 
     val requireChargingForHeavyTasks: Flow<Boolean> = context.dataStore.data.map {
@@ -135,6 +136,20 @@ class SettingsRepository(private val context: Context) {
 
     suspend fun setUiMode(mode: UiMode) {
         context.dataStore.edit { it[Keys.UI_MODE] = mode.name }
+    }
+
+    /** TV-mode-only safe-area margin (0-10, percent of each screen dimension) - a real Android TV
+     * box crops a slice off every edge that nothing this app draws is actually visible in, but
+     * exactly how much varies by device/panel (confirmed two different real boxes needing two
+     * different values, 8% not being enough for one and being way too much - "огромные черные
+     * отступы" - on another that apparently barely crops at all). A single hardcoded guess can't
+     * fit every device, so this is user-adjustable instead (Settings, TV mode only) rather than
+     * re-guessed in code every time a new device is tested. Default 0 - safest starting point for
+     * an unknown device is no margin at all rather than assuming a crop that isn't really there. */
+    val tvOverscanMarginPercent: Flow<Int> = context.dataStore.data.map { it[Keys.TV_OVERSCAN_MARGIN_PERCENT] ?: 0 }
+
+    suspend fun setTvOverscanMarginPercent(percent: Int) {
+        context.dataStore.edit { it[Keys.TV_OVERSCAN_MARGIN_PERCENT] = percent.coerceIn(0, 10) }
     }
 
     /** Global switch for haptic feedback (IllusionNavHost overrides LocalHapticFeedback app-wide with this, so every existing call site respects it without individual changes). */

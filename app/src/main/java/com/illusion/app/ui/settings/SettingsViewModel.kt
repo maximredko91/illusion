@@ -76,6 +76,11 @@ class SettingsViewModel(
     }
     val downloadsFolderUri: Flow<String?> = settingsRepository.downloadsFolderUri
     val uiMode: Flow<UiMode?> = settingsRepository.uiMode
+    val tvOverscanMarginPercent: Flow<Int> = settingsRepository.tvOverscanMarginPercent
+
+    fun setTvOverscanMarginPercent(percent: Int) {
+        viewModelScope.launch { settingsRepository.setTvOverscanMarginPercent(percent) }
+    }
     val defaultSortOrder: Flow<SortOrder> = settingsRepository.defaultSortOrder
     val hapticsEnabled: Flow<Boolean> = settingsRepository.hapticsEnabled
     val predictiveBackEnabled: Flow<Boolean> = settingsRepository.predictiveBackEnabled

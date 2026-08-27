@@ -136,6 +136,7 @@ fun IllusionNavHost(
     // hasn't answered the onboarding prompt yet; it only matters for the brief pre-onboarding
     // frame and for pre-existing installs from before this feature (see SettingsRepository.uiMode).
     val uiMode by app.settingsRepository.uiMode.collectAsState(initial = UiMode.PHONE)
+    val tvOverscanMarginPercent by app.settingsRepository.tvOverscanMarginPercent.collectAsState(initial = 0)
     // Wraps the real LocalHapticFeedback so every existing call site (6 files, .toggle()/
     // .reject()/.segmentTick()/.tick()) respects the Settings switch without being touched
     // individually - overriding the same CompositionLocal androidx itself provides.
@@ -193,24 +194,26 @@ fun IllusionNavHost(
             modifier = Modifier.fillMaxSize(),
             color = MaterialTheme.colorScheme.background
         ) {
-            // TV-mode-only overscan-safe margin - confirmed on a real Android TV (photos from the
-            // user: focus-highlight borders and list-row chevrons rendering right up to, and past,
-            // the physical bezel, "192.168.2.1" missing its leading "1" against the left edge)
-            // that this TV crops a real slice off every edge of the picture without compensating
-            // the reported display resolution for it - nothing this app draws in that strip is
-            // actually visible. Google's own historical TV design guidance calls this the
-            // "overscan-safe area" and starts at 5% of each dimension - bumped to 8% after the
-            // user reported icons still clipped (and visible spare room past them) at 5% on this
-            // specific panel, whose real crop is evidently bigger than the guideline's baseline.
-            // A phone/tablet never hits this branch, so nothing changes there.
-            if ((uiMode ?: UiMode.PHONE) == UiMode.TV && !isPlayerScreen) {
+            // TV-mode-only overscan-safe margin - some real Android TV boxes crop a slice off
+            // every edge of the picture without compensating the reported display resolution for
+            // it, so nothing this app draws in that strip is actually visible there. How much (if
+            // any) varies by device: a fixed 5%, then 8%, guess each turned out wrong for a
+            // *different* real box - one still clipped icons at 5%, another showed "огромные
+            // черные отступы" (huge black bars) at 8% despite barely cropping at all. Rather than
+            // re-guessing a single global constant forever, this is now Settings-adjustable
+            // (default 0 - no margin, matching "интерфейс... на всю доступную площадь" for a
+            // device that doesn't crop at all) and only a user who actually sees clipping needs to
+            // raise it for their own box. A phone/tablet never hits this branch, so nothing
+            // changes there.
+            if ((uiMode ?: UiMode.PHONE) == UiMode.TV && !isPlayerScreen && tvOverscanMarginPercent > 0) {
+                val marginFraction = tvOverscanMarginPercent / 100f
                 androidx.compose.foundation.layout.BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
                     IllusionNavGraph(
                         app,
                         navController,
                         modifier = Modifier
                             .fillMaxSize()
-                            .padding(horizontal = maxWidth * 0.08f, vertical = maxHeight * 0.08f)
+                            .padding(horizontal = maxWidth * marginFraction, vertical = maxHeight * marginFraction)
                     )
                 }
             } else {
@@ -548,6 +551,8 @@ private fun IllusionNavGraph(app: IllusionApplication, navController: NavHostCon
                     onOpenCache = { navController.navigate(Destination.Cache) },
                     uiMode = settingsViewModel.uiMode,
                     onUiModeChange = { mode -> settingsViewModel.setUiMode(mode) },
+                    tvOverscanMarginPercent = settingsViewModel.tvOverscanMarginPercent,
+                    onTvOverscanMarginPercentChange = { percent -> settingsViewModel.setTvOverscanMarginPercent(percent) },
                     defaultSortOrder = settingsViewModel.defaultSortOrder,
                     onDefaultSortOrderChange = settingsViewModel::setDefaultSortOrder,
                     hapticsEnabled = settingsViewModel.hapticsEnabled,

@@ -119,6 +119,8 @@ fun SettingsScreen(
     onOpenCache: () -> Unit,
     uiMode: Flow<UiMode?>,
     onUiModeChange: (UiMode) -> Unit,
+    tvOverscanMarginPercent: Flow<Int>,
+    onTvOverscanMarginPercentChange: (Int) -> Unit,
     defaultSortOrder: Flow<SortOrder>,
     onDefaultSortOrderChange: (SortOrder) -> Unit,
     hapticsEnabled: Flow<Boolean>,
@@ -172,6 +174,7 @@ fun SettingsScreen(
     modifier: Modifier = Modifier
 ) {
     val currentUiMode by uiMode.collectAsState(initial = null)
+    val currentTvOverscanMarginPercent by tvOverscanMarginPercent.collectAsState(initial = 0)
     val currentDefaultSortOrder by defaultSortOrder.collectAsState(initial = SortOrder.RATING)
     val currentPlayerMode by playerMode.collectAsState(initial = com.illusion.app.domain.model.PlayerMode.INTERNAL)
     val currentExternalPlayerPackage by externalPlayerPackage.collectAsState(initial = null)
@@ -791,6 +794,24 @@ fun SettingsScreen(
                                     .focusHighlight(tvRowSource)
                                     .clickable(interactionSource = tvRowSource, indication = LocalIndication.current) { onUiModeChange(UiMode.TV) }
                             )
+                        }
+                        // Only meaningful in TV mode (IllusionNavHost only ever applies this
+                        // margin there) - how much a real TV box crops varies by device (0%, 8%,
+                        // and "way too much at 8%" were all seen on different real panels this
+                        // session), so this is user-adjustable rather than a single hardcoded
+                        // guess baked into the app.
+                        if (currentUiMode == UiMode.TV) {
+                            SettingsGroup {
+                                ListItem(
+                                    headlineContent = { Text(stringResource(R.string.settings_tv_overscan_margin)) },
+                                    supportingContent = { Text(stringResource(R.string.settings_tv_overscan_margin_hint)) },
+                                    trailingContent = {
+                                        TvOverscanMarginMenu(currentTvOverscanMarginPercent, onTvOverscanMarginPercentChange)
+                                    },
+                                    colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                            }
                         }
                     }
 
@@ -1665,6 +1686,33 @@ private fun RescanIntervalMenu(hours: Int, onChange: (Int) -> Unit) {
 @Composable
 private fun rescanLabel(hours: Int): String =
     if (hours <= 0) stringResource(R.string.settings_rescan_off) else stringResource(R.string.settings_rescan_hours, hours)
+
+private val TV_OVERSCAN_MARGIN_OPTIONS = listOf(0, 2, 4, 6, 8, 10)
+
+@Composable
+private fun TvOverscanMarginMenu(percent: Int, onChange: (Int) -> Unit) {
+    var expanded by remember { mutableStateOf(false) }
+    Box {
+        val triggerSource = remember { MutableInteractionSource() }
+        OutlinedButton(onClick = { expanded = true }, interactionSource = triggerSource, modifier = Modifier.focusHighlight(triggerSource)) {
+            Text(if (percent <= 0) stringResource(R.string.settings_tv_overscan_margin_off) else "$percent%")
+        }
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            TV_OVERSCAN_MARGIN_OPTIONS.forEach { option ->
+                val itemSource = remember { MutableInteractionSource() }
+                DropdownMenuItem(
+                    text = { Text(if (option <= 0) stringResource(R.string.settings_tv_overscan_margin_off) else "$option%") },
+                    onClick = {
+                        onChange(option)
+                        expanded = false
+                    },
+                    interactionSource = itemSource,
+                    modifier = Modifier.focusHighlight(itemSource)
+                )
+            }
+        }
+    }
+}
 
 @Composable
 private fun ThemeModeMenu(current: com.illusion.app.domain.model.ThemeMode, onChange: (com.illusion.app.domain.model.ThemeMode) -> Unit) {

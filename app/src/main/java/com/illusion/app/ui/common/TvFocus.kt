@@ -11,6 +11,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.focus.FocusDirection
+import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.input.key.Key
@@ -63,6 +64,28 @@ fun Modifier.focusHighlight(
  * reinterpreted as "move to the next/previous focusable", matching how a vertically-stacked form
  * should behave on a D-pad in the first place.
  */
+/**
+ * Details screen floats its back/home buttons as a fixed overlay OUTSIDE the scrollable content
+ * column (so they stay put while the fanart/poster/etc. below scroll away) - on a real Android TV
+ * this turned out to strand D-pad focus: with nothing else composed above them and no explicit
+ * traversal link into the separate scrollable subtree below, DirectionDown from back/home simply
+ * had no reachable candidate, leaving the user able to toggle only between those two buttons and
+ * never reach the poster, play button, or anything else on the page at all (confirmed on-device:
+ * "могу переключаться между стрелочкой назад и домиком, больше ничего"). This explicitly bridges
+ * that gap - DirectionDown from the annotated element jumps straight to [target] instead of
+ * relying on 2D spatial search to find it across that subtree boundary on its own.
+ */
+@Composable
+fun Modifier.bridgeFocusDown(target: FocusRequester): Modifier =
+    this.onPreviewKeyEvent { event ->
+        if (event.type == KeyEventType.KeyDown && event.key == Key.DirectionDown) {
+            runCatching { target.requestFocus() }
+            true
+        } else {
+            false
+        }
+    }
+
 @Composable
 fun Modifier.dpadFieldNavigation(): Modifier {
     val focusManager = LocalFocusManager.current
