@@ -3,6 +3,7 @@ package com.illusion.app.ui.player
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
+import android.media.AudioManager
 import android.view.WindowManager
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
@@ -350,7 +351,6 @@ fun PlayerScreen(
         if (!isInPip) {
             GestureLayer(
                 enabled = !isLocked,
-                player = currentPlayer,
                 seekDurationMs = uiState.seekDurationMs,
                 currentPositionMs = uiState.currentPositionMs,
                 doubleTapSeekEnabled = uiState.doubleTapSeekEnabled,
@@ -677,7 +677,6 @@ private fun Context.findActivity(): Activity? {
 @Composable
 private fun GestureLayer(
     enabled: Boolean,
-    player: androidx.media3.exoplayer.ExoPlayer,
     seekDurationMs: Long,
     currentPositionMs: Long,
     doubleTapSeekEnabled: Boolean,
@@ -695,11 +694,19 @@ private fun GestureLayer(
 
     val context = LocalContext.current
     val activity = remember(context) { context.findActivity() }
+    val audioManager = remember(context) {
+        context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+    }
     val scope = rememberCoroutineScope()
 
     var showVolume by remember { mutableStateOf(false) }
     var showBrightness by remember { mutableStateOf(false) }
-    var volumeFraction by remember { mutableFloatStateOf(player.volume) }
+    var volumeFraction by remember {
+        mutableFloatStateOf(
+            audioManager.getStreamVolume(AudioManager.STREAM_MUSIC).toFloat() /
+                audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC).coerceAtLeast(1)
+        )
+    }
     var brightnessFraction by remember { mutableFloatStateOf(0.5f) }
     var volumeHideJob: Job? by remember { mutableStateOf<Job?>(null) }
     var brightnessHideJob: Job? by remember { mutableStateOf<Job?>(null) }
@@ -822,6 +829,7 @@ private fun GestureLayer(
                 var accumulatedDy = 0f
                 var dragStartVolume = 0f
                 var dragStartBrightness = 0f
+                val maxVolume = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
 
                 detectDragGestures(
                     onDragStart = { offset ->
@@ -829,7 +837,7 @@ private fun GestureLayer(
                         startX = offset.x
                         accumulatedDx = 0f
                         accumulatedDy = 0f
-                        dragStartVolume = player.volume
+                        dragStartVolume = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC).toFloat() / maxVolume.coerceAtLeast(1)
                         dragStartBrightness = activity?.let { currentBrightness(it) } ?: 0.5f
                     },
                     onDrag = { change, dragAmount ->
@@ -859,21 +867,28 @@ private fun GestureLayer(
                         }
                         when (mode) {
                             DragMode.VOLUME -> {
-                                // Driving player.volume (ExoPlayer's own software gain, a smooth
-                                // 0f..1f float) instead of AudioManager's STREAM_MUSIC used to make
-                                // the on-screen percentage jump in big steps rather than tracking
-                                // the finger smoothly - STREAM_MUSIC only has a handful of discrete
-                                // hardware steps on most devices (commonly 15-30 total), so every
-                                // AudioManager.setStreamVolume() call snapped to the nearest whole
-                                // step regardless of how finely the drag itself moved (confirmed
-                                // on-device as jumpy several-percent-at-a-time changes). This only
-                                // affects this app's own playback volume, not the device's real
-                                // media volume/other apps - the hardware volume rocker still
-                                // controls STREAM_MUSIC exactly as before, untouched here.
+                                // Switched to driving player.volume (ExoPlayer's own software
+                                // gain) instead of AudioManager's real STREAM_MUSIC to fix a
+                                // jumpy on-screen percentage - but that also silently stopped the
+                                // gesture from actually changing the device's audible volume at
+                                // all (confirmed on-device: "громкость не увеличивается свайпом",
+                                // "только физическими [кнопками]" now worked). player.volume is a
+                                // multiplier ON TOP OF the real system volume, not a replacement
+                                // for it - swiping to 100% player.volume against a low system
+                                // volume just plays at 100% of "quiet".
+                                //
+                                // Back to driving the real STREAM_MUSIC (so the gesture alone can
+                                // reach true max loudness again, matching the hardware rocker),
+                                // but the displayed percentage now tracks the finger's own
+                                // continuous fraction directly rather than being reconstructed
+                                // from the resulting whole hardware step - that's what actually
+                                // fixes the original jumpy-number complaint without breaking the
+                                // gesture's real effect.
                                 val fraction = -accumulatedDy / (size.height * VERTICAL_GESTURE_RANGE_FRACTION)
-                                val newVolume = (dragStartVolume + fraction).coerceIn(0f, 1f)
-                                player.volume = newVolume
-                                volumeFraction = newVolume
+                                val newVolumeFraction = (dragStartVolume + fraction).coerceIn(0f, 1f)
+                                val newVolume = (newVolumeFraction * maxVolume).roundToInt().coerceIn(0, maxVolume)
+                                audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, newVolume, 0)
+                                volumeFraction = newVolumeFraction
                                 pulseVolume()
                             }
                             DragMode.BRIGHTNESS -> {
