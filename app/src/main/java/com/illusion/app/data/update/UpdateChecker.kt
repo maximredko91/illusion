@@ -49,10 +49,10 @@ class UpdateChecker(
         val release = runCatching { fetchLatestRelease() }.getOrElse {
             return@withContext UpdateCheckResult.Failed(it.message ?: "Неизвестная ошибка")
         }
-        if (release.draft || release.prerelease) return@withContext UpdateCheckResult.UpToDate
-        val versionCode = versionCodeFromTag(release.tagName) ?: return@withContext UpdateCheckResult.UpToDate
-        if (versionCode <= currentVersionCode) return@withContext UpdateCheckResult.UpToDate
-        val apk = selectApkForDevice(release.assets) ?: return@withContext UpdateCheckResult.UpToDate
+        if (release.draft || release.prerelease) return@withContext UpdateCheckResult.UpToDate()
+        val versionCode = versionCodeFromTag(release.tagName) ?: return@withContext UpdateCheckResult.UpToDate()
+        if (versionCode <= currentVersionCode) return@withContext UpdateCheckResult.UpToDate()
+        val apk = selectApkForDevice(release.assets) ?: return@withContext UpdateCheckResult.UpToDate()
         UpdateCheckResult.Available(
             UpdateInfo(
                 versionCode = versionCode,

@@ -148,7 +148,13 @@ class UpdateViewModel(
                     }
                 }
                 is UpdateCheckResult.UpToDate -> {
-                    if (force) _upToDateMessage.value = "У вас последняя версия"
+                    if (force) {
+                        _upToDateMessage.value = if (result.checkedVersionInfo != null) {
+                            "У вас последняя версия (${result.checkedVersionInfo})"
+                        } else {
+                            "У вас последняя версия"
+                        }
+                    }
                 }
                 is UpdateCheckResult.Available -> {
                     if (!force && settingsRepository.skippedUpdateVersionCode.first() == result.info.versionCode) return@launch

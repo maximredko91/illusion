@@ -36,8 +36,9 @@ class LocalUpdateChecker(
             }
             val manifest = runCatching { json.decodeFromString(LocalUpdateManifest.serializer(), manifestText) }
                 .getOrElse { return@withContext UpdateCheckResult.Failed("Некорректный manifest.json") }
-            if (manifest.versionCode <= currentVersionCode) return@withContext UpdateCheckResult.UpToDate
-            val asset = selectAssetForDevice(manifest.assets) ?: return@withContext UpdateCheckResult.UpToDate
+            val manifestInfo = "манифест: v${manifest.versionCode} (${manifest.versionName})"
+            if (manifest.versionCode <= currentVersionCode) return@withContext UpdateCheckResult.UpToDate(manifestInfo)
+            val asset = selectAssetForDevice(manifest.assets) ?: return@withContext UpdateCheckResult.UpToDate(manifestInfo)
             UpdateCheckResult.Available(
                 UpdateInfo(
                     versionCode = manifest.versionCode,
