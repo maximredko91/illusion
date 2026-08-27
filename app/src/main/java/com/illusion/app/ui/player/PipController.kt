@@ -26,4 +26,17 @@ object PipController {
      * signal that the window was actually closed rather than just entered.
      */
     var onPipClosed: (() -> Unit)? = null
+
+    /**
+     * Set by [com.illusion.app.ui.player.PlayerScreen] while it's on screen, invoked by
+     * [com.illusion.app.MainActivity.onStop] when the activity stops WITHOUT PiP having actually
+     * been entered - [com.illusion.app.MainActivity.onUserLeaveHint] tries to enter PiP whenever
+     * [isPlayerActive] is true, but that doesn't cover every way of leaving (confirmed on-device:
+     * swiping up to the app-switcher/recents overview left playback silently running full audio,
+     * with no PiP window ever showing at all - onUserLeaveHint's enterPictureInPictureMode() call
+     * either wasn't reached for that specific gesture, or the OS declined it). Leaving audio
+     * running invisibly like that was never an intended state - either PiP is genuinely showing
+     * the video, or playback should pause, never neither.
+     */
+    var onBackgroundedWithoutPip: (() -> Unit)? = null
 }

@@ -3,7 +3,6 @@ package com.illusion.app.ui.player
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
-import android.media.AudioManager
 import android.view.WindowManager
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
@@ -165,6 +164,7 @@ fun PlayerScreen(
     var showSpeedDialog by remember { mutableStateOf(false) }
     var resizeMode by remember { mutableStateOf(AspectRatioFrameLayout.RESIZE_MODE_FIT) }
     var resizeModeLabel by remember { mutableStateOf<String?>(null) }
+    var sharpenToggleLabel by remember { mutableStateOf<String?>(null) }
     var showAspectRatioBlockedDialog by remember { mutableStateOf(false) }
     var playerViewRef by remember { mutableStateOf<PlayerView?>(null) }
 
@@ -222,6 +222,14 @@ fun PlayerScreen(
             resizeModeLabel = null
         }
     }
+    val sharpenOnLabel = stringResource(R.string.player_sharpen_on_label)
+    val sharpenOffLabel = stringResource(R.string.player_sharpen_off_label)
+    LaunchedEffect(sharpenToggleLabel) {
+        if (sharpenToggleLabel != null) {
+            delay(800)
+            sharpenToggleLabel = null
+        }
+    }
 
     // AspectRatioFrameLayout's own measure pass usually re-scales the video surface on rotation,
     // but when playback is paused (no new decoder frames arriving) that relayout can be missed -
@@ -272,12 +280,17 @@ fun PlayerScreen(
             // when the PiP window's close button is tapped, so this is the fallback that actually
             // stops playback in that case instead of leaving audio running with nothing visible.
             PipController.onPipClosed = { viewModel.player.pause() }
+            // See PipController.onBackgroundedWithoutPip's own KDoc - the same "never leave audio
+            // running with nothing visible" principle, for the case where PiP never actually
+            // started in the first place.
+            PipController.onBackgroundedWithoutPip = { viewModel.player.pause() }
         }
     }
     DisposableEffect(Unit) {
         onDispose {
             PipController.isPlayerActive = false
             PipController.onPipClosed = null
+            PipController.onBackgroundedWithoutPip = null
         }
     }
     LaunchedEffect(uiState.videoAspectRatio) {
@@ -330,6 +343,7 @@ fun PlayerScreen(
         if (!isInPip) {
             GestureLayer(
                 enabled = !isLocked,
+                player = currentPlayer,
                 seekDurationMs = uiState.seekDurationMs,
                 currentPositionMs = uiState.currentPositionMs,
                 doubleTapSeekEnabled = uiState.doubleTapSeekEnabled,
@@ -348,6 +362,11 @@ fun PlayerScreen(
                     LabelToast(label, modifier = Modifier.align(Alignment.Center))
                 }
             }
+            sharpenToggleLabel?.let { label ->
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    LabelToast(label, modifier = Modifier.align(Alignment.Center))
+                }
+            }
         }
 
         // Centered on the CenterTransportControls play/pause button below when controls are
@@ -359,7 +378,7 @@ fun PlayerScreen(
         if (uiState.isLoading && uiState.error == null && (isInPip || !controlsVisible || isLocked)) {
             BufferingIndicator(
                 bufferedPositionMs = uiState.bufferedPositionMs,
-                durationMs = uiState.durationMs,
+                currentPositionMs = uiState.currentPositionMs,
                 color = Color.White,
                 modifier = Modifier.align(Alignment.Center)
             )
@@ -414,23 +433,35 @@ fun PlayerScreen(
                         onCycleAspectRatio = { bumpInteraction(); cycleResizeMode() },
                         onOpenSettings = { bumpInteraction(); showSpeedDialog = true },
                         sharpenEnabled = uiState.sharpenEnabled,
-                        onToggleSharpen = { bumpInteraction(); viewModel.setSharpenEnabled(!uiState.sharpenEnabled) },
+                        onToggleSharpen = {
+                            bumpInteraction()
+                            val nowEnabled = !uiState.sharpenEnabled
+                            viewModel.setSharpenEnabled(nowEnabled)
+                            sharpenToggleLabel = if (nowEnabled) sharpenOnLabel else sharpenOffLabel
+                        },
                         sleepTimerRemainingMs = uiState.sleepTimerRemainingMs,
                         onSetSleepTimer = { duration -> bumpInteraction(); viewModel.setSleepTimer(duration) },
                         onCancelSleepTimer = { bumpInteraction(); viewModel.cancelSleepTimer() }
                     )
                     Box(modifier = Modifier.fillMaxSize().weight(1f), contentAlignment = Alignment.Center) {
+                        // Both used to render unconditionally, stacked on the exact same center
+                        // point - a bare spinner is thin enough that the overlap with the play
+                        // button underneath wasn't obviously broken, but adding buffering% text
+                        // right below it made the collision plainly visible on-device (play
+                        // triangle and "39%" mashed together). Mutually exclusive now - only one
+                        // thing ever occupies this center spot at a time.
                         if (uiState.isLoading && uiState.error == null && !isLocked) {
                             BufferingIndicator(
                                 bufferedPositionMs = uiState.bufferedPositionMs,
-                                durationMs = uiState.durationMs,
+                                currentPositionMs = uiState.currentPositionMs,
                                 color = Color.White
                             )
+                        } else {
+                            CenterTransportControls(
+                                isPlaying = uiState.isPlaying,
+                                onTogglePlayPause = { bumpInteraction(); viewModel.togglePlayPause() }
+                            )
                         }
-                        CenterTransportControls(
-                            isPlaying = uiState.isPlaying,
-                            onTogglePlayPause = { bumpInteraction(); viewModel.togglePlayPause() }
-                        )
                     }
                     BottomGradientBar(
                         currentPositionMs = uiState.currentPositionMs,
@@ -539,18 +570,35 @@ fun PlayerScreen(
     }
 }
 
+/** How far ahead of the current position ExoPlayer needs to have buffered before 100% reads as
+ * "basically ready" - a display-only approximation (not read from [buildAdaptiveLoadControl]'s
+ * actual per-connection profile, which ranges 2-8s for the after-rebuffer threshold depending on
+ * estimated bandwidth) rather than the literal readiness threshold. Precision doesn't matter here,
+ * only that it's measured from the current/seek position, not absolute file position. */
+private const val BUFFERING_DISPLAY_TARGET_MS = 8_000L
+
 /** Plain spinner used to just sit there indefinitely with zero feedback on how far along the
  * initial buffer actually was - indistinguishable from a genuine hang (reported on-device for a
  * large 4K file that turned out to be stuck, but nothing on screen could tell the user that vs.
- * "just slow"). [durationMs] is 0 until the container's metadata has actually loaded - real
- * percent stays hidden until then rather than showing a misleading 0%. */
+ * "just slow"). Percent is buffered-ahead-of-current-position, not bufferedPositionMs/durationMs -
+ * the latter is absolute position in the FILE, so right after a seek it just echoes back
+ * wherever the user tapped on the seek bar (bufferedPosition briefly resets to ~= the seek
+ * target) instead of showing real buffering progress from that point, which is exactly what was
+ * reported on-device. */
 @Composable
-private fun BufferingIndicator(bufferedPositionMs: Long, durationMs: Long, color: Color, modifier: Modifier = Modifier) {
+private fun BufferingIndicator(bufferedPositionMs: Long, currentPositionMs: Long, color: Color, modifier: Modifier = Modifier) {
     Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = modifier) {
         CircularProgressIndicator(color = color)
-        if (durationMs > 0) {
-            val percent = ((bufferedPositionMs.toFloat() / durationMs) * 100).toInt().coerceIn(0, 100)
-            Text("$percent%", color = color, modifier = Modifier.padding(top = 8.dp))
+        Text(
+            stringResource(R.string.player_buffering),
+            color = color,
+            style = MaterialTheme.typography.bodyMedium,
+            modifier = Modifier.padding(top = 12.dp)
+        )
+        val bufferedAheadMs = (bufferedPositionMs - currentPositionMs).coerceAtLeast(0)
+        if (bufferedAheadMs > 0) {
+            val percent = ((bufferedAheadMs.toFloat() / BUFFERING_DISPLAY_TARGET_MS) * 100).toInt().coerceIn(0, 100)
+            Text("$percent%", color = color, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = 2.dp))
         }
     }
 }
@@ -622,6 +670,7 @@ private fun Context.findActivity(): Activity? {
 @Composable
 private fun GestureLayer(
     enabled: Boolean,
+    player: androidx.media3.exoplayer.ExoPlayer,
     seekDurationMs: Long,
     currentPositionMs: Long,
     doubleTapSeekEnabled: Boolean,
@@ -639,14 +688,11 @@ private fun GestureLayer(
 
     val context = LocalContext.current
     val activity = remember(context) { context.findActivity() }
-    val audioManager = remember(context) {
-        context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
-    }
     val scope = rememberCoroutineScope()
 
     var showVolume by remember { mutableStateOf(false) }
     var showBrightness by remember { mutableStateOf(false) }
-    var volumeFraction by remember { mutableFloatStateOf(0f) }
+    var volumeFraction by remember { mutableFloatStateOf(player.volume) }
     var brightnessFraction by remember { mutableFloatStateOf(0.5f) }
     var volumeHideJob: Job? by remember { mutableStateOf<Job?>(null) }
     var brightnessHideJob: Job? by remember { mutableStateOf<Job?>(null) }
@@ -767,9 +813,8 @@ private fun GestureLayer(
                 var startX = 0f
                 var accumulatedDx = 0f
                 var accumulatedDy = 0f
-                var dragStartVolume = 0
+                var dragStartVolume = 0f
                 var dragStartBrightness = 0f
-                val maxVolume = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
 
                 detectDragGestures(
                     onDragStart = { offset ->
@@ -777,7 +822,7 @@ private fun GestureLayer(
                         startX = offset.x
                         accumulatedDx = 0f
                         accumulatedDy = 0f
-                        dragStartVolume = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)
+                        dragStartVolume = player.volume
                         dragStartBrightness = activity?.let { currentBrightness(it) } ?: 0.5f
                     },
                     onDrag = { change, dragAmount ->
@@ -807,10 +852,21 @@ private fun GestureLayer(
                         }
                         when (mode) {
                             DragMode.VOLUME -> {
+                                // Driving player.volume (ExoPlayer's own software gain, a smooth
+                                // 0f..1f float) instead of AudioManager's STREAM_MUSIC used to make
+                                // the on-screen percentage jump in big steps rather than tracking
+                                // the finger smoothly - STREAM_MUSIC only has a handful of discrete
+                                // hardware steps on most devices (commonly 15-30 total), so every
+                                // AudioManager.setStreamVolume() call snapped to the nearest whole
+                                // step regardless of how finely the drag itself moved (confirmed
+                                // on-device as jumpy several-percent-at-a-time changes). This only
+                                // affects this app's own playback volume, not the device's real
+                                // media volume/other apps - the hardware volume rocker still
+                                // controls STREAM_MUSIC exactly as before, untouched here.
                                 val fraction = -accumulatedDy / (size.height * VERTICAL_GESTURE_RANGE_FRACTION)
-                                val newVolume = (dragStartVolume + fraction * maxVolume).roundToInt().coerceIn(0, maxVolume)
-                                audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, newVolume, 0)
-                                volumeFraction = if (maxVolume > 0) newVolume.toFloat() / maxVolume else 0f
+                                val newVolume = (dragStartVolume + fraction).coerceIn(0f, 1f)
+                                player.volume = newVolume
+                                volumeFraction = newVolume
                                 pulseVolume()
                             }
                             DragMode.BRIGHTNESS -> {
@@ -922,7 +978,7 @@ private fun GestureIndicator(label: String, fraction: Float, modifier: Modifier 
         Text(
             text = "${(fraction * 100).roundToInt()}%",
             color = Color.White.copy(alpha = 0.85f),
-            style = MaterialTheme.typography.labelSmall
+            style = MaterialTheme.typography.titleMedium
         )
     }
 }

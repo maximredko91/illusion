@@ -325,6 +325,10 @@
     <string name="streaming_notification_text">Передача файла внешнему плееру</string>
     <string name="streaming_notification_stop">Остановить</string>
 
+    <string name="player_buffering">Буферизация</string>
+    <string name="player_sharpen_on_label">Резкость включена</string>
+    <string name="player_sharpen_off_label">Резкость выключена</string>
+
     <string name="settings_tv_overscan_margin">Отступ от края экрана</string>
     <string name="settings_tv_overscan_margin_hint">Если интерфейс обрезается краем телевизора — увеличьте. Если по краям пустые чёрные полосы — уменьшите</string>
     <string name="settings_tv_overscan_margin_off">Без отступа</string>

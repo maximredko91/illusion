@@ -110,10 +110,19 @@ class MainActivity : ComponentActivity() {
     // onStop() only fires here while isInPipMode is still true when the PiP window itself has gone
     // away (normal PiP keeps the activity STARTED the whole time the small window is visible) - see
     // PipController.onPipClosed's KDoc for why this can't just rely on the activity finishing.
+    //
+    // The else branch covers leaving the app WITHOUT PiP ever having been entered at all -
+    // onPictureInPictureModeChanged() fires synchronously during a successful
+    // enterPictureInPictureMode() call, well before the activity reaches onStop(), so isInPipMode
+    // is a reliable signal here for "did PiP actually start" (not just "was requested"). Confirmed
+    // on-device: swiping up to the recents/app-switcher overview left a video's audio running with
+    // no PiP window ever showing - see PipController.onBackgroundedWithoutPip's own KDoc.
     override fun onStop() {
         super.onStop()
         if (PipController.isInPipMode) {
             PipController.onPipClosed?.invoke()
+        } else {
+            PipController.onBackgroundedWithoutPip?.invoke()
         }
     }
 }

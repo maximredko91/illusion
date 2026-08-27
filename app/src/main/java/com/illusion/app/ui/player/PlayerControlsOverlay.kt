@@ -2,8 +2,10 @@ package com.illusion.app.ui.player
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.ui.draw.clip
@@ -15,6 +17,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -33,10 +36,12 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.AutoFixHigh
 import androidx.compose.material.icons.filled.Audiotrack
+import androidx.compose.material.icons.filled.BlurOff
 import androidx.compose.material.icons.filled.Cast
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.AspectRatio
@@ -125,7 +130,10 @@ fun TopGradientBar(
         val sharpenSource = remember { MutableInteractionSource() }
         IconButton(onClick = onToggleSharpen, interactionSource = sharpenSource, modifier = Modifier.focusHighlight(sharpenSource, color = Color.White)) {
             Icon(
-                Icons.Default.AutoFixHigh,
+                // Was AutoFixHigh (a generic magic-wand "auto enhance" glyph, easy to mistake for
+                // some other automatic/AI feature) - BlurOff reads as "sharpen" specifically: the
+                // opposite of blur, which is exactly what this toggle does.
+                Icons.Default.BlurOff,
                 contentDescription = stringResource(R.string.player_sharpen_quick_toggle),
                 tint = if (sharpenEnabled) MaterialTheme.colorScheme.primary else Color.White
             )
@@ -522,7 +530,7 @@ fun PlayerSettingsPanel(
                     }
                 }
 
-                PanelSectionLabel(stringResource(R.string.player_settings_section_speed))
+                CollapsiblePanelSection(stringResource(R.string.player_settings_section_speed)) {
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     speeds.forEach { speed ->
                         FilterChip(
@@ -537,8 +545,9 @@ fun PlayerSettingsPanel(
                         )
                     }
                 }
+                }
 
-                PanelSectionLabel(stringResource(R.string.player_settings_section_subtitles))
+                CollapsiblePanelSection(stringResource(R.string.player_settings_section_subtitles)) {
                 Text(
                     stringResource(R.string.player_subtitle_color),
                     color = Color.White.copy(alpha = 0.7f),
@@ -588,8 +597,9 @@ fun PlayerSettingsPanel(
                 TextButton(onClick = onResetSubtitleStyle, modifier = Modifier.padding(top = 4.dp)) {
                     Text(stringResource(R.string.player_subtitle_style_reset))
                 }
+                }
 
-                PanelSectionLabel(stringResource(R.string.player_settings_section_gestures))
+                CollapsiblePanelSection(stringResource(R.string.player_settings_section_gestures)) {
                 Text(
                     stringResource(R.string.player_seek_duration, seekDurationSeconds),
                     color = Color.White.copy(alpha = 0.7f),
@@ -613,8 +623,9 @@ fun PlayerSettingsPanel(
                     Text(stringResource(R.string.player_hold_to_seek), color = Color.White, modifier = Modifier.weight(1f))
                     androidx.compose.material3.Switch(checked = holdToSeekEnabled, onCheckedChange = onHoldToSeekEnabledChange)
                 }
+                }
 
-                PanelSectionLabel(stringResource(R.string.player_settings_section_image))
+                CollapsiblePanelSection(stringResource(R.string.player_settings_section_image)) {
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                     Text(stringResource(R.string.player_sharpen_toggle), color = Color.White, modifier = Modifier.weight(1f))
                     androidx.compose.material3.Switch(
@@ -625,15 +636,27 @@ fun PlayerSettingsPanel(
                     )
                 }
                 if (sharpenEnabled) {
+                    // onSharpenAmountChange persists to DataStore, which PlayerViewModel's own
+                    // sharpenAmount collector reacts to by calling player.setVideoEffects() again -
+                    // a genuinely heavy operation (rebuilds the whole video effects pipeline).
+                    // Committing straight from onValueChange fired it dozens of times per second
+                    // while dragging, which was enough to deadlock the renderer thread entirely -
+                    // confirmed on-device as a full picture+audio freeze and ExoPlayer's own "Player
+                    // stuck playing with no progress for 10000ms" watchdog error. Local drag state
+                    // (same pattern as the seek bar above) keeps the live percentage readout
+                    // responsive while dragging, but only actually commits - and so only triggers
+                    // one real setVideoEffects() call - once the user lets go.
+                    var sharpenDragValue by remember(sharpenAmount) { mutableStateOf(sharpenAmount) }
                     Text(
-                        stringResource(R.string.player_sharpen_amount, (sharpenAmount * 100).roundToInt()),
+                        stringResource(R.string.player_sharpen_amount, (sharpenDragValue * 100).roundToInt()),
                         color = Color.White.copy(alpha = 0.7f),
                         style = MaterialTheme.typography.bodySmall,
                         modifier = Modifier.padding(top = 8.dp)
                     )
                     androidx.compose.material3.Slider(
-                        value = sharpenAmount,
-                        onValueChange = onSharpenAmountChange,
+                        value = sharpenDragValue,
+                        onValueChange = { sharpenDragValue = it },
+                        onValueChangeFinished = { onSharpenAmountChange(sharpenDragValue) },
                         valueRange = 0.1f..1f,
                         steps = 8
                     )
@@ -652,10 +675,12 @@ fun PlayerSettingsPanel(
                         Text(stringResource(R.string.player_reload))
                     }
                 }
+                }
+
                 // A separate, off-by-default toggle rather than always showing the text below the
                 // sharpen switch - codec/resolution/HDR details aren't something most viewers ever
                 // look for, and it cluttered this panel by default for everyone who never asked.
-                PanelSectionLabel(stringResource(R.string.player_settings_section_technical))
+                CollapsiblePanelSection(stringResource(R.string.player_settings_section_technical)) {
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                     Text(stringResource(R.string.player_show_technical_info), color = Color.White, modifier = Modifier.weight(1f))
                     androidx.compose.material3.Switch(
@@ -665,6 +690,7 @@ fun PlayerSettingsPanel(
                 }
                 if (showTechnicalInfo) {
                     Text(videoFormatSummary, color = Color.White.copy(alpha = 0.7f), style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 8.dp))
+                }
                 }
 
                 if (canMarkIntro) {
@@ -732,6 +758,45 @@ private fun PanelSectionLabel(text: String) {
         style = MaterialTheme.typography.labelMedium,
         modifier = Modifier.padding(bottom = 8.dp)
     )
+}
+
+/** Same divider+label as [PanelSectionLabel], but the label itself is the toggle for an
+ * [AnimatedVisibility] section below it - per feedback, this whole panel (speed/subtitles/
+ * gestures/image/technical-info, all at once) read as too much to scan through every time it
+ * opened, most of it for settings someone sets once and never touches again. Collapsed by
+ * default; a chevron marks which way it folds. */
+@Composable
+private fun CollapsiblePanelSection(text: String, content: @Composable ColumnScope.() -> Unit) {
+    var expanded by remember { mutableStateOf(false) }
+    HorizontalDivider(color = Color.White.copy(alpha = 0.15f), modifier = Modifier.padding(top = 20.dp, bottom = 4.dp))
+    val headerSource = remember { MutableInteractionSource() }
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(interactionSource = headerSource, indication = null) { expanded = !expanded }
+            .focusHighlight(headerSource)
+            .padding(bottom = 8.dp)
+    ) {
+        Text(
+            text,
+            color = Color.White.copy(alpha = 0.6f),
+            style = MaterialTheme.typography.labelMedium,
+            modifier = Modifier.weight(1f)
+        )
+        Icon(
+            if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+            contentDescription = null,
+            tint = Color.White.copy(alpha = 0.6f)
+        )
+    }
+    AnimatedVisibility(
+        visible = expanded,
+        enter = fadeIn() + expandVertically(),
+        exit = fadeOut() + shrinkVertically()
+    ) {
+        Column(content = content)
+    }
 }
 
 fun formatTime(ms: Long): String {
