@@ -105,6 +105,13 @@ private val EDGE_DEAD_ZONE = 32.dp
 /** How often a held press re-fires the seek step while holdToSeek is active. */
 private const val HOLD_SEEK_INTERVAL_MS = 400L
 
+/** How long a press must be held before hold-to-seek arms and starts stepping - the platform's
+ * own [androidx.compose.ui.platform.ViewConfiguration.longPressTimeoutMillis] (~500ms) was used
+ * before, but that's tuned for a generic long-press, not specifically for "the user actually
+ * wants to hold-seek rather than just pausing their tap a beat longer than usual" - per feedback,
+ * a longer, more deliberate hold reads as more intentional and cuts down on accidental triggers. */
+private const val HOLD_SEEK_ARM_DELAY_MS = 900L
+
 @Composable
 fun PlayerScreen(
     stableId: String,
@@ -771,7 +778,7 @@ private fun GestureLayer(
                         val forward = offset.x >= size.width / 2f
                         var holdTickJob: Job? = null
                         val armJob = scope.launch {
-                            delay(viewConfiguration.longPressTimeoutMillis)
+                            delay(HOLD_SEEK_ARM_DELAY_MS)
                             holdTickJob = scope.launch {
                                 while (isActive) {
                                     onDoubleTapSeek(if (forward) seekDurationMs else -seekDurationMs)
@@ -957,7 +964,7 @@ private fun GestureIndicator(label: String, fraction: Float, modifier: Modifier 
         Text(
             text = label,
             color = Color.White.copy(alpha = 0.85f),
-            style = MaterialTheme.typography.labelSmall
+            style = MaterialTheme.typography.titleSmall
         )
         Box(
             modifier = Modifier

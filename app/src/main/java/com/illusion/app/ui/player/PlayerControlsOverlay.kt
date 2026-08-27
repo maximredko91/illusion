@@ -1,6 +1,7 @@
 package com.illusion.app.ui.player
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -38,6 +39,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Audiotrack
 import androidx.compose.material.icons.filled.BlurOff
+import androidx.compose.material.icons.filled.BlurOn
 import androidx.compose.material.icons.filled.Cast
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ExpandLess
@@ -129,14 +131,18 @@ fun TopGradientBar(
         // ratio-blocked dialog (see PlayerScreen's cycleResizeMode()).
         val sharpenSource = remember { MutableInteractionSource() }
         IconButton(onClick = onToggleSharpen, interactionSource = sharpenSource, modifier = Modifier.focusHighlight(sharpenSource, color = Color.White)) {
-            Icon(
-                // Was AutoFixHigh (a generic magic-wand "auto enhance" glyph, easy to mistake for
-                // some other automatic/AI feature) - BlurOff reads as "sharpen" specifically: the
-                // opposite of blur, which is exactly what this toggle does.
-                Icons.Default.BlurOff,
-                contentDescription = stringResource(R.string.player_sharpen_quick_toggle),
-                tint = if (sharpenEnabled) MaterialTheme.colorScheme.primary else Color.White
-            )
+            // Was a fixed AutoFixHigh glyph (a generic magic-wand "auto enhance" icon, easy to
+            // mistake for some other automatic/AI feature) regardless of state, only the tint
+            // color changed. Now animates between two BlurOn/BlurOff icons - unslashed while
+            // sharpen is actually on, slashed-through while it's off - so the icon itself, not
+            // just its color, shows what tapping it does right now.
+            Crossfade(targetState = sharpenEnabled, label = "sharpenIcon") { enabled ->
+                Icon(
+                    if (enabled) Icons.Default.BlurOn else Icons.Default.BlurOff,
+                    contentDescription = stringResource(R.string.player_sharpen_quick_toggle),
+                    tint = if (enabled) MaterialTheme.colorScheme.primary else Color.White
+                )
+            }
         }
         val audioSource = remember { MutableInteractionSource() }
         IconButton(onClick = onOpenAudioTracks, interactionSource = audioSource, modifier = Modifier.focusHighlight(audioSource, color = Color.White)) {
