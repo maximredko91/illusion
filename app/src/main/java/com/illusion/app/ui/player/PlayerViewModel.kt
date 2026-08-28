@@ -25,6 +25,8 @@ import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import androidx.media3.extractor.DefaultExtractorsFactory
+import androidx.media3.extractor.mkv.MatroskaExtractor
 import com.illusion.app.data.download.DownloadStorage
 import com.illusion.app.data.local.entity.DownloadEntity
 import com.illusion.app.data.local.entity.DownloadStatus
@@ -111,8 +113,6 @@ data class PlayerUiState(
     val doubleTapSeekEnabled: Boolean = true,
     val swipeSeekEnabled: Boolean = true,
     val holdToSeekEnabled: Boolean = true,
-    /** Codec/resolution/HDR diagnostic block in the settings sheet - off by default, see [SettingsRepository.showTechnicalInfo]. */
-    val showTechnicalInfo: Boolean = false,
     val subtitleTextColor: Int = -0x1,
     val subtitleBackgroundOpacity: Int = 60,
     val subtitleTextSizePercent: Int = 100
@@ -133,7 +133,15 @@ class PlayerViewModel(
 
     private val appContext = context.applicationContext
 
-    private fun createPlayer(): ExoPlayer = ExoPlayer.Builder(
+    /**
+     * [disableCuesSeek] trades away seeking entirely for [item] in exchange for not hanging -
+     * verified via javap that with MatroskaExtractor's Cues-seek disabled, it emits
+     * SeekMap.Unseekable for the WHOLE file rather than a merely-less-precise seek map. Only worth
+     * it for files already known (via [SettingsRepository.cuesSeekWorkaroundStableIds]) to hang
+     * otherwise - see [playItem]'s stall watchdog for how a file gets added to that list. Normal
+     * files never pass true here, so they keep full seeking.
+     */
+    private fun createPlayer(disableCuesSeek: Boolean = false): ExoPlayer = ExoPlayer.Builder(
         appContext,
         // EXTENSION_RENDERER_MODE_ON: falls back to the FFmpeg extension (DTS/AC3/TrueHD) only when no
         // platform decoder handles the format - a no-op today since the extension isn't on the classpath
@@ -144,9 +152,20 @@ class PlayerViewModel(
         // FileDataSource and everything else to dataSourceFactory - so smb-item:// keeps streaming
         // over SMB exactly as before, with no branching needed at the MediaItem-building call site.
         .setMediaSourceFactory(
-            DefaultMediaSourceFactory(appContext).setDataSourceFactory(DefaultDataSource.Factory(appContext, dataSourceFactory))
+            (
+                if (disableCuesSeek) {
+                    DefaultMediaSourceFactory(
+                        appContext,
+                        DefaultExtractorsFactory().setMatroskaExtractorFlags(MatroskaExtractor.FLAG_DISABLE_SEEK_FOR_CUES)
+                    )
+                } else {
+                    DefaultMediaSourceFactory(appContext)
+                }
+            ).setDataSourceFactory(DefaultDataSource.Factory(appContext, dataSourceFactory))
         )
-        .setLoadControl(buildAdaptiveLoadControl(appContext))
+        .setLoadControl(
+            buildAdaptiveLoadControl(appContext, runBlocking { settingsRepository.playerBufferSize.first() })
+        )
         .build()
         .apply { setWakeMode(C.WAKE_MODE_NETWORK) }
 
@@ -168,6 +187,14 @@ class PlayerViewModel(
 
     private var currentItem: MediaItemEntity? = null
     private var currentTrailerItem: MediaItemEntity? = null
+
+    /** Whether [player] (the CURRENT instance) was built with Cues-based seeking disabled - see [createPlayer]. */
+    private var cuesSeekDisabledForCurrentPlayer = false
+
+    /** Detects the Cues-table hang (see [SettingsRepository.cuesSeekWorkaroundStableIds]'s KDoc) on
+     * a file playing for the first time, without needing the user to report it - cancelled as soon
+     * as a new [playItem] call supersedes it. */
+    private var stallWatchdogJob: Job? = null
     private var nextEpisode: MediaItemEntity? = null
     private var tickerJob: Job? = null
     private var lastSavedAtMs = 0L
@@ -335,9 +362,6 @@ class PlayerViewModel(
             settingsRepository.holdToSeekEnabled.collect { enabled -> _state.update { it.copy(holdToSeekEnabled = enabled) } }
         }
         viewModelScope.launch {
-            settingsRepository.showTechnicalInfo.collect { enabled -> _state.update { it.copy(showTechnicalInfo = enabled) } }
-        }
-        viewModelScope.launch {
             settingsRepository.subtitleTextColor.collect { color -> _state.update { it.copy(subtitleTextColor = color) } }
         }
         viewModelScope.launch {
@@ -358,10 +382,6 @@ class PlayerViewModel(
 
     fun resetSharpenAmount() {
         viewModelScope.launch { settingsRepository.setSharpenAmount(SHARPEN_AMOUNT_DEFAULT) }
-    }
-
-    fun setShowTechnicalInfo(enabled: Boolean) {
-        viewModelScope.launch { settingsRepository.setShowTechnicalInfo(enabled) }
     }
 
     fun setSeekDurationSeconds(seconds: Int) {
@@ -458,6 +478,46 @@ class PlayerViewModel(
     /** Actually hands [item] to the current player - shared by [load] (fresh navigation into the
      * player) and [reloadPlayer] (same item, same [player] instance identity swapped out under it). */
     private suspend fun playItem(item: MediaItemEntity, startPositionMs: Long, autoPlay: Boolean) {
+        stallWatchdogJob?.cancel()
+        val needsCuesWorkaround = item.stableId in settingsRepository.cuesSeekWorkaroundStableIds.first()
+        if (needsCuesWorkaround != cuesSeekDisabledForCurrentPlayer) {
+            val old = player
+            old.release()
+            val fresh = createPlayer(disableCuesSeek = needsCuesWorkaround)
+            attachListeners(fresh)
+            _player.value = fresh
+            cuesSeekDisabledForCurrentPlayer = needsCuesWorkaround
+            playbackService?.attachPlayer(fresh)
+            if (_state.value.sharpenEnabled) fresh.setVideoEffects(listOf(SharpenEffect(_state.value.sharpenAmount)))
+        }
+        if (!needsCuesWorkaround) {
+            // First play of a file with no known Cues-table problem: watch for the exact signature
+            // of the hang documented in project memory - stuck in BUFFERING, never having advanced
+            // past its start position, for far longer than any real (even very slow) initial
+            // buffer should take. If it hits, this is almost certainly the same pathological-Cues
+            // hang, not just a slow network - remember it and transparently retry with seeking
+            // disabled instead of leaving the user stuck forever.
+            val watchedItem = item
+            val watchedStartPositionMs = startPositionMs
+            val watchedAutoPlay = autoPlay
+            stallWatchdogJob = viewModelScope.launch {
+                delay(STALL_WATCHDOG_TIMEOUT_MS)
+                if (player.playbackState == Player.STATE_BUFFERING &&
+                    player.currentPosition <= watchedStartPositionMs + 2_000
+                ) {
+                    settingsRepository.addCuesSeekWorkaroundStableId(watchedItem.stableId)
+                    // Must null this out BEFORE recursing - playItem()'s own first line cancels
+                    // stallWatchdogJob to supersede a stale watchdog from a PREVIOUS call, but this
+                    // recursive call is running INSIDE that same job. Leaving the reference in place
+                    // meant that line canceled its own enclosing coroutine, which took effect (as a
+                    // CancellationException) at the very next suspend call and silently aborted the
+                    // retry before it ever got to swap the player - confirmed on-device as the
+                    // workaround never actually kicking in (buffering stayed infinite).
+                    stallWatchdogJob = null
+                    playItem(watchedItem, watchedStartPositionMs, watchedAutoPlay)
+                }
+            }
+        }
         ensurePlaybackServiceStarted()
         _state.update { it.copy(readyForInternalPlayback = true) }
         // See PlaybackActivity's own KDoc - lets ThumbnailGenerator back off from the shared
@@ -510,7 +570,6 @@ class PlayerViewModel(
                 doubleTapSeekEnabled = it.doubleTapSeekEnabled,
                 swipeSeekEnabled = it.swipeSeekEnabled,
                 holdToSeekEnabled = it.holdToSeekEnabled,
-                showTechnicalInfo = it.showTechnicalInfo,
                 subtitleTextColor = it.subtitleTextColor,
                 subtitleBackgroundOpacity = it.subtitleBackgroundOpacity,
                 subtitleTextSizePercent = it.subtitleTextSizePercent,
@@ -570,7 +629,10 @@ class PlayerViewModel(
         if (item != null) persistProgress(position, duration)
 
         old.release()
-        val fresh = createPlayer()
+        // Preserves whichever mode (normal / Cues-seek-disabled) the player was already in -
+        // reloadPlayer() exists for the sharpen-effects pipeline, unrelated to Cues workaround
+        // status, so this must not silently reset a file back to the mode that was hanging it.
+        val fresh = createPlayer(disableCuesSeek = cuesSeekDisabledForCurrentPlayer)
         attachListeners(fresh)
         _player.value = fresh
         // MediaSession's player can't be swapped in place - re-attaching rebuilds it around the
@@ -634,7 +696,6 @@ class PlayerViewModel(
                 doubleTapSeekEnabled = it.doubleTapSeekEnabled,
                 swipeSeekEnabled = it.swipeSeekEnabled,
                 holdToSeekEnabled = it.holdToSeekEnabled,
-                showTechnicalInfo = it.showTechnicalInfo,
                 subtitleTextColor = it.subtitleTextColor,
                 subtitleBackgroundOpacity = it.subtitleBackgroundOpacity,
                 subtitleTextSizePercent = it.subtitleTextSizePercent,
@@ -1075,6 +1136,9 @@ class PlayerViewModel(
     }
 
     companion object {
+        /** How long a first-ever play is allowed to sit in BUFFERING at/near its start position before [playItem] assumes it's the Cues-table hang, not just a slow network - generous on purpose since falsely tripping it permanently disables seeking for that file. */
+        private const val STALL_WATCHDOG_TIMEOUT_MS = 30_000L
+
         fun factory(
             libraryRepository: LibraryRepository,
             watchProgressRepository: WatchProgressRepository,

@@ -439,7 +439,6 @@ private fun IllusionNavGraph(app: IllusionApplication, navController: NavHostCon
                 CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides this) {
                     TagsScreen(
                         libraryRepository = app.libraryRepository,
-                        translationRepository = app.tagTranslationRepository,
                         onSelectTag = { tag, label ->
                             navController.navigate(Destination.Search(initialQuery = tag, initialDisplayQuery = label)) {
                                 popUpTo(Destination.Search()) { inclusive = true }
@@ -511,7 +510,7 @@ private fun IllusionNavGraph(app: IllusionApplication, navController: NavHostCon
             composable<Destination.Settings> {
                 val context = LocalContext.current
                 val settingsViewModel: SettingsViewModel = viewModel(
-                    factory = SettingsViewModel.factory(app.smbSourceRepository, app.settingsRepository, app.thumbnailRepository, app.downloadRepository, app.backupManager, app.devAccessStore, app.libraryRepository, app.watchProgressRepository, app.tagTranslationRepository)
+                    factory = SettingsViewModel.factory(app.smbSourceRepository, app.settingsRepository, app.thumbnailRepository, app.downloadRepository, app.backupManager, app.devAccessStore, app.libraryRepository, app.watchProgressRepository)
                 )
                 val sources by settingsViewModel.sources.collectAsState()
                 val cacheSizeBytes by settingsViewModel.cacheSizeBytes.collectAsState()
@@ -521,7 +520,6 @@ private fun IllusionNavGraph(app: IllusionApplication, navController: NavHostCon
                 val backupMessage by settingsViewModel.backupMessage.collectAsState()
                 val isScanRunning by remember(context) { WorkScheduler.isOneTimeScanRunning(context) }.collectAsState(initial = false)
                 val scanCoroutineScope = rememberCoroutineScope()
-                val deeplUpgradeState by settingsViewModel.deeplUpgradeState.collectAsState()
                 // Explicitly scoped to the Activity (not this NavBackStackEntry) so it resolves to
                 // the exact same instance MainActivity's top-level UpdatePrompt observes - the
                 // manual "Проверить обновления" button here needs to trigger the same dialog that
@@ -534,18 +532,14 @@ private fun IllusionNavGraph(app: IllusionApplication, navController: NavHostCon
                 val upToDateMessage by updateViewModel.upToDateMessage.collectAsState()
                 SettingsScreen(
                     sources = sources,
-                    deeplApiKey = settingsViewModel.deeplApiKey,
-                    onDeeplApiKeyChange = settingsViewModel::setDeeplApiKey,
-                    deeplUpgradeState = deeplUpgradeState,
-                    onUpgradeTagsToDeepL = settingsViewModel::upgradeTagsToDeepL,
-                    onCancelTagsUpgrade = settingsViewModel::cancelTagsUpgrade,
-                    onDismissDeeplUpgradeState = settingsViewModel::dismissDeeplUpgradeState,
                     requireChargingForHeavyTasks = settingsViewModel.requireChargingForHeavyTasks,
                     rescanIntervalHours = settingsViewModel.rescanIntervalHours,
                     playerMode = settingsViewModel.playerMode,
                     onPlayerModeChange = settingsViewModel::setPlayerMode,
                     externalPlayerPackage = settingsViewModel.externalPlayerPackage,
                     onExternalPlayerPackageChange = settingsViewModel::setExternalPlayerPackage,
+                    playerBufferSize = settingsViewModel.playerBufferSize,
+                    onPlayerBufferSizeChange = settingsViewModel::setPlayerBufferSize,
                     cacheSizeBytes = cacheSizeBytes,
                     onRefreshCacheSize = { settingsViewModel.refreshCacheSize(context) },
                     onOpenCache = { navController.navigate(Destination.Cache) },
@@ -627,7 +621,7 @@ private fun IllusionNavGraph(app: IllusionApplication, navController: NavHostCon
             composable<Destination.Cache> {
                 val context = LocalContext.current
                 val settingsViewModel: SettingsViewModel = viewModel(
-                    factory = SettingsViewModel.factory(app.smbSourceRepository, app.settingsRepository, app.thumbnailRepository, app.downloadRepository, app.backupManager, app.devAccessStore, app.libraryRepository, app.watchProgressRepository, app.tagTranslationRepository)
+                    factory = SettingsViewModel.factory(app.smbSourceRepository, app.settingsRepository, app.thumbnailRepository, app.downloadRepository, app.backupManager, app.devAccessStore, app.libraryRepository, app.watchProgressRepository)
                 )
                 val cacheSizeBytes by settingsViewModel.cacheSizeBytes.collectAsState()
                 val posterCacheSizeBytes by settingsViewModel.posterCacheSizeBytes.collectAsState()

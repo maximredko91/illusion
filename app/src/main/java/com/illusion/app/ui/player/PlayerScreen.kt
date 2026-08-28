@@ -527,8 +527,6 @@ fun PlayerScreen(
             onResetSharpenAmount = viewModel::resetSharpenAmount,
             aspectRatioLockedBySharpen = uiState.aspectRatioLockedBySharpen,
             onReloadPlayer = viewModel::reloadPlayer,
-            showTechnicalInfo = uiState.showTechnicalInfo,
-            onShowTechnicalInfoChange = viewModel::setShowTechnicalInfo,
             subtitleTextColor = uiState.subtitleTextColor,
             onSubtitleTextColorChange = viewModel::setSubtitleTextColor,
             subtitleBackgroundOpacity = uiState.subtitleBackgroundOpacity,

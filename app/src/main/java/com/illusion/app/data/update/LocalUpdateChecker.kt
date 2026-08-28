@@ -46,7 +46,8 @@ class LocalUpdateChecker(
                     releaseNotes = manifest.releaseNotes,
                     apkDownloadUrl = LocalUpdateUri.build(sourceId, "$UPDATE_DIR\\${asset.fileName}"),
                     apkSizeBytes = asset.sizeBytes,
-                    releasePageUrl = ""
+                    releasePageUrl = "",
+                    mandatory = manifest.mandatory
                 )
             )
         } finally {

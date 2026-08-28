@@ -84,18 +84,12 @@ fun DownloadsScreen(
                 windowInsets = com.illusion.app.ui.common.rememberLatchedStatusBarsInsets(),
                 title = { Text(stringResource(R.string.downloads_title)) },
                 navigationIcon = {
-                    val backSource = remember { MutableInteractionSource() }
-                    IconButton(onClick = onBack, interactionSource = backSource, modifier = Modifier.focusHighlight(backSource)) {
+                    com.illusion.app.ui.common.TvAwareIconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.details_back))
                     }
                 },
                 actions = {
-                    val folderSource = remember { MutableInteractionSource() }
-                    IconButton(
-                        onClick = { context.startActivity(DownloadStorage.openFolderIntent(context, downloadsFolder)) },
-                        interactionSource = folderSource,
-                        modifier = Modifier.focusHighlight(folderSource)
-                    ) {
+                    com.illusion.app.ui.common.TvAwareIconButton(onClick = { context.startActivity(DownloadStorage.openFolderIntent(context, downloadsFolder)) }) {
                         Icon(Icons.Default.Folder, contentDescription = stringResource(R.string.settings_downloads_open_folder))
                     }
                 }
@@ -165,26 +159,18 @@ fun DownloadsScreen(
                             }
                         }
                         if (entry.download.status == DownloadStatus.FAILED) {
-                            val retrySource = remember { MutableInteractionSource() }
-                            IconButton(
-                                onClick = { viewModel.retryDownload(context, entry.download.stableId) },
-                                interactionSource = retrySource,
-                                modifier = Modifier.focusHighlight(retrySource)
-                            ) {
+                            com.illusion.app.ui.common.TvAwareIconButton(onClick = { viewModel.retryDownload(context, entry.download.stableId) }) {
                                 Icon(Icons.Default.Refresh, contentDescription = stringResource(R.string.downloads_resume))
                             }
                         }
-                        val removeSource = remember { MutableInteractionSource() }
-                        IconButton(
+                        com.illusion.app.ui.common.TvAwareIconButton(
                             onClick = {
                                 if (entry.download.status == DownloadStatus.COMPLETED) {
                                     pendingRemoveEntry = entry
                                 } else {
                                     viewModel.removeDownload(context, entry.download.stableId)
                                 }
-                            },
-                            interactionSource = removeSource,
-                            modifier = Modifier.focusHighlight(removeSource)
+                            }
                         ) {
                             Icon(
                                 if (entry.download.status == DownloadStatus.DOWNLOADING) Icons.Default.Close else Icons.Default.Delete,

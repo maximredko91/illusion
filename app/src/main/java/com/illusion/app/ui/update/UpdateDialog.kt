@@ -61,8 +61,15 @@ fun UpdatePrompt(viewModel: UpdateViewModel) {
     }
 
     val update = uiState.update
+    // A mandatory release (see UpdateInfo.mandatory's own KDoc) skips every "not now" exit at
+    // every stage - no Skip/Later on the offer, no Later once downloaded, and the dialog itself
+    // can't be dismissed by tapping outside/back. Deliberately doesn't block the rest of the app
+    // (that would need its own dedicated blocking screen) - just removes every way to defer this
+    // one dialog without acting on it.
+    val mandatory = update?.mandatory == true
     when {
         uiState.downloadedFile != null && !installPromptDismissed -> InstallReadyDialog(
+            mandatory = mandatory,
             onInstall = { viewModel.install() },
             onLater = { installPromptDismissed = true }
         )
@@ -79,8 +86,8 @@ fun UpdatePrompt(viewModel: UpdateViewModel) {
 @Composable
 private fun WhatsNewDialog(update: UpdateInfo, onUpdate: () -> Unit, onLater: () -> Unit, onSkip: () -> Unit) {
     AlertDialog(
-        onDismissRequest = onLater,
-        title = { Text("Доступно обновление ${update.versionName}") },
+        onDismissRequest = if (update.mandatory) {{}} else onLater,
+        title = { Text(if (update.mandatory) "Требуется обновление ${update.versionName}" else "Доступно обновление ${update.versionName}") },
         text = {
             if (update.releaseNotes.isBlank()) {
                 Text("Список изменений не указан.")
@@ -93,12 +100,12 @@ private fun WhatsNewDialog(update: UpdateInfo, onUpdate: () -> Unit, onLater: ()
         },
         confirmButton = {
             Row {
-                TextButton(onClick = onSkip) { Text("Пропустить версию") }
+                if (!update.mandatory) TextButton(onClick = onSkip) { Text("Пропустить версию") }
                 TextButton(onClick = onUpdate) { Text("Обновить") }
             }
         },
-        dismissButton = {
-            TextButton(onClick = onLater) { Text("Позже") }
+        dismissButton = if (update.mandatory) null else {
+            { TextButton(onClick = onLater) { Text("Позже") } }
         }
     )
 }
@@ -127,12 +134,14 @@ private fun DownloadProgressDialog(progress: Float?) {
 }
 
 @Composable
-private fun InstallReadyDialog(onInstall: () -> Unit, onLater: () -> Unit) {
+private fun InstallReadyDialog(mandatory: Boolean, onInstall: () -> Unit, onLater: () -> Unit) {
     AlertDialog(
-        onDismissRequest = onLater,
+        onDismissRequest = if (mandatory) {{}} else onLater,
         title = { Text("Обновление готово") },
         text = { Text("Новая версия скачана. Установить сейчас?") },
         confirmButton = { TextButton(onClick = onInstall) { Text("Установить") } },
-        dismissButton = { TextButton(onClick = onLater) { Text("Позже") } }
+        dismissButton = if (mandatory) null else {
+            { TextButton(onClick = onLater) { Text("Позже") } }
+        }
     )
 }

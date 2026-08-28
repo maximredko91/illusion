@@ -214,11 +214,9 @@ fun ScanProgressScreen(
                                     modifier = Modifier.fillMaxWidth().padding(top = 4.dp)
                                 )
                             }
-                            val continueSource = remember { MutableInteractionSource() }
-                            Button(
+                            com.illusion.app.ui.common.TvAwareButton(
                                 onClick = onComplete,
-                                interactionSource = continueSource,
-                                modifier = Modifier.padding(top = 16.dp).focusHighlight(continueSource)
+                                modifier = Modifier.padding(top = 16.dp)
                             ) {
                                 Text(stringResource(R.string.scan_progress_continue))
                             }
@@ -230,11 +228,9 @@ fun ScanProgressScreen(
                                 textAlign = TextAlign.Center,
                                 modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
                             )
-                            val continueSource = remember { MutableInteractionSource() }
-                            Button(
+                            com.illusion.app.ui.common.TvAwareButton(
                                 onClick = onComplete,
-                                interactionSource = continueSource,
-                                modifier = Modifier.padding(top = 16.dp).focusHighlight(continueSource)
+                                modifier = Modifier.padding(top = 16.dp)
                             ) {
                                 Text(stringResource(R.string.scan_progress_continue))
                             }

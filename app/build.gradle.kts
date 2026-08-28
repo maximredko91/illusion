@@ -57,8 +57,8 @@ android {
         // 2026-08-25 once the repo went public and beta testers started using the in-app updater -
         // restarted the counter at beta1 rather than continuing the alpha sequence's number, since
         // jumping straight to "beta73" would misleadingly imply 72 prior beta builds existed.
-        versionCode = 105
-        versionName = "0.1.0-beta32"
+        versionCode = 106
+        versionName = "0.1.0-beta33"
 
         // The real bulk of a universal APK's size turned out to be native .so libs bundled per-ABI
         // (ML Kit's on-device tag-translation library alone is ~17MB *per architecture*) - R8
@@ -164,6 +164,15 @@ dependencies {
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.navigation.compose)
 
+    // Compose for TV - real TV-specific composables (focus-aware Surface/Card/lists) replacing
+    // the hand-rolled Material3+manual-focus-modifier approach (see project memory
+    // "ATV UI rewrite plan" - that approach produced repeated regressions: overscan-margin
+    // guesses, a manual focus bridge, the player getting squeezed into the overscan box).
+    // Business logic/ViewModels stay shared with phone; only ui/ screens get a TV-specific
+    // composable, gated on the existing UiMode.TV toggle.
+    implementation(libs.androidx.tv.material)
+    implementation(libs.androidx.tv.foundation)
+
     implementation(libs.androidx.room.runtime)
     implementation(libs.androidx.room.ktx)
     ksp(libs.androidx.room.compiler)
@@ -193,11 +202,6 @@ dependencies {
     // URL instead. Small/well-established, same library the previous HomeCinema app used for
     // exactly this.
     implementation("org.nanohttpd:nanohttpd:2.3.1")
-
-    // On-device EN->RU translation for freeform .nfo <tag> values (data/translation/TagTranslator.kt) -
-    // model downloads once (needs network), then runs fully offline, same one-time-network shape
-    // as this app's only other online touchpoint (TmdbClient).
-    implementation("com.google.mlkit:translate:17.0.3")
 
     ffmpegExtensionAar?.let { implementation(files(it)) }
 

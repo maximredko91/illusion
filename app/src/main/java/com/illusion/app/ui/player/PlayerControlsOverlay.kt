@@ -446,8 +446,6 @@ fun PlayerSettingsPanel(
     onResetSharpenAmount: () -> Unit,
     aspectRatioLockedBySharpen: Boolean,
     onReloadPlayer: () -> Unit,
-    showTechnicalInfo: Boolean,
-    onShowTechnicalInfoChange: (Boolean) -> Unit,
     subtitleTextColor: Int,
     onSubtitleTextColorChange: (Int) -> Unit,
     subtitleBackgroundOpacity: Int,
@@ -683,20 +681,11 @@ fun PlayerSettingsPanel(
                 }
                 }
 
-                // A separate, off-by-default toggle rather than always showing the text below the
-                // sharpen switch - codec/resolution/HDR details aren't something most viewers ever
-                // look for, and it cluttered this panel by default for everyone who never asked.
+                // The section itself is collapsed by default (CollapsiblePanelSection), which
+                // already gates visibility - an inner switch on top of that was a redundant second
+                // gate the user had to also flip after expanding the section.
                 CollapsiblePanelSection(stringResource(R.string.player_settings_section_technical)) {
-                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                    Text(stringResource(R.string.player_show_technical_info), color = Color.White, modifier = Modifier.weight(1f))
-                    androidx.compose.material3.Switch(
-                        checked = showTechnicalInfo,
-                        onCheckedChange = onShowTechnicalInfoChange
-                    )
-                }
-                if (showTechnicalInfo) {
-                    Text(videoFormatSummary, color = Color.White.copy(alpha = 0.7f), style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 8.dp))
-                }
+                Text(videoFormatSummary, color = Color.White.copy(alpha = 0.7f), style = MaterialTheme.typography.bodySmall)
                 }
 
                 if (canMarkIntro) {

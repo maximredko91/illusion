@@ -173,8 +173,7 @@ fun CacheScreen(
                 windowInsets = com.illusion.app.ui.common.rememberLatchedStatusBarsInsets(),
                 title = { Text(stringResource(R.string.settings_cache)) },
                 navigationIcon = {
-                    val backSource = remember { MutableInteractionSource() }
-                    IconButton(onClick = onBack, interactionSource = backSource, modifier = Modifier.focusHighlight(backSource)) {
+                    com.illusion.app.ui.common.TvAwareIconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.details_back))
                     }
                 }
@@ -199,12 +198,7 @@ fun CacheScreen(
                         )
                     },
                     trailingContent = {
-                        val clearCacheSource = remember { MutableInteractionSource() }
-                        OutlinedButton(
-                            onClick = { showClearCacheConfirm = true },
-                            interactionSource = clearCacheSource,
-                            modifier = Modifier.focusHighlight(clearCacheSource)
-                        ) {
+                        com.illusion.app.ui.common.TvAwareOutlinedButton(onClick = { showClearCacheConfirm = true }) {
                             Text(stringResource(R.string.settings_cache_clear))
                         }
                     },
@@ -240,12 +234,7 @@ fun CacheScreen(
                         )
                     },
                     trailingContent = {
-                        val clearPosterCacheSource = remember { MutableInteractionSource() }
-                        OutlinedButton(
-                            onClick = { showClearPosterCacheConfirm = true },
-                            interactionSource = clearPosterCacheSource,
-                            modifier = Modifier.focusHighlight(clearPosterCacheSource)
-                        ) {
+                        com.illusion.app.ui.common.TvAwareOutlinedButton(onClick = { showClearPosterCacheConfirm = true }) {
                             Text(stringResource(R.string.settings_cache_clear))
                         }
                     },
@@ -265,12 +254,7 @@ fun CacheScreen(
                     },
                     supportingContent = { Text(stringResource(R.string.settings_fanart_cache_description)) },
                     trailingContent = {
-                        val clearFanartCacheSource = remember { MutableInteractionSource() }
-                        OutlinedButton(
-                            onClick = { showClearFanartCacheConfirm = true },
-                            interactionSource = clearFanartCacheSource,
-                            modifier = Modifier.focusHighlight(clearFanartCacheSource)
-                        ) {
+                        com.illusion.app.ui.common.TvAwareOutlinedButton(onClick = { showClearFanartCacheConfirm = true }) {
                             Text(stringResource(R.string.settings_cache_clear))
                         }
                     },
@@ -300,10 +284,9 @@ private fun ImageCacheLimitMenu(currentMb: Int, onChange: (Int) -> Unit) {
         // pixel widths, and this button sits in a ListItem's trailingContent next to a long
         // supportingContent description - letting the button's width vary with the label reflowed
         // that description onto a different number of lines on every selection, visibly "jumping".
-        OutlinedButton(
+        com.illusion.app.ui.common.TvAwareOutlinedButton(
             onClick = { expanded = true },
-            interactionSource = triggerSource,
-            modifier = Modifier.focusHighlight(triggerSource).widthIn(min = 96.dp)
+            modifier = Modifier.widthIn(min = 96.dp)
         ) {
             Text(imageCacheLimitLabel(currentMb))
         }

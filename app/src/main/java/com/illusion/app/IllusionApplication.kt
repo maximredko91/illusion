@@ -31,9 +31,6 @@ import com.illusion.app.data.settings.SettingsRepository
 import com.illusion.app.data.smb.SmbClient
 import com.illusion.app.data.smb.SmbCredentialStore
 import com.illusion.app.data.tmdb.TmdbClient
-import com.illusion.app.data.translation.DeepLClient
-import com.illusion.app.data.translation.TagTranslationRepository
-import com.illusion.app.data.translation.TagTranslator
 import com.illusion.app.work.IllusionWorkerFactory
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -59,16 +56,6 @@ class IllusionApplication : Application(), Configuration.Provider, SingletonImag
         WatchProgressRepository(database.watchProgressDao(), database.favoriteDao())
     }
     val settingsRepository: SettingsRepository by lazy { SettingsRepository(this) }
-
-    val tagTranslationRepository: TagTranslationRepository by lazy {
-        TagTranslationRepository(
-            database.tagTranslationDao(),
-            libraryRepository,
-            settingsRepository,
-            TagTranslator(),
-            DeepLClient(apiKeyProvider = { runBlocking { settingsRepository.deeplApiKey.first() } })
-        )
-    }
 
     val libraryScanner: LibraryScanner by lazy {
         LibraryScanner(smbSourceRepository, libraryRepository, smbClient, nfoParser)

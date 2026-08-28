@@ -14,6 +14,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import com.illusion.app.domain.model.UiMode
 
 /**
  * `IconButton` with a long-press tooltip showing [label] - the same-looking row of icon-only
@@ -31,8 +32,19 @@ fun TooltipIconButton(label: String, icon: ImageVector, onClick: () -> Unit, mod
         tooltip = { PlainTooltip { Text(label) } },
         state = rememberTooltipState()
     ) {
-        IconButton(onClick = onClick, interactionSource = interactionSource, modifier = modifier.focusHighlight(interactionSource)) {
-            Icon(icon, contentDescription = label)
+        // TV gets androidx.tv.material3.IconButton (native focus scale/glow, same reasoning as
+        // PosterCard's tv-material Card) instead of a plain Material3 IconButton with the
+        // hand-rolled focusHighlight() modifier. Only verify on the real TV Box with a real
+        // remote - see TvAwareControls.kt's KDoc for why touch-testing this on a phone looks
+        // completely broken (expected, not a bug).
+        if (LocalUiMode.current == UiMode.TV) {
+            androidx.tv.material3.IconButton(onClick = onClick, interactionSource = interactionSource, modifier = modifier) {
+                Icon(icon, contentDescription = label)
+            }
+        } else {
+            IconButton(onClick = onClick, interactionSource = interactionSource, modifier = modifier.focusHighlight(interactionSource)) {
+                Icon(icon, contentDescription = label)
+            }
         }
     }
 }

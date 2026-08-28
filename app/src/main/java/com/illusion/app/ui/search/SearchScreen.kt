@@ -273,7 +273,7 @@ private fun RecentSearchesList(
                     headlineContent = { Text(recent) },
                     leadingContent = { Icon(Icons.Default.History, contentDescription = null) },
                     trailingContent = {
-                        IconButton(onClick = { onRemove(recent) }) {
+                        com.illusion.app.ui.common.TvAwareIconButton(onClick = { onRemove(recent) }) {
                             Icon(
                                 Icons.Default.Close,
                                 contentDescription = stringResource(R.string.search_recent_remove)

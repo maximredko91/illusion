@@ -114,20 +114,16 @@ private fun UiModeChoiceStep(
             verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically)
         ) {
             Text(stringResource(R.string.onboarding_ui_mode_description))
-            val phoneSource = remember { MutableInteractionSource() }
-            Button(
+            com.illusion.app.ui.common.TvAwareButton(
                 onClick = { choose(UiMode.PHONE) },
-                interactionSource = phoneSource,
-                modifier = Modifier.fillMaxWidth().focusHighlight(phoneSource)
+                modifier = Modifier.fillMaxWidth()
             ) {
                 Icon(Icons.Default.PhoneAndroid, contentDescription = null)
                 Text(stringResource(R.string.onboarding_ui_mode_phone), modifier = Modifier.padding(start = 8.dp))
             }
-            val tvSource = remember { MutableInteractionSource() }
-            Button(
+            com.illusion.app.ui.common.TvAwareButton(
                 onClick = { choose(UiMode.TV) },
-                interactionSource = tvSource,
-                modifier = Modifier.fillMaxWidth().focusHighlight(tvSource)
+                modifier = Modifier.fillMaxWidth()
             ) {
                 Icon(Icons.Default.Tv, contentDescription = null)
                 Text(stringResource(R.string.onboarding_ui_mode_tv), modifier = Modifier.padding(start = 8.dp))

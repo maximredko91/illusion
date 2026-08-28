@@ -12,7 +12,9 @@ data class LocalUpdateManifest(
     val versionCode: Int,
     val versionName: String,
     val releaseNotes: String = "",
-    val assets: List<LocalUpdateManifestAsset>
+    val assets: List<LocalUpdateManifestAsset>,
+    /** See [UpdateInfo.mandatory]'s own KDoc. Set by hand in manifest.json when publishing a release that must be installed. */
+    val mandatory: Boolean = false
 )
 
 /** [abi] matches one of [android.os.Build.SUPPORTED_ABIS] (e.g. "arm64-v8a") - [fileName] is

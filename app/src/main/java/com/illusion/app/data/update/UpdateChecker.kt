@@ -53,16 +53,32 @@ class UpdateChecker(
         val versionCode = versionCodeFromTag(release.tagName) ?: return@withContext UpdateCheckResult.UpToDate()
         if (versionCode <= currentVersionCode) return@withContext UpdateCheckResult.UpToDate()
         val apk = selectApkForDevice(release.assets) ?: return@withContext UpdateCheckResult.UpToDate()
+        val (mandatory, notes) = parseMandatory(release.body.orEmpty())
         UpdateCheckResult.Available(
             UpdateInfo(
                 versionCode = versionCode,
                 versionName = versionNameFromRelease(release),
-                releaseNotes = release.body.orEmpty(),
+                releaseNotes = notes,
                 apkDownloadUrl = apk.browserDownloadUrl,
                 apkSizeBytes = apk.size.takeIf { it > 0 },
-                releasePageUrl = release.htmlUrl
+                releasePageUrl = release.htmlUrl,
+                mandatory = mandatory
             )
         )
+    }
+
+    /**
+     * A release is marked mandatory by starting its body with a `[MANDATORY]` or `[ОБЯЗАТЕЛЬНОЕ]`
+     * marker line (case-insensitive) - see UpdateInfo.mandatory's own KDoc for what that actually
+     * does in the UI. The marker itself is stripped out before the text is shown as release notes,
+     * so it never leaks into the "what's new" dialog as visible clutter.
+     */
+    private fun parseMandatory(body: String): Pair<Boolean, String> {
+        val firstLine = body.lineSequence().firstOrNull()?.trim().orEmpty()
+        val isMandatory = firstLine.equals("[MANDATORY]", ignoreCase = true) ||
+            firstLine.equals("[ОБЯЗАТЕЛЬНОЕ]", ignoreCase = true)
+        val notes = if (isMandatory) body.substringAfter('\n').trimStart('\n', '\r') else body
+        return isMandatory to notes
     }
 
     /**

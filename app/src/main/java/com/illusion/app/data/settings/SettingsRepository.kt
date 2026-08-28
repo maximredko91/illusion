@@ -9,6 +9,7 @@ import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.illusion.app.domain.model.AccentColor
+import com.illusion.app.domain.model.PlayerBufferSize
 import com.illusion.app.domain.model.PlayerMode
 import com.illusion.app.domain.model.SortOrder
 import com.illusion.app.domain.model.UiMode
@@ -45,12 +46,10 @@ class SettingsRepository(private val context: Context) {
         val PLAYER_MODE = stringPreferencesKey("player_mode")
         val EXTERNAL_PLAYER_PACKAGE = stringPreferencesKey("external_player_package")
         val PREDICTIVE_BACK_ENABLED = booleanPreferencesKey("predictive_back_enabled")
-        val DEEPL_API_KEY = stringPreferencesKey("deepl_api_key")
         val RECENT_SEARCHES = stringPreferencesKey("recent_searches")
         val DOUBLE_TAP_SEEK_ENABLED = booleanPreferencesKey("player_double_tap_seek_enabled")
         val SWIPE_SEEK_ENABLED = booleanPreferencesKey("player_swipe_seek_enabled")
         val HOLD_TO_SEEK_ENABLED = booleanPreferencesKey("player_hold_to_seek_enabled")
-        val SHOW_TECHNICAL_INFO = booleanPreferencesKey("player_show_technical_info")
         val SUBTITLE_TEXT_COLOR = intPreferencesKey("player_subtitle_text_color")
         val SUBTITLE_BACKGROUND_OPACITY = intPreferencesKey("player_subtitle_background_opacity")
         val SUBTITLE_TEXT_SIZE_PERCENT = intPreferencesKey("player_subtitle_text_size_percent")
@@ -60,6 +59,8 @@ class SettingsRepository(private val context: Context) {
         val TV_OVERSCAN_MARGIN_PERCENT = intPreferencesKey("tv_overscan_margin_percent")
         val UPDATE_SOURCE = stringPreferencesKey("update_source")
         val LOCAL_UPDATE_SOURCE_ID = longPreferencesKey("local_update_source_id")
+        val PLAYER_BUFFER_SIZE = stringPreferencesKey("player_buffer_size")
+        val CUES_SEEK_WORKAROUND_STABLE_IDS = stringPreferencesKey("cues_seek_workaround_stable_ids")
     }
 
     val requireChargingForHeavyTasks: Flow<Boolean> = context.dataStore.data.map {
@@ -190,6 +191,39 @@ class SettingsRepository(private val context: Context) {
         context.dataStore.edit { it[Keys.PLAYER_MODE] = mode.name }
     }
 
+    /** Defaults to INCREASED (not AUTO) - the bandwidth-adaptive default turned out too small for high-bitrate 4K remuxes on a real home Wi-Fi link, causing frequent rebuffering. */
+    val playerBufferSize: Flow<PlayerBufferSize> = context.dataStore.data.map {
+        it[Keys.PLAYER_BUFFER_SIZE]?.let { name -> runCatching { PlayerBufferSize.valueOf(name) }.getOrNull() }
+            ?: PlayerBufferSize.INCREASED
+    }
+
+    suspend fun setPlayerBufferSize(size: PlayerBufferSize) {
+        context.dataStore.edit { it[Keys.PLAYER_BUFFER_SIZE] = size.name }
+    }
+
+    /**
+     * stableIds of files whose MatroskaExtractor Cues table is pathological enough to hang the
+     * player forever in BUFFERING (observed on one real 38GB/76-chapter file - see project memory
+     * "Avatar infinite buffering bug"). Disabling Cues-based seeking fixes the hang but also makes
+     * that one file entirely non-seekable (MatroskaExtractor falls back to SeekMap.Unseekable, not
+     * a less-precise seek map), so it can't be a global setting - PlayerViewModel auto-detects the
+     * hang once (a stall watchdog on first play) and remembers the file here so every later replay
+     * skips straight to the workaround instead of hanging again first.
+     */
+    val cuesSeekWorkaroundStableIds: Flow<Set<String>> = context.dataStore.data.map {
+        val raw = it[Keys.CUES_SEEK_WORKAROUND_STABLE_IDS] ?: return@map emptySet()
+        runCatching { Json.decodeFromString<Set<String>>(raw) }.getOrDefault(emptySet())
+    }
+
+    suspend fun addCuesSeekWorkaroundStableId(stableId: String) {
+        context.dataStore.edit {
+            val current = it[Keys.CUES_SEEK_WORKAROUND_STABLE_IDS]?.let { raw ->
+                runCatching { Json.decodeFromString<Set<String>>(raw) }.getOrDefault(emptySet())
+            } ?: emptySet()
+            it[Keys.CUES_SEEK_WORKAROUND_STABLE_IDS] = Json.encodeToString(current + stableId)
+        }
+    }
+
     /** Package name of the specific external player app to hand playback to, chosen from InstalledPlayerApps' scan - null means let Android decide (its own disambiguation dialog if more than one app matches, or launch the sole match directly), which was this setting's implicit default before it existed. */
     val externalPlayerPackage: Flow<String?> = context.dataStore.data.map { it[Keys.EXTERNAL_PLAYER_PACKAGE] }
 
@@ -218,13 +252,6 @@ class SettingsRepository(private val context: Context) {
 
     suspend fun setHoldToSeekEnabled(value: Boolean) {
         context.dataStore.edit { it[Keys.HOLD_TO_SEEK_ENABLED] = value }
-    }
-
-    /** Codec/resolution/HDR diagnostic block in the player's settings sheet - off by default so it doesn't clutter the panel for viewers who never asked for it. */
-    val showTechnicalInfo: Flow<Boolean> = context.dataStore.data.map { it[Keys.SHOW_TECHNICAL_INFO] ?: false }
-
-    suspend fun setShowTechnicalInfo(value: Boolean) {
-        context.dataStore.edit { it[Keys.SHOW_TECHNICAL_INFO] = value }
     }
 
     /** Subtitle text color, an ARGB Int (android.graphics.Color-style) - default opaque white. */
@@ -266,15 +293,6 @@ class SettingsRepository(private val context: Context) {
 
     suspend fun setPredictiveBackEnabled(value: Boolean) {
         context.dataStore.edit { it[Keys.PREDICTIVE_BACK_ENABLED] = value }
-    }
-
-    /** Opt-in, entered by the user in Settings (TagTranslationRepository/DeepLClient) - null means DeepL upgrade is unavailable and tag labels stay on the offline ML Kit translation. Never required; the app's own tag list works fully offline without this. */
-    val deeplApiKey: Flow<String?> = context.dataStore.data.map { it[Keys.DEEPL_API_KEY] }
-
-    suspend fun setDeeplApiKey(value: String?) {
-        context.dataStore.edit {
-            if (value.isNullOrBlank()) it.remove(Keys.DEEPL_API_KEY) else it[Keys.DEEPL_API_KEY] = value
-        }
     }
 
     private val MAX_RECENT_SEARCHES = 10

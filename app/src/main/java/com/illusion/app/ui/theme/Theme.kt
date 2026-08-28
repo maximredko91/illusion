@@ -122,9 +122,49 @@ fun IllusionTheme(
         }
     }
 
+    // tv-material's own MaterialTheme/ColorScheme is a SEPARATE CompositionLocal from Material3's
+    // - androidx.tv.material3.Card/Surface/etc. (used by TV-mode composables, e.g. PosterCard) read
+    // colors from IT, not from the androidx.compose.material3.MaterialTheme above. Without this,
+    // every TV component would render with tv-material's own hardcoded default palette instead of
+    // the user's chosen accent color/theme. Always provided (not gated on UiMode) since it's inert
+    // for phone-mode composables, which never read it - simpler than threading UiMode through here
+    // just to skip an otherwise-harmless CompositionLocal provide.
+    val tvColorScheme = if (darkTheme) {
+        androidx.tv.material3.darkColorScheme(
+            primary = colorScheme.primary,
+            onPrimary = colorScheme.onPrimary,
+            secondary = colorScheme.secondary,
+            onSecondary = colorScheme.onSecondary,
+            tertiary = colorScheme.tertiary,
+            onTertiary = colorScheme.onTertiary,
+            background = colorScheme.background,
+            onBackground = colorScheme.onBackground,
+            surface = colorScheme.surface,
+            onSurface = colorScheme.onSurface
+        )
+    } else {
+        androidx.tv.material3.lightColorScheme(
+            primary = colorScheme.primary,
+            onPrimary = colorScheme.onPrimary,
+            secondary = colorScheme.secondary,
+            onSecondary = colorScheme.onSecondary,
+            tertiary = colorScheme.tertiary,
+            onTertiary = colorScheme.onTertiary,
+            background = colorScheme.background,
+            onBackground = colorScheme.onBackground,
+            surface = colorScheme.surface,
+            onSurface = colorScheme.onSurface
+        )
+    }
+
     MaterialTheme(
         colorScheme = colorScheme,
         typography = Typography,
-        content = content
+        content = {
+            androidx.tv.material3.MaterialTheme(
+                colorScheme = tvColorScheme,
+                content = content
+            )
+        }
     )
 }

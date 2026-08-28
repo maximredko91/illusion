@@ -79,6 +79,7 @@ import com.illusion.app.domain.model.Category
 import com.illusion.app.domain.model.SortOrder
 import com.illusion.app.domain.model.defaultAscending
 import com.illusion.app.ui.common.PosterCard
+import com.illusion.app.ui.common.TvAwareAssistChip
 import com.illusion.app.ui.common.focusHighlight
 import com.illusion.app.ui.common.posterGridColumns
 import com.illusion.app.ui.common.segmentTick
@@ -431,16 +432,13 @@ private fun SortMenu(
     var expanded by remember { mutableStateOf(false) }
     val haptics = LocalHapticFeedback.current
     Box {
-        val triggerSource = remember { MutableInteractionSource() }
         // The direction is spelled out right in the chip's own text - a bare arrow icon means
         // nothing until you've already learned what it does, but "Рейтинг: сначала высокий" is
         // legible on first look, and this text is always visible (unlike a tooltip, which
         // touch/D-pad users have no reliable way to trigger before tapping).
-        AssistChip(
+        TvAwareAssistChip(
             onClick = { expanded = true },
-            label = { Text(sortDirectionLabel(sortOrder, ascending)) },
-            interactionSource = triggerSource,
-            modifier = Modifier.focusHighlight(triggerSource)
+            label = { Text(sortDirectionLabel(sortOrder, ascending)) }
         )
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             SortOrder.entries.forEach { order ->
@@ -510,12 +508,9 @@ private fun FilterMenu(
     val allLabel = stringResource(R.string.library_filter_all)
     val haptics = LocalHapticFeedback.current
     Box {
-        val triggerSource = remember { MutableInteractionSource() }
-        AssistChip(
+        TvAwareAssistChip(
             onClick = { expanded = true },
-            label = { Text(selected ?: label) },
-            interactionSource = triggerSource,
-            modifier = Modifier.focusHighlight(triggerSource)
+            label = { Text(selected ?: label) }
         )
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             val allSource = remember { MutableInteractionSource() }

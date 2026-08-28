@@ -585,13 +585,12 @@ private fun DetailsContent(
                             targetValue = if (isFavorite) Color(0xFFE53935) else MaterialTheme.colorScheme.onSurfaceVariant,
                             label = "favoriteTint"
                         )
-                        val favoriteSource = remember { MutableInteractionSource() }
                         // Fixed size (matches IconButton's own default touch target) rather than
                         // wrapping content - an implicitly-sized Box here would grow/shrink this
                         // whole Box (a direct child of the SpaceBetween Row above) as its content
                         // changed, shifting the Row's layout.
                         Box(modifier = Modifier.size(48.dp)) {
-                            IconButton(
+                            com.illusion.app.ui.common.TvAwareIconButton(
                                 onClick = {
                                     haptics.toggle(!isFavorite)
                                     onToggleFavorite()
@@ -603,9 +602,7 @@ private fun DetailsContent(
                                         favoriteScale.snapTo(0.7f)
                                         favoriteScale.animateTo(1f, animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow))
                                     }
-                                },
-                                interactionSource = favoriteSource,
-                                modifier = Modifier.focusHighlight(favoriteSource)
+                                }
                             ) {
                                 Crossfade(targetState = isFavorite, label = "favoriteIcon") { favorite ->
                                     Icon(
@@ -625,9 +622,8 @@ private fun DetailsContent(
                             targetValue = if (isWatched) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                             label = "watchedTint"
                         )
-                        val watchedSource = remember { MutableInteractionSource() }
                         Box(modifier = Modifier.size(48.dp)) {
-                            IconButton(
+                            com.illusion.app.ui.common.TvAwareIconButton(
                                 onClick = {
                                     haptics.toggle(!isWatched)
                                     onToggleWatched()
@@ -639,9 +635,7 @@ private fun DetailsContent(
                                         watchedScale.snapTo(0.7f)
                                         watchedScale.animateTo(1f, animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow))
                                     }
-                                },
-                                interactionSource = watchedSource,
-                                modifier = Modifier.focusHighlight(watchedSource)
+                                }
                             ) {
                                 Crossfade(targetState = isWatched, label = "watchedIcon") { watched ->
                                     Icon(
@@ -1036,12 +1030,10 @@ private fun ActionButtonsRow(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.fillMaxWidth()
         ) {
-            val playSource = remember { MutableInteractionSource() }
-            Button(
+            com.illusion.app.ui.common.TvAwareButton(
                 onClick = onPlay,
-                interactionSource = playSource,
                 contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
-                modifier = Modifier.weight(1f).focusHighlight(playSource)
+                modifier = Modifier.weight(1f)
             ) {
                 Icon(Icons.Default.PlayArrow, contentDescription = null)
                 Text(
@@ -1098,12 +1090,10 @@ private fun DownloadButton(
         null -> {
             // Same filled-Button design as "Смотреть" above it, not a bare icon - per user feedback,
             // an icon-only download affordance didn't read clearly enough next to a labeled button.
-            val startSource = remember { MutableInteractionSource() }
-            Button(
+            com.illusion.app.ui.common.TvAwareButton(
                 onClick = onStart,
-                interactionSource = startSource,
                 contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
-                modifier = Modifier.fillMaxWidth().focusHighlight(startSource)
+                modifier = Modifier.fillMaxWidth()
             ) {
                 Icon(Icons.Default.Download, contentDescription = null)
                 Text(
@@ -1322,12 +1312,10 @@ private fun PersonRow(label: String, names: List<String>, clickablePersons: Set<
                 // otherwise it's just this one item again, so the chip stays inert (greyed out).
                 val clickable = name in clickablePersons
                 val personSource = remember { MutableInteractionSource() }
-                AssistChip(
+                com.illusion.app.ui.common.TvAwareAssistChip(
                     onClick = { if (clickable) onOpenPerson(name) },
                     label = { Text(name) },
-                    enabled = clickable,
-                    interactionSource = personSource,
-                    modifier = Modifier.focusHighlight(personSource)
+                    enabled = clickable
                 )
             }
         }
@@ -1434,14 +1422,12 @@ private fun EpisodeList(
                     modifier = Modifier.padding(end = 4.dp)
                 )
                 val seasonHasDownloads = seasonEpisodes.any { downloads[it.stableId]?.status == DownloadStatus.COMPLETED }
-                val seasonDownloadSource = remember { MutableInteractionSource() }
-                IconButton(
+                com.illusion.app.ui.common.TvAwareIconButton(
                     onClick = {
                         val ids = seasonEpisodes.map { it.stableId }
                         if (seasonHasDownloads) seasonDownloadsToRemove = ids else onDownloadSeason(ids)
                     },
-                    interactionSource = seasonDownloadSource,
-                    modifier = Modifier.size(36.dp).focusHighlight(seasonDownloadSource)
+                    modifier = Modifier.size(36.dp)
                 ) {
                     Icon(
                         if (seasonHasDownloads) Icons.Default.Delete else Icons.Default.Download,
@@ -1507,11 +1493,9 @@ private fun EpisodeList(
                         }
                         when (downloads[episode.stableId]?.status) {
                             DownloadStatus.COMPLETED -> {
-                                val episodeRemoveSource = remember { MutableInteractionSource() }
-                                IconButton(
+                                com.illusion.app.ui.common.TvAwareIconButton(
                                     onClick = { episodeDownloadToRemove = episode },
-                                    interactionSource = episodeRemoveSource,
-                                    modifier = Modifier.padding(start = 4.dp).size(36.dp).focusHighlight(episodeRemoveSource)
+                                    modifier = Modifier.padding(start = 4.dp).size(36.dp)
                                 ) {
                                     Icon(
                                         Icons.Default.DownloadDone,
@@ -1525,11 +1509,9 @@ private fun EpisodeList(
                                 strokeWidth = 2.dp
                             )
                             else -> {
-                                val episodeDownloadSource = remember { MutableInteractionSource() }
-                                IconButton(
+                                com.illusion.app.ui.common.TvAwareIconButton(
                                     onClick = { onDownloadEpisode(episode.stableId) },
-                                    interactionSource = episodeDownloadSource,
-                                    modifier = Modifier.padding(start = 4.dp).size(36.dp).focusHighlight(episodeDownloadSource)
+                                    modifier = Modifier.padding(start = 4.dp).size(36.dp)
                                 ) {
                                     Icon(Icons.Default.Download, contentDescription = stringResource(R.string.details_download))
                                 }

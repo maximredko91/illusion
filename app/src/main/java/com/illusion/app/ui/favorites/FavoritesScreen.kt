@@ -54,8 +54,7 @@ fun FavoritesScreen(
                 windowInsets = com.illusion.app.ui.common.rememberLatchedStatusBarsInsets(),
                 title = { Text(stringResource(R.string.favorites_title)) },
                 navigationIcon = {
-                    val backSource = remember { MutableInteractionSource() }
-                    IconButton(onClick = onBack, interactionSource = backSource, modifier = Modifier.focusHighlight(backSource)) {
+                    com.illusion.app.ui.common.TvAwareIconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.details_back))
                     }
                 }

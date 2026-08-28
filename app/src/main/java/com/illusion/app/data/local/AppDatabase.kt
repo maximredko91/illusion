@@ -12,7 +12,6 @@ import com.illusion.app.data.local.dao.DownloadDao
 import com.illusion.app.data.local.dao.FavoriteDao
 import com.illusion.app.data.local.dao.MediaItemDao
 import com.illusion.app.data.local.dao.SmbSourceDao
-import com.illusion.app.data.local.dao.TagTranslationDao
 import com.illusion.app.data.local.dao.ThumbnailSpriteDao
 import com.illusion.app.data.local.dao.WatchProgressDao
 import com.illusion.app.data.local.entity.AudioTrackEntity
@@ -20,7 +19,6 @@ import com.illusion.app.data.local.entity.DownloadEntity
 import com.illusion.app.data.local.entity.FavoriteEntity
 import com.illusion.app.data.local.entity.MediaItemEntity
 import com.illusion.app.data.local.entity.SmbSourceEntity
-import com.illusion.app.data.local.entity.TagTranslationEntity
 import com.illusion.app.data.local.entity.ThumbnailSpriteEntity
 import com.illusion.app.data.local.entity.WatchProgressEntity
 
@@ -32,10 +30,9 @@ import com.illusion.app.data.local.entity.WatchProgressEntity
         FavoriteEntity::class,
         ThumbnailSpriteEntity::class,
         DownloadEntity::class,
-        AudioTrackEntity::class,
-        TagTranslationEntity::class
+        AudioTrackEntity::class
     ],
-    version = 18
+    version = 19
 )
 @TypeConverters(Converters::class)
 abstract class AppDatabase : RoomDatabase() {
@@ -46,7 +43,6 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun thumbnailSpriteDao(): ThumbnailSpriteDao
     abstract fun downloadDao(): DownloadDao
     abstract fun audioTrackDao(): AudioTrackDao
-    abstract fun tagTranslationDao(): TagTranslationDao
 
     companion object {
         @Volatile
@@ -225,6 +221,17 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        // In-app tag translation (TagTranslator/DeepLClient) removed - tags are now translated
+        // upstream, into the .nfo files themselves, by the user's own separate script before this
+        // app ever scans them. Same lesson as MIGRATION_10_11's own KDoc: a removed @Entity needs
+        // a real migration dropping the table, not just deleting the Kotlin class - Room's schema
+        // validator checks the live table set against the expected one on every launch.
+        private val MIGRATION_18_19 = object : Migration(18, 19) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("DROP TABLE IF EXISTS `tag_translations`")
+            }
+        }
+
         private val MIGRATION_9_10 = object : Migration(9, 10) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("CREATE INDEX IF NOT EXISTS `index_media_items_category` ON `media_items` (`category`)")
@@ -323,7 +330,7 @@ abstract class AppDatabase : RoomDatabase() {
                     context.applicationContext,
                     AppDatabase::class.java,
                     "illusion.db"
-                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18).build().also { instance = it }
+                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18, MIGRATION_18_19).build().also { instance = it }
             }
     }
 }

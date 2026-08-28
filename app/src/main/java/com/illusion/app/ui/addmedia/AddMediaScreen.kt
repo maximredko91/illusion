@@ -136,13 +136,13 @@ fun AddMediaScreen(
             TopAppBar(
                 title = { Text(stringResource(R.string.addmedia_title)) },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
+                    com.illusion.app.ui.common.TvAwareIconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.addmedia_back))
                     }
                 },
                 actions = {
                     if (state.isTmdbConfigured && !state.showTmdbKeyEditor) {
-                        IconButton(onClick = viewModel::openTmdbKeyEditor) {
+                        com.illusion.app.ui.common.TvAwareIconButton(onClick = viewModel::openTmdbKeyEditor) {
                             Icon(Icons.Default.Key, contentDescription = stringResource(R.string.addmedia_tmdb_key_change))
                         }
                     }
@@ -221,7 +221,7 @@ private fun TmdbKeyEntryStep(
             singleLine = true,
             modifier = Modifier.fillMaxWidth()
         )
-        Button(onClick = onSave, enabled = keyInput.isNotBlank(), modifier = Modifier.fillMaxWidth()) {
+        com.illusion.app.ui.common.TvAwareButton(onClick = onSave, enabled = keyInput.isNotBlank(), modifier = Modifier.fillMaxWidth()) {
             Text(stringResource(R.string.addmedia_tmdb_key_save))
         }
         if (onCancel != null) {
@@ -252,7 +252,7 @@ private fun SetupStep(
         var sourceMenuExpanded by remember { mutableStateOf(false) }
         val selectedSource = state.sources.firstOrNull { it.id == state.selectedSourceId }
         Box {
-            OutlinedButton(onClick = { sourceMenuExpanded = true }, modifier = Modifier.fillMaxWidth()) {
+            com.illusion.app.ui.common.TvAwareOutlinedButton(onClick = { sourceMenuExpanded = true }, modifier = Modifier.fillMaxWidth()) {
                 Text(selectedSource?.displayName ?: stringResource(R.string.addmedia_source))
             }
             DropdownMenu(expanded = sourceMenuExpanded, onDismissRequest = { sourceMenuExpanded = false }) {
@@ -302,14 +302,14 @@ private fun SetupStep(
             }
         }
 
-        Button(onClick = onPickFile, modifier = Modifier.fillMaxWidth()) {
+        com.illusion.app.ui.common.TvAwareButton(onClick = onPickFile, modifier = Modifier.fillMaxWidth()) {
             Text(stringResource(R.string.addmedia_pick_file))
         }
         state.pickedFileName?.let { name ->
             Text(stringResource(R.string.addmedia_picked_file, name), style = MaterialTheme.typography.bodySmall)
         }
 
-        Button(
+        com.illusion.app.ui.common.TvAwareButton(
             onClick = onNext,
             enabled = state.selectedSourceId != null && state.pickedFileUri != null &&
                 (state.kind == MediaKind.MOVIE || state.showTitleInput.isNotBlank()),
@@ -361,7 +361,7 @@ private fun SearchStep(
                 label = { Text(stringResource(R.string.addmedia_search_query)) },
                 modifier = Modifier.weight(1f)
             )
-            Button(onClick = onSearch) { Text(stringResource(R.string.addmedia_search_button)) }
+            com.illusion.app.ui.common.TvAwareButton(onClick = onSearch) { Text(stringResource(R.string.addmedia_search_button)) }
         }
 
         if (state.isSearching || state.isFetchingDetails) {
@@ -435,7 +435,7 @@ private fun ConfirmStep(
                 label = { Text(stringResource(R.string.addmedia_destination_folder)) },
                 modifier = Modifier.weight(1f)
             )
-            OutlinedButton(onClick = onBrowseFolder) { Text(stringResource(R.string.addmedia_browse)) }
+            com.illusion.app.ui.common.TvAwareOutlinedButton(onClick = onBrowseFolder) { Text(stringResource(R.string.addmedia_browse)) }
         }
         OutlinedTextField(value = state.destinationFileName, onValueChange = onFileNameChange, label = { Text(stringResource(R.string.addmedia_destination_file)) }, modifier = Modifier.fillMaxWidth())
 
@@ -449,7 +449,7 @@ private fun ConfirmStep(
                 TextButton(onClick = onRemoveSubtitle) { Text(stringResource(R.string.addmedia_remove_subtitle)) }
             }
         } else {
-            OutlinedButton(onClick = onPickSubtitle, modifier = Modifier.fillMaxWidth()) {
+            com.illusion.app.ui.common.TvAwareOutlinedButton(onClick = onPickSubtitle, modifier = Modifier.fillMaxWidth()) {
                 Text(stringResource(R.string.addmedia_pick_subtitle))
             }
         }
@@ -466,7 +466,7 @@ private fun ConfirmStep(
 
         if (state.prepareError != null) Text(state.prepareError, color = MaterialTheme.colorScheme.error)
 
-        Button(onClick = onConfirm, enabled = !state.isPreparing, modifier = Modifier.fillMaxWidth()) {
+        com.illusion.app.ui.common.TvAwareButton(onClick = onConfirm, enabled = !state.isPreparing, modifier = Modifier.fillMaxWidth()) {
             if (state.isPreparing) {
                 CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
             } else {
@@ -499,7 +499,7 @@ private fun DoneStep(onRescanNow: () -> Unit, modifier: Modifier = Modifier) {
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Text(stringResource(R.string.addmedia_upload_done), style = MaterialTheme.typography.titleMedium)
-        Button(onClick = onRescanNow) { Text(stringResource(R.string.addmedia_rescan_now)) }
+        com.illusion.app.ui.common.TvAwareButton(onClick = onRescanNow) { Text(stringResource(R.string.addmedia_rescan_now)) }
     }
 }
 

@@ -63,7 +63,6 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -89,6 +88,8 @@ import com.illusion.app.R
 import com.illusion.app.data.backup.BackupSource
 import com.illusion.app.data.download.DownloadStorage
 import com.illusion.app.data.local.entity.SmbSourceEntity
+import com.illusion.app.ui.common.TvAwareOutlinedButton
+import com.illusion.app.ui.common.TvAwareSwitch
 import com.illusion.app.ui.common.focusHighlight
 import com.illusion.app.ui.common.reject
 import com.illusion.app.ui.common.segmentTick
@@ -103,18 +104,14 @@ private val RESCAN_OPTIONS = listOf(0, 6, 12, 24, 48)
 @Composable
 fun SettingsScreen(
     sources: List<SmbSourceEntity>,
-    deeplApiKey: Flow<String?>,
-    onDeeplApiKeyChange: (String?) -> Unit,
-    deeplUpgradeState: DeeplUpgradeUiState,
-    onUpgradeTagsToDeepL: () -> Unit,
-    onCancelTagsUpgrade: () -> Unit,
-    onDismissDeeplUpgradeState: () -> Unit,
     requireChargingForHeavyTasks: Flow<Boolean>,
     rescanIntervalHours: Flow<Int>,
     playerMode: Flow<com.illusion.app.domain.model.PlayerMode>,
     onPlayerModeChange: (com.illusion.app.domain.model.PlayerMode) -> Unit,
     externalPlayerPackage: Flow<String?>,
     onExternalPlayerPackageChange: (String?) -> Unit,
+    playerBufferSize: Flow<com.illusion.app.domain.model.PlayerBufferSize>,
+    onPlayerBufferSizeChange: (com.illusion.app.domain.model.PlayerBufferSize) -> Unit,
     cacheSizeBytes: Long?,
     onRefreshCacheSize: () -> Unit,
     onOpenCache: () -> Unit,
@@ -183,6 +180,7 @@ fun SettingsScreen(
     val currentDefaultSortOrder by defaultSortOrder.collectAsState(initial = SortOrder.RATING)
     val currentPlayerMode by playerMode.collectAsState(initial = com.illusion.app.domain.model.PlayerMode.INTERNAL)
     val currentExternalPlayerPackage by externalPlayerPackage.collectAsState(initial = null)
+    val currentPlayerBufferSize by playerBufferSize.collectAsState(initial = com.illusion.app.domain.model.PlayerBufferSize.INCREASED)
     val hapticsOn by hapticsEnabled.collectAsState(initial = true)
     val predictiveBackOn by predictiveBackEnabled.collectAsState(initial = true)
     val currentAccentColor by accentColor.collectAsState(initial = com.illusion.app.domain.model.AccentColor.ILLUSION)
@@ -312,8 +310,7 @@ fun SettingsScreen(
                     // Only meaningful inside the SMB-sources category now - shown elsewhere it had
                     // no relation to whatever category the user was actually looking at.
                     if (selectedCategory == "smb_sources") {
-                        val addSourceSource = remember { MutableInteractionSource() }
-                        IconButton(onClick = onAddSource, interactionSource = addSourceSource, modifier = Modifier.focusHighlight(addSourceSource)) {
+                        com.illusion.app.ui.common.TvAwareIconButton(onClick = onAddSource) {
                             Icon(Icons.Default.Add, contentDescription = stringResource(R.string.settings_add_source))
                         }
                     }
@@ -575,12 +572,7 @@ fun SettingsScreen(
                                     }
                                 } else null,
                                 trailingContent = {
-                                    val checkUpdatesSource = remember { MutableInteractionSource() }
-                                    OutlinedButton(
-                                        onClick = onCheckForUpdates,
-                                        interactionSource = checkUpdatesSource,
-                                        modifier = Modifier.focusHighlight(checkUpdatesSource)
-                                    ) {
+                                    TvAwareOutlinedButton(onClick = onCheckForUpdates) {
                                         Text(stringResource(R.string.action_check))
                                     }
                                 },
@@ -700,7 +692,7 @@ fun SettingsScreen(
                                                 // single connected source has nothing to select against, and the
                                                 // switch would just be a confusing way to fully empty the library.
                                                 if (sources.size > 1) {
-                                                    Switch(
+                                                    TvAwareSwitch(
                                                         checked = source.enabled,
                                                         onCheckedChange = {
                                                             haptics.segmentTick()
@@ -748,7 +740,7 @@ fun SettingsScreen(
                                 headlineContent = { Text(stringResource(R.string.settings_haptics)) },
                                 supportingContent = { Text(stringResource(R.string.settings_haptics_description)) },
                                 trailingContent = {
-                                    Switch(
+                                    TvAwareSwitch(
                                         checked = hapticsOn,
                                         onCheckedChange = { enabled ->
                                             // Fires regardless of direction (even turning off) -
@@ -768,7 +760,7 @@ fun SettingsScreen(
                                 headlineContent = { Text(stringResource(R.string.settings_predictive_back)) },
                                 supportingContent = { Text(stringResource(R.string.settings_predictive_back_description)) },
                                 trailingContent = {
-                                    Switch(
+                                    TvAwareSwitch(
                                         checked = predictiveBackOn,
                                         onCheckedChange = onPredictiveBackEnabledChange
                                     )
@@ -895,133 +887,6 @@ fun SettingsScreen(
                                 modifier = Modifier.fillMaxWidth()
                             )
                         }
-                        SettingsGroup {
-                            val currentDeeplKey by deeplApiKey.collectAsState(initial = null)
-                            var keyDraft by remember(currentDeeplKey) { mutableStateOf(currentDeeplKey ?: "") }
-                            // Once a key is saved, the field itself goes away in favor of a plain
-                            // "активирован" line - per feedback, leaving the raw key sitting in an
-                            // always-visible text field read as unfinished/insecure once it's
-                            // actually in use. "Изменить" brings the field back for editing.
-                            var editingKey by remember(currentDeeplKey) { mutableStateOf(currentDeeplKey.isNullOrBlank()) }
-                            ListItem(
-                                headlineContent = {
-                                    Column {
-                                        Text(stringResource(R.string.settings_tag_translation))
-                                        Text(
-                                            stringResource(R.string.settings_tag_translation_description),
-                                            style = MaterialTheme.typography.bodyMedium,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            modifier = Modifier.padding(top = 4.dp)
-                                        )
-                                    }
-                                },
-                                colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-                                modifier = Modifier.fillMaxWidth()
-                            )
-                            if (editingKey) {
-                                OutlinedTextField(
-                                    value = keyDraft,
-                                    onValueChange = { keyDraft = it },
-                                    label = { Text(stringResource(R.string.settings_deepl_api_key_label)) },
-                                    singleLine = true,
-                                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
-                                )
-                                val saveSource = remember { MutableInteractionSource() }
-                                TextButton(
-                                    onClick = {
-                                        onDeeplApiKeyChange(keyDraft)
-                                        if (keyDraft.isNotBlank()) editingKey = false
-                                    },
-                                    interactionSource = saveSource,
-                                    modifier = Modifier.padding(horizontal = 16.dp).focusHighlight(saveSource)
-                                ) {
-                                    Text(stringResource(R.string.action_save))
-                                }
-                            } else {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)
-                                ) {
-                                    Icon(
-                                        Icons.Default.CheckCircle,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.size(20.dp)
-                                    )
-                                    Text(
-                                        stringResource(R.string.settings_deepl_api_key_active),
-                                        modifier = Modifier.padding(start = 8.dp).weight(1f)
-                                    )
-                                    val changeSource = remember { MutableInteractionSource() }
-                                    TextButton(
-                                        onClick = { editingKey = true },
-                                        interactionSource = changeSource,
-                                        modifier = Modifier.focusHighlight(changeSource)
-                                    ) {
-                                        Text(stringResource(R.string.action_change))
-                                    }
-                                }
-                            }
-                            val isInProgress = deeplUpgradeState is DeeplUpgradeUiState.InProgress
-                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(16.dp)) {
-                                val upgradeSource = remember { MutableInteractionSource() }
-                                Button(
-                                    onClick = onUpgradeTagsToDeepL,
-                                    enabled = !currentDeeplKey.isNullOrBlank() && !isInProgress,
-                                    interactionSource = upgradeSource,
-                                    modifier = Modifier.focusHighlight(upgradeSource)
-                                ) {
-                                    Text(stringResource(R.string.settings_tag_translation_upgrade_action))
-                                }
-                                if (isInProgress) {
-                                    val cancelSource = remember { MutableInteractionSource() }
-                                    TextButton(
-                                        onClick = onCancelTagsUpgrade,
-                                        interactionSource = cancelSource,
-                                        modifier = Modifier.padding(start = 8.dp).focusHighlight(cancelSource)
-                                    ) {
-                                        Text(stringResource(R.string.action_cancel))
-                                    }
-                                }
-                            }
-                            if (deeplUpgradeState is DeeplUpgradeUiState.InProgress) {
-                                val state = deeplUpgradeState
-                                Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
-                                    if (state.total > 0) {
-                                        LinearProgressIndicator(
-                                            progress = { state.done.toFloat() / state.total },
-                                            modifier = Modifier.fillMaxWidth()
-                                        )
-                                        Text(
-                                            stringResource(R.string.settings_tag_translation_progress, state.done, state.total),
-                                            style = MaterialTheme.typography.bodyMedium,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            modifier = Modifier.padding(top = 4.dp)
-                                        )
-                                    } else {
-                                        LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-                                    }
-                                }
-                            }
-                            val upgradeMessage = when (val state = deeplUpgradeState) {
-                                is DeeplUpgradeUiState.Done -> stringResource(R.string.settings_tag_translation_done, state.count)
-                                DeeplUpgradeUiState.AlreadyUpToDate -> stringResource(R.string.settings_tag_translation_already_done)
-                                DeeplUpgradeUiState.NoApiKey -> stringResource(R.string.settings_tag_translation_no_key)
-                                DeeplUpgradeUiState.Cancelled -> stringResource(R.string.settings_tag_translation_cancelled)
-                                else -> null
-                            }
-                            if (upgradeMessage != null) {
-                                LaunchedEffect(upgradeMessage) {
-                                    kotlinx.coroutines.delay(4000)
-                                    onDismissDeeplUpgradeState()
-                                }
-                                Text(
-                                    upgradeMessage,
-                                    color = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
-                                )
-                            }
-                        }
                     }
 
                     "scan" -> {
@@ -1036,12 +901,7 @@ fun SettingsScreen(
                                     headlineContent = { Text(stringResource(R.string.settings_scan_running)) },
                                     supportingContent = { Text(stringResource(R.string.settings_scan_running_description)) },
                                     trailingContent = {
-                                        val openSource = remember { MutableInteractionSource() }
-                                        OutlinedButton(
-                                            onClick = onOpenRunningScan,
-                                            interactionSource = openSource,
-                                            modifier = Modifier.focusHighlight(openSource)
-                                        ) {
+                                        TvAwareOutlinedButton(onClick = onOpenRunningScan) {
                                             Text(stringResource(R.string.settings_scan_running_open))
                                         }
                                     },
@@ -1064,13 +924,7 @@ fun SettingsScreen(
                                         }
                                     },
                                     trailingContent = {
-                                        val rescanNowSource = remember { MutableInteractionSource() }
-                                        OutlinedButton(
-                                            onClick = onRescanNow,
-                                            enabled = sources.isNotEmpty(),
-                                            interactionSource = rescanNowSource,
-                                            modifier = Modifier.focusHighlight(rescanNowSource)
-                                        ) {
+                                        TvAwareOutlinedButton(onClick = onRescanNow, enabled = sources.isNotEmpty()) {
                                             Text(stringResource(R.string.settings_rescan_now_action))
                                         }
                                     },
@@ -1090,13 +944,7 @@ fun SettingsScreen(
                                         }
                                     },
                                     trailingContent = {
-                                        val forceSource = remember { MutableInteractionSource() }
-                                        OutlinedButton(
-                                            onClick = onRescanForceNow,
-                                            enabled = sources.isNotEmpty(),
-                                            interactionSource = forceSource,
-                                            modifier = Modifier.focusHighlight(forceSource)
-                                        ) {
+                                        TvAwareOutlinedButton(onClick = onRescanForceNow, enabled = sources.isNotEmpty()) {
                                             Text(stringResource(R.string.settings_rescan_now_action))
                                         }
                                     },
@@ -1116,7 +964,7 @@ fun SettingsScreen(
                                 headlineContent = { Text(stringResource(R.string.settings_charging_only)) },
                                 supportingContent = { Text(stringResource(R.string.settings_charging_only_description)) },
                                 trailingContent = {
-                                    Switch(
+                                    TvAwareSwitch(
                                         checked = chargingOnly,
                                         onCheckedChange = { enabled ->
                                             haptics.toggle(enabled)
@@ -1179,6 +1027,23 @@ fun SettingsScreen(
                                     modifier = Modifier.fillMaxWidth()
                                 )
                             }
+                            ListItem(
+                                headlineContent = {
+                                    Column {
+                                        Text(stringResource(R.string.settings_player_buffer_size))
+                                        Text(
+                                            stringResource(R.string.settings_player_buffer_size_description),
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                },
+                                trailingContent = {
+                                    PlayerBufferSizeMenu(currentPlayerBufferSize, onPlayerBufferSizeChange)
+                                },
+                                colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                                modifier = Modifier.fillMaxWidth()
+                            )
                         }
                     }
 
@@ -1213,12 +1078,7 @@ fun SettingsScreen(
                                         ) {
                                             Icon(Icons.Default.Folder, contentDescription = stringResource(R.string.settings_downloads_open_folder))
                                         }
-                                        val chooseFolderSource = remember { MutableInteractionSource() }
-                                        OutlinedButton(
-                                            onClick = { folderPicker.launch(DownloadStorage.pickerInitialUri()) },
-                                            interactionSource = chooseFolderSource,
-                                            modifier = Modifier.focusHighlight(chooseFolderSource)
-                                        ) {
+                                        TvAwareOutlinedButton(onClick = { folderPicker.launch(DownloadStorage.pickerInitialUri()) }) {
                                             Text(stringResource(R.string.settings_downloads_choose_folder))
                                         }
                                     }
@@ -1242,12 +1102,7 @@ fun SettingsScreen(
                                     style = MaterialTheme.typography.bodyLarge
                                 )
                                 Row(modifier = Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.End) {
-                                    val clearDownloadsSource = remember { MutableInteractionSource() }
-                                    OutlinedButton(
-                                        onClick = onClearDownloads,
-                                        interactionSource = clearDownloadsSource,
-                                        modifier = Modifier.focusHighlight(clearDownloadsSource)
-                                    ) {
+                                    TvAwareOutlinedButton(onClick = onClearDownloads) {
                                         Text(stringResource(R.string.settings_downloads_clear))
                                     }
                                 }
@@ -1265,12 +1120,7 @@ fun SettingsScreen(
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                                 Row(modifier = Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.End) {
-                                    val recoverSource = remember { MutableInteractionSource() }
-                                    OutlinedButton(
-                                        onClick = { recoverFolderPicker.launch(DownloadStorage.pickerInitialUri()) },
-                                        interactionSource = recoverSource,
-                                        modifier = Modifier.focusHighlight(recoverSource)
-                                    ) {
+                                    TvAwareOutlinedButton(onClick = { recoverFolderPicker.launch(DownloadStorage.pickerInitialUri()) }) {
                                         Text(stringResource(R.string.settings_downloads_recover_action))
                                     }
                                 }
@@ -1380,12 +1230,7 @@ fun SettingsScreen(
                                     }
                                 },
                                 trailingContent = {
-                                    val feedbackSource = remember { MutableInteractionSource() }
-                                    OutlinedButton(
-                                        onClick = { context.startActivity(android.content.Intent.createChooser(com.illusion.app.data.crash.CrashReporter.feedbackIntent(), null)) },
-                                        interactionSource = feedbackSource,
-                                        modifier = Modifier.focusHighlight(feedbackSource)
-                                    ) {
+                                    TvAwareOutlinedButton(onClick = { context.startActivity(android.content.Intent.createChooser(com.illusion.app.data.crash.CrashReporter.feedbackIntent(), null)) }) {
                                         Text(stringResource(R.string.settings_feedback_action))
                                     }
                                 },
@@ -1409,12 +1254,7 @@ fun SettingsScreen(
                                     }
                                 },
                                 trailingContent = {
-                                    val resetSource = remember { MutableInteractionSource() }
-                                    OutlinedButton(
-                                        onClick = { showResetConfirm = true },
-                                        interactionSource = resetSource,
-                                        modifier = Modifier.focusHighlight(resetSource)
-                                    ) {
+                                    TvAwareOutlinedButton(onClick = { showResetConfirm = true }) {
                                         Text(stringResource(R.string.settings_reset_to_defaults_action))
                                     }
                                 },
@@ -1708,7 +1548,7 @@ private fun DefaultSortOrderMenu(current: SortOrder, onChange: (SortOrder) -> Un
     val haptics = LocalHapticFeedback.current
     Box {
         val triggerSource = remember { MutableInteractionSource() }
-        OutlinedButton(onClick = { expanded = true }, interactionSource = triggerSource, modifier = Modifier.focusHighlight(triggerSource)) {
+        TvAwareOutlinedButton(onClick = { expanded = true }) {
             Text(sortLabel(current))
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
@@ -1734,7 +1574,7 @@ private fun RescanIntervalMenu(hours: Int, onChange: (Int) -> Unit) {
     var expanded by remember { mutableStateOf(false) }
     Box {
         val triggerSource = remember { MutableInteractionSource() }
-        OutlinedButton(onClick = { expanded = true }, interactionSource = triggerSource, modifier = Modifier.focusHighlight(triggerSource)) {
+        TvAwareOutlinedButton(onClick = { expanded = true }) {
             Text(rescanLabel(hours))
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
@@ -1765,7 +1605,7 @@ private fun TvOverscanMarginMenu(percent: Int, onChange: (Int) -> Unit) {
     var expanded by remember { mutableStateOf(false) }
     Box {
         val triggerSource = remember { MutableInteractionSource() }
-        OutlinedButton(onClick = { expanded = true }, interactionSource = triggerSource, modifier = Modifier.focusHighlight(triggerSource)) {
+        TvAwareOutlinedButton(onClick = { expanded = true }) {
             Text(if (percent <= 0) stringResource(R.string.settings_tv_overscan_margin_off) else "$percent%")
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
@@ -1791,7 +1631,7 @@ private fun ThemeModeMenu(current: com.illusion.app.domain.model.ThemeMode, onCh
     val haptics = LocalHapticFeedback.current
     Box {
         val triggerSource = remember { MutableInteractionSource() }
-        OutlinedButton(onClick = { expanded = true }, interactionSource = triggerSource, modifier = Modifier.focusHighlight(triggerSource)) {
+        TvAwareOutlinedButton(onClick = { expanded = true }) {
             Text(themeModeLabel(current))
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
@@ -1826,7 +1666,7 @@ private fun PlayerModeMenu(current: com.illusion.app.domain.model.PlayerMode, on
     val haptics = LocalHapticFeedback.current
     Box {
         val triggerSource = remember { MutableInteractionSource() }
-        OutlinedButton(onClick = { expanded = true }, interactionSource = triggerSource, modifier = Modifier.focusHighlight(triggerSource)) {
+        TvAwareOutlinedButton(onClick = { expanded = true }) {
             Text(playerModeLabel(current))
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
@@ -1848,12 +1688,46 @@ private fun PlayerModeMenu(current: com.illusion.app.domain.model.PlayerMode, on
 }
 
 @Composable
+private fun PlayerBufferSizeMenu(current: com.illusion.app.domain.model.PlayerBufferSize, onChange: (com.illusion.app.domain.model.PlayerBufferSize) -> Unit) {
+    var expanded by remember { mutableStateOf(false) }
+    val haptics = LocalHapticFeedback.current
+    Box {
+        val triggerSource = remember { MutableInteractionSource() }
+        TvAwareOutlinedButton(onClick = { expanded = true }) {
+            Text(playerBufferSizeLabel(current))
+        }
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            com.illusion.app.domain.model.PlayerBufferSize.entries.forEach { size ->
+                val itemSource = remember { MutableInteractionSource() }
+                DropdownMenuItem(
+                    text = { Text(playerBufferSizeLabel(size)) },
+                    onClick = {
+                        haptics.segmentTick()
+                        onChange(size)
+                        expanded = false
+                    },
+                    interactionSource = itemSource,
+                    modifier = Modifier.focusHighlight(itemSource)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun playerBufferSizeLabel(size: com.illusion.app.domain.model.PlayerBufferSize): String = when (size) {
+    com.illusion.app.domain.model.PlayerBufferSize.AUTO -> stringResource(R.string.settings_player_buffer_size_auto)
+    com.illusion.app.domain.model.PlayerBufferSize.INCREASED -> stringResource(R.string.settings_player_buffer_size_increased)
+    com.illusion.app.domain.model.PlayerBufferSize.MAXIMUM -> stringResource(R.string.settings_player_buffer_size_maximum)
+}
+
+@Composable
 private fun UpdateSourceMenu(current: com.illusion.app.domain.model.UpdateSource, onChange: (com.illusion.app.domain.model.UpdateSource) -> Unit) {
     var expanded by remember { mutableStateOf(false) }
     val haptics = LocalHapticFeedback.current
     Box {
         val triggerSource = remember { MutableInteractionSource() }
-        OutlinedButton(onClick = { expanded = true }, interactionSource = triggerSource, modifier = Modifier.focusHighlight(triggerSource)) {
+        TvAwareOutlinedButton(onClick = { expanded = true }) {
             Text(updateSourceLabel(current))
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
@@ -1891,7 +1765,7 @@ private fun LocalUpdateSourceMenu(
     val current = sources.firstOrNull { it.id == currentId }
     Box {
         val triggerSource = remember { MutableInteractionSource() }
-        OutlinedButton(onClick = { expanded = true }, interactionSource = triggerSource, modifier = Modifier.focusHighlight(triggerSource)) {
+        TvAwareOutlinedButton(onClick = { expanded = true }) {
             Text(current?.displayName ?: stringResource(R.string.settings_local_update_source_pick))
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
@@ -1927,7 +1801,7 @@ private fun UpdateCheckIntervalMenu(currentHours: Int, onChange: (Int) -> Unit) 
     val haptics = LocalHapticFeedback.current
     Box {
         val triggerSource = remember { MutableInteractionSource() }
-        OutlinedButton(onClick = { expanded = true }, interactionSource = triggerSource, modifier = Modifier.focusHighlight(triggerSource)) {
+        TvAwareOutlinedButton(onClick = { expanded = true }) {
             Text(updateCheckIntervalLabel(currentHours))
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
@@ -1960,7 +1834,7 @@ private fun ExternalPlayerAppMenu(currentPackage: String?, onChange: (String?) -
     val currentLabel = apps.find { it.packageName == currentPackage }?.label ?: systemLabel
     Box {
         val triggerSource = remember { MutableInteractionSource() }
-        OutlinedButton(onClick = { expanded = true }, interactionSource = triggerSource, modifier = Modifier.focusHighlight(triggerSource)) {
+        TvAwareOutlinedButton(onClick = { expanded = true }) {
             Text(currentLabel)
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {

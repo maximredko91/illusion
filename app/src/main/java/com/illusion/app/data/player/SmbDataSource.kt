@@ -167,6 +167,10 @@ class SmbDataSource internal constructor(
     override fun getUri(): Uri? = currentUri
 
     override fun close() {
+        // TEMP DEBUG (Avatar infinite-buffering investigation) - remove once diagnosed. Confirms
+        // whether ExoPlayer ever gives up on / abandons this DataSource instance instead of
+        // reading from it, vs. it just being held open indefinitely with nothing happening at all.
+        Log.d(TAG, "TEMP close() called: position=$position opened=$opened")
         randomAccessFile?.let { runCatching { it.close() } }
         randomAccessFile = null
         if (opened) {

@@ -157,7 +157,12 @@ class UpdateViewModel(
                     }
                 }
                 is UpdateCheckResult.Available -> {
-                    if (!force && settingsRepository.skippedUpdateVersionCode.first() == result.info.versionCode) return@launch
+                    // A "skip this version" from before a release was (re-)marked mandatory
+                    // should never be able to suppress it once it is - see UpdateInfo.mandatory's
+                    // own KDoc for why a mandatory release must always reach the user.
+                    val previouslySkipped = !force && !result.info.mandatory &&
+                        settingsRepository.skippedUpdateVersionCode.first() == result.info.versionCode
+                    if (previouslySkipped) return@launch
                     _state.update { it.copy(update = result.info) }
                 }
             }

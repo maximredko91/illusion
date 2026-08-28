@@ -74,19 +74,13 @@ fun HistoryScreen(
                 windowInsets = com.illusion.app.ui.common.rememberLatchedStatusBarsInsets(),
                 title = { Text(stringResource(R.string.history_title)) },
                 navigationIcon = {
-                    val backSource = remember { MutableInteractionSource() }
-                    IconButton(onClick = onBack, interactionSource = backSource, modifier = Modifier.focusHighlight(backSource)) {
+                    com.illusion.app.ui.common.TvAwareIconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.details_back))
                     }
                 },
                 actions = {
                     if (entries.isNotEmpty()) {
-                        val clearAllSource = remember { MutableInteractionSource() }
-                        IconButton(
-                            onClick = { showClearAllConfirm = true },
-                            interactionSource = clearAllSource,
-                            modifier = Modifier.focusHighlight(clearAllSource)
-                        ) {
+                        com.illusion.app.ui.common.TvAwareIconButton(onClick = { showClearAllConfirm = true }) {
                             Icon(Icons.Default.Delete, contentDescription = stringResource(R.string.history_clear_all))
                         }
                     }
@@ -157,12 +151,7 @@ fun HistoryScreen(
                                 )
                             }
                         }
-                        val removeSource = remember { MutableInteractionSource() }
-                        IconButton(
-                            onClick = { pendingRemoveEntry = entry },
-                            interactionSource = removeSource,
-                            modifier = Modifier.focusHighlight(removeSource)
-                        ) {
+                        com.illusion.app.ui.common.TvAwareIconButton(onClick = { pendingRemoveEntry = entry }) {
                             Icon(Icons.Default.Delete, contentDescription = stringResource(R.string.history_remove_item))
                         }
                     }

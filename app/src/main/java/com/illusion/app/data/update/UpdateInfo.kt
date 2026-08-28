@@ -12,5 +12,10 @@ data class UpdateInfo(
     val releaseNotes: String,
     val apkDownloadUrl: String,
     val apkSizeBytes: Long?,
-    val releasePageUrl: String
+    val releasePageUrl: String,
+    /** True hides "Позже"/"Пропустить версию" in the update dialog - for a release the developer
+     * has decided every device must install (e.g. it fixes an actual crash/data-loss bug). See
+     * [UpdateChecker]'s own KDoc for how this is set from a GitHub release body, and
+     * [LocalUpdateManifest.mandatory] for the local-source counterpart. */
+    val mandatory: Boolean = false
 )

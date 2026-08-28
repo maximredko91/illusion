@@ -36,7 +36,6 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.illusion.app.R
 import com.illusion.app.data.repository.LibraryRepository
-import com.illusion.app.data.translation.TagTranslationRepository
 import com.illusion.app.ui.common.focusHighlight
 
 /** Full, sortable/filterable browser over every distinct raw .nfo <tag> in the library - see Destination.Tags's own comment for why this exists separately from Search's own capped inline chip row. */
@@ -44,17 +43,15 @@ import com.illusion.app.ui.common.focusHighlight
 @Composable
 fun TagsScreen(
     libraryRepository: LibraryRepository,
-    translationRepository: TagTranslationRepository,
     onSelectTag: (tag: String, label: String) -> Unit,
     onBack: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val viewModel: TagsViewModel = viewModel(factory = TagsViewModel.factory(libraryRepository, translationRepository))
+    val viewModel: TagsViewModel = viewModel(factory = TagsViewModel.factory(libraryRepository))
     val tags by viewModel.tags.collectAsState()
     val sortOrder by viewModel.sortOrder.collectAsState()
     val filter by viewModel.filter.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
-    val isTranslating by viewModel.isTranslating.collectAsState()
 
     Scaffold(
         modifier = modifier,
@@ -63,7 +60,7 @@ fun TagsScreen(
                 windowInsets = com.illusion.app.ui.common.rememberLatchedStatusBarsInsets(),
                 title = { Text(stringResource(R.string.tags_title)) },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
+                    com.illusion.app.ui.common.TvAwareIconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.details_back))
                     }
                 }
@@ -78,19 +75,6 @@ fun TagsScreen(
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth().padding(8.dp)
             )
-            // Only appears while the one-time lazy ML Kit pass (TagsViewModel's own init) is still
-            // working through never-before-seen tags - explains why some entries below might
-            // briefly show their raw English text instead of leaving that unexplained. Every tag
-            // stays translated for good after this first pass (see TagTranslationRepository's own
-            // KDoc), so this is a first-visit-only message, not a persistent caveat.
-            if (isTranslating) {
-                Text(
-                    stringResource(R.string.tags_translating_hint),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    style = MaterialTheme.typography.bodySmall,
-                    modifier = Modifier.padding(horizontal = 8.dp)
-                )
-            }
             Row(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)

@@ -5,24 +5,26 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.illusion.app.data.repository.LibraryRepository
-import com.illusion.app.data.translation.TagTranslationRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 enum class TagSortOrder { COUNT, ALPHABETICAL }
 
-/** [label] is the Russian translation once resolved, or [tag] itself while still pending/untranslatable - see TagTranslationRepository. */
+/** Tags are already Russian by the time they land in .nfo files - translated upstream by the
+ * user's own script before scanning, not by this app. [label] used to be a separately-resolved
+ * translation (on-device ML Kit, or DeepL via a manual Settings upgrade); now it's always just
+ * [tag] itself. Kept as a distinct field rather than collapsing call sites onto `tag` directly, so
+ * a future re-introduction of translation (a different source, a different tag set) wouldn't need
+ * to touch every call site again. */
 data class TagCount(val tag: String, val count: Int, val label: String = tag)
 
 /** Full tag browser backing TagsScreen - unlike Search's own inline top-N chip row, this loads every distinct <tag> in the library (a large one can have thousands - see SearchViewModel's own comment), so sort/filter are the only way to make that actually navigable. */
 class TagsViewModel(
-    private val libraryRepository: LibraryRepository,
-    private val translationRepository: TagTranslationRepository
+    private val libraryRepository: LibraryRepository
 ) : ViewModel() {
     private val _allTags = MutableStateFlow<List<TagCount>>(emptyList())
     private val _sortOrder = MutableStateFlow(TagSortOrder.COUNT)
@@ -37,10 +39,6 @@ class TagsViewModel(
     private val _tags = MutableStateFlow<List<TagCount>>(emptyList())
     val tags: StateFlow<List<TagCount>> = _tags.asStateFlow()
 
-    /** True while the lazy ML Kit pass below is still working through never-before-seen tags - lets TagsScreen explain why some entries are still showing their raw English text instead of silently leaving the user to wonder. Once every tag in the library has been translated at least once (persisted in Room), this stays false for good - a fresh install/first visit is the only time it's ever true for long. */
-    private val _isTranslating = MutableStateFlow(false)
-    val isTranslating: StateFlow<Boolean> = _isTranslating.asStateFlow()
-
     init {
         viewModelScope.launch {
             val counts = withContext(Dispatchers.Default) {
@@ -50,31 +48,9 @@ class TagsViewModel(
                     .eachCount()
                     .map { (tag, count) -> TagCount(tag, count) }
             }
-            // Already-translated tags (from a prior ML Kit lookup or a Settings DeepL upgrade)
-            // show their real label immediately - only genuinely new tags fall back to the raw
-            // English text below while they resolve one at a time.
-            val cachedLabels = translationRepository.getCached()
-            _allTags.value = counts.map { it.copy(label = cachedLabels[it.tag] ?: it.tag) }
+            _allTags.value = counts
             _isLoading.value = false
             recompute()
-
-            // Lazy, on-device (ML Kit) - a large library can have thousands of never-before-seen
-            // tags on first visit, and one launch{} per tag would fire that many concurrent
-            // translator calls at once. Sequential instead: still fills in the list live (each
-            // result updates the UI as soon as it resolves) without hammering ML Kit's client
-            // with thousands of simultaneous requests.
-            val pending = counts.filter { it.tag !in cachedLabels }
-            if (pending.isNotEmpty()) {
-                _isTranslating.value = true
-                withContext(Dispatchers.Default) {
-                    pending.forEach { tagCount ->
-                        val label = translationRepository.translateLazily(tagCount.tag)
-                        _allTags.update { list -> list.map { if (it.tag == tagCount.tag) it.copy(label = label) else it } }
-                        recompute()
-                    }
-                }
-                _isTranslating.value = false
-            }
         }
     }
 
@@ -99,8 +75,8 @@ class TagsViewModel(
     }
 
     companion object {
-        fun factory(libraryRepository: LibraryRepository, translationRepository: TagTranslationRepository) = viewModelFactory {
-            initializer { TagsViewModel(libraryRepository, translationRepository) }
+        fun factory(libraryRepository: LibraryRepository) = viewModelFactory {
+            initializer { TagsViewModel(libraryRepository) }
         }
     }
 }

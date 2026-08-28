@@ -52,6 +52,7 @@ import com.illusion.app.R
 import com.illusion.app.data.image.posterModel
 import com.illusion.app.data.local.entity.MediaItemEntity
 import com.illusion.app.domain.model.Category
+import com.illusion.app.domain.model.UiMode
 
 /** Poster + title card used in the home carousels and library grids. Falls back to a category icon when there's no poster. */
 @OptIn(ExperimentalSharedTransitionApi::class)
@@ -70,6 +71,22 @@ fun PosterCard(
     val haptics = LocalHapticFeedback.current
     val interactionSource = remember { MutableInteractionSource() }
 
+    // TV gets androidx.tv.material3.Card - native focus scale/border/glow (real D-pad-first
+    // component, not the hand-rolled scale+border focusHighlight() hack every other platform
+    // still uses) instead of a plain clickable Material3 Card. Phone/tablet keeps the exact
+    // previous Card. IMPORTANT: only verify this on the real TV Box with a real remote - tapping
+    // TV mode on a touchscreen phone will look completely broken (tv-material's click handling
+    // requires D-pad focus first, see TvAwareControls.kt's own KDoc), that is expected, not a bug.
+    if (LocalUiMode.current == UiMode.TV) {
+        androidx.tv.material3.Card(
+            onClick = { haptics.tick(); onClick() },
+            modifier = modifier
+        ) {
+            PosterCardContent(item, showRatingBadge, posterAspectRatio, isCurrent, progressFraction)
+        }
+        return
+    }
+
     Card(
         // A dozen-plus grid cards each casting their own shadow is real GPU compositing cost on
         // the very first frame a screen full of them appears - flat cards render just as well in
@@ -82,7 +99,19 @@ fun PosterCard(
                 onClick()
             }
     ) {
-        Column {
+        PosterCardContent(item, showRatingBadge, posterAspectRatio, isCurrent, progressFraction)
+    }
+}
+
+@Composable
+private fun PosterCardContent(
+    item: MediaItemEntity,
+    showRatingBadge: Boolean,
+    posterAspectRatio: Float,
+    isCurrent: Boolean,
+    progressFraction: Float?
+) {
+    Column {
             // Shared-element bounds-morph into/out of Details deliberately removed (per user
             // feedback: it read as the poster "flying in" oddly rather than a clean transition) -
             // Details now just fades in/out (see NAV_TRANSITION handling in IllusionNavHost), no
@@ -177,7 +206,6 @@ fun PosterCard(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-        }
     }
 }
 
