@@ -409,7 +409,7 @@ private fun DetailsContent(
             // DetailsScreen's own overlay), but the dead zone here still needs to line up with
             // where a near-miss on one of them actually lands.
             val cornerButtonSize = 48.dp
-            val fanartHeight = if (isTv) 380.dp else 220.dp
+            val fanartHeight = if (isTv) 460.dp else 220.dp
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -491,6 +491,29 @@ private fun DetailsContent(
                                 }
                             )
                     )
+                    // TV-only "hero" title overlay - Netflix/Google TV-style, the title sits
+                    // directly on the backdrop instead of only appearing in the metadata row
+                    // below (phone's layout, unchanged). Purely additive on top of the existing
+                    // gradient - doesn't touch the zoom-click hit box, the corner buttons, or any
+                    // of the phone-only layout math below it. The title still also appears in its
+                    // usual place further down (shared code path with phone) - deliberately not
+                    // removed there, since collapsing that would mean threading isTv through
+                    // several more tightly-coupled measurements (title-wrap line caps, the empty-
+                    // space-under-a-short-title spacing) for no real benefit; a title shown twice
+                    // is harmless, a broken layout isn't.
+                    if (isTv) {
+                        Text(
+                            item.title,
+                            color = Color.White,
+                            style = MaterialTheme.typography.headlineMedium,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier
+                                .align(Alignment.BottomStart)
+                                .padding(start = 24.dp, end = 24.dp, bottom = 20.dp)
+                        )
+                    }
                 }
                 if (fanart != null) {
                     // Zoom only triggers from this inset center region, not the full fanart - a
