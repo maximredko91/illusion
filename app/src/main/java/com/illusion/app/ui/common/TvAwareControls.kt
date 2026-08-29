@@ -63,6 +63,37 @@ fun TvAwareAssistChip(
     }
 }
 
+/** A chip that toggles a "selected" visual state (e.g. the active sort option) - phone uses a
+ * plain AssistChip with custom colors when selected, TV uses tv-material's real FilterChip
+ * (its `selected` param is exactly this concept, unlike AssistChip which has none). */
+@Composable
+fun TvAwareSelectableChip(
+    selected: Boolean,
+    onClick: () -> Unit,
+    label: @Composable () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    if (LocalUiMode.current == UiMode.TV) {
+        androidx.tv.material3.FilterChip(selected = selected, onClick = onClick, modifier = modifier, content = label)
+    } else {
+        val interactionSource = remember { MutableInteractionSource() }
+        AssistChip(
+            onClick = onClick,
+            label = label,
+            interactionSource = interactionSource,
+            modifier = modifier.focusHighlight(interactionSource),
+            colors = if (selected) {
+                androidx.compose.material3.AssistChipDefaults.assistChipColors(
+                    containerColor = androidx.compose.material3.MaterialTheme.colorScheme.primary,
+                    labelColor = androidx.compose.material3.MaterialTheme.colorScheme.onPrimary
+                )
+            } else {
+                androidx.compose.material3.AssistChipDefaults.assistChipColors()
+            }
+        )
+    }
+}
+
 @Composable
 fun TvAwareButton(
     onClick: () -> Unit,

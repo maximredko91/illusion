@@ -381,7 +381,7 @@ fun ErrorOverlay(message: String, onRetry: () -> Unit, modifier: Modifier = Modi
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text(message, color = Color.White)
             Spacer(Modifier.padding(4.dp))
-            Button(onClick = onRetry) { Text(stringResource(R.string.player_retry)) }
+            com.illusion.app.ui.common.TvAwareButton(onClick = onRetry) { Text(stringResource(R.string.player_retry)) }
         }
     }
 }
@@ -617,22 +617,22 @@ fun PlayerSettingsPanel(
                 )
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                     Text(stringResource(R.string.player_double_tap_seek), color = Color.White, modifier = Modifier.weight(1f))
-                    androidx.compose.material3.Switch(checked = doubleTapSeekEnabled, onCheckedChange = onDoubleTapSeekEnabledChange)
+                    com.illusion.app.ui.common.TvAwareSwitch(checked = doubleTapSeekEnabled, onCheckedChange = onDoubleTapSeekEnabledChange)
                 }
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                     Text(stringResource(R.string.player_swipe_seek), color = Color.White, modifier = Modifier.weight(1f))
-                    androidx.compose.material3.Switch(checked = swipeSeekEnabled, onCheckedChange = onSwipeSeekEnabledChange)
+                    com.illusion.app.ui.common.TvAwareSwitch(checked = swipeSeekEnabled, onCheckedChange = onSwipeSeekEnabledChange)
                 }
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                     Text(stringResource(R.string.player_hold_to_seek), color = Color.White, modifier = Modifier.weight(1f))
-                    androidx.compose.material3.Switch(checked = holdToSeekEnabled, onCheckedChange = onHoldToSeekEnabledChange)
+                    com.illusion.app.ui.common.TvAwareSwitch(checked = holdToSeekEnabled, onCheckedChange = onHoldToSeekEnabledChange)
                 }
                 }
 
                 CollapsiblePanelSection(stringResource(R.string.player_settings_section_image)) {
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                     Text(stringResource(R.string.player_sharpen_toggle), color = Color.White, modifier = Modifier.weight(1f))
-                    androidx.compose.material3.Switch(
+                    com.illusion.app.ui.common.TvAwareSwitch(
                         checked = sharpenEnabled,
                         onCheckedChange = { enabled ->
                             if (enabled) showEnableWarning = true else onSharpenEnabledChange(false)

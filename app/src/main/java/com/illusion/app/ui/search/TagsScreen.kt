@@ -79,35 +79,15 @@ fun TagsScreen(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
             ) {
-                val countSource = remember { MutableInteractionSource() }
-                AssistChip(
+                com.illusion.app.ui.common.TvAwareSelectableChip(
+                    selected = sortOrder == TagSortOrder.COUNT,
                     onClick = { viewModel.setSortOrder(TagSortOrder.COUNT) },
-                    label = { Text(stringResource(R.string.tags_sort_by_count)) },
-                    interactionSource = countSource,
-                    modifier = Modifier.focusHighlight(countSource),
-                    colors = if (sortOrder == TagSortOrder.COUNT) {
-                        androidx.compose.material3.AssistChipDefaults.assistChipColors(
-                            containerColor = MaterialTheme.colorScheme.primary,
-                            labelColor = MaterialTheme.colorScheme.onPrimary
-                        )
-                    } else {
-                        androidx.compose.material3.AssistChipDefaults.assistChipColors()
-                    }
+                    label = { Text(stringResource(R.string.tags_sort_by_count)) }
                 )
-                val alphaSource = remember { MutableInteractionSource() }
-                AssistChip(
+                com.illusion.app.ui.common.TvAwareSelectableChip(
+                    selected = sortOrder == TagSortOrder.ALPHABETICAL,
                     onClick = { viewModel.setSortOrder(TagSortOrder.ALPHABETICAL) },
-                    label = { Text(stringResource(R.string.tags_sort_alphabetical)) },
-                    interactionSource = alphaSource,
-                    modifier = Modifier.focusHighlight(alphaSource),
-                    colors = if (sortOrder == TagSortOrder.ALPHABETICAL) {
-                        androidx.compose.material3.AssistChipDefaults.assistChipColors(
-                            containerColor = MaterialTheme.colorScheme.primary,
-                            labelColor = MaterialTheme.colorScheme.onPrimary
-                        )
-                    } else {
-                        androidx.compose.material3.AssistChipDefaults.assistChipColors()
-                    }
+                    label = { Text(stringResource(R.string.tags_sort_alphabetical)) }
                 )
             }
             when {
