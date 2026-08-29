@@ -3,6 +3,9 @@
 package com.illusion.app.ui.common
 
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.IconButton
@@ -10,6 +13,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Switch
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import com.illusion.app.domain.model.UiMode
 
@@ -68,7 +72,18 @@ fun TvAwareButton(
     content: @Composable () -> Unit
 ) {
     if (LocalUiMode.current == UiMode.TV) {
-        androidx.tv.material3.Button(onClick = onClick, modifier = modifier, enabled = enabled, contentPadding = contentPadding) { content() }
+        // tv-material's Button internally centers its own Row (Arrangement.Center, verified via
+        // javap) but that Row wraps tightly to content width - it's the OUTER Surface/Box that
+        // decides where that tight Row sits when the button itself is stretched wider (e.g. via
+        // Modifier.weight(1f) in a Row of buttons), and that outer alignment defaults to the
+        // start, not the center. Confirmed on-device: "Смотреть"/"Скачать" rendered as icon+text
+        // hugging the left edge of a much wider pill. Forcing our own fillMaxWidth() + Center Row
+        // here overrides that regardless of tv-material's own default.
+        androidx.tv.material3.Button(onClick = onClick, modifier = modifier, enabled = enabled, contentPadding = contentPadding) {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
+                content()
+            }
+        }
     } else {
         val interactionSource = remember { MutableInteractionSource() }
         Button(
@@ -100,7 +115,13 @@ fun TvAwareOutlinedButton(
     content: @Composable () -> Unit
 ) {
     if (LocalUiMode.current == UiMode.TV) {
-        androidx.tv.material3.OutlinedButton(onClick = onClick, modifier = modifier, enabled = enabled) { content() }
+        // See TvAwareButton's own comment - tv-material's outer Surface/Box doesn't center a
+        // stretched button's content on its own.
+        androidx.tv.material3.OutlinedButton(onClick = onClick, modifier = modifier, enabled = enabled) {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
+                content()
+            }
+        }
     } else {
         val interactionSource = remember { MutableInteractionSource() }
         OutlinedButton(

@@ -126,6 +126,7 @@ import com.illusion.app.data.local.entity.DownloadEntity
 import com.illusion.app.data.local.entity.DownloadStatus
 import com.illusion.app.data.local.entity.MediaItemEntity
 import com.illusion.app.data.local.entity.hasForcedSubtitles
+import com.illusion.app.domain.model.UiMode
 import com.illusion.app.domain.model.editionLabel
 import com.illusion.app.domain.model.videoQualityLabel
 import com.illusion.app.data.player.AudioTrackProber
@@ -133,6 +134,7 @@ import com.illusion.app.data.repository.AudioTrackRepository
 import com.illusion.app.data.repository.DownloadRepository
 import com.illusion.app.data.repository.LibraryRepository
 import com.illusion.app.data.repository.WatchProgressRepository
+import com.illusion.app.ui.common.LocalUiMode
 import com.illusion.app.ui.common.PosterCard
 import com.illusion.app.ui.common.RatingBadge
 import com.illusion.app.ui.common.ThumbnailImage
@@ -393,6 +395,12 @@ private fun DetailsContent(
             .padding(horizontal = cutoutHorizontalDp)
     ) {
         val haptics = LocalHapticFeedback.current
+        // Phone sizing reused as-is on TV made the fanart/poster look tiny from couch distance on
+        // a real TV screen (confirmed on-device) - same couch-distance reasoning as
+        // posterCardMinWidth() elsewhere, just applied to Details' own header instead of a grid
+        // cell. Declared at this scope (not inside the fanart Box below) since the poster size
+        // further down needs it too.
+        val isTv = LocalUiMode.current == UiMode.TV
         Box {
             val fanart = item.fanartModel
             val fanartSource = remember { MutableInteractionSource() }
@@ -401,10 +409,11 @@ private fun DetailsContent(
             // DetailsScreen's own overlay), but the dead zone here still needs to line up with
             // where a near-miss on one of them actually lands.
             val cornerButtonSize = 48.dp
+            val fanartHeight = if (isTv) 380.dp else 220.dp
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(220.dp)
+                    .height(fanartHeight)
                     .background(MaterialTheme.colorScheme.surfaceVariant)
             ) {
                 if (fanart != null) {
@@ -544,7 +553,8 @@ private fun DetailsContent(
                 // lines, which grows the column taller still. The title itself is now capped at 4
                 // lines below instead, which keeps the column from running away in the first place.
                 val posterSource = remember { MutableInteractionSource() }
-                Column(modifier = Modifier.width(132.dp)) {
+                val posterWidth = if (isTv) 200.dp else 132.dp
+                Column(modifier = Modifier.width(posterWidth)) {
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()

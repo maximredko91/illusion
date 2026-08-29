@@ -80,6 +80,12 @@ fun PosterCard(
     if (LocalUiMode.current == UiMode.TV) {
         androidx.tv.material3.Card(
             onClick = { haptics.tick(); onClick() },
+            // Default focused scale is 1.1f (verified via javap on CardDefaults.scale$default) -
+            // a poster card at the edge of a dense grid zooms 10% on focus with no reserved room
+            // for it, so it visibly overflows the screen edge (confirmed on the real TV Box).
+            // 1.05f keeps a real, visible "this is focused" zoom without needing to also rework
+            // every grid's edge padding just to make room for the library default.
+            scale = androidx.tv.material3.CardDefaults.scale(focusedScale = 1.05f),
             modifier = modifier
         ) {
             PosterCardContent(item, showRatingBadge, posterAspectRatio, isCurrent, progressFraction)
