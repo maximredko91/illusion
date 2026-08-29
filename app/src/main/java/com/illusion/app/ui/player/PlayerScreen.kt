@@ -12,6 +12,7 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -52,7 +53,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
@@ -166,6 +174,19 @@ fun PlayerScreen(
     KeepScreenOn()
 
     var controlsVisible by remember { mutableStateOf(true) }
+    // TV D-pad had no way to bring the controls back once they auto-hid: everything here
+    // (GestureLayer's onSingleTap toggle included) was wired purely for touch, so on a real
+    // remote - once focus fell off whatever button last had it as the controls disappeared -
+    // there was nothing left focused for DPAD_CENTER/Enter to land on at all (confirmed:
+    // "повторное нажатие на центр пульта не открывает интерфейс плеера"). This dedicated
+    // full-screen focus target sits underneath everything else, stays focusable even with no
+    // controls on screen, and re-claims focus itself the moment controlsVisible goes false so a
+    // remote press always has somewhere to be delivered.
+    val rootFocusRequester = remember { FocusRequester() }
+    LaunchedEffect(Unit) { rootFocusRequester.requestFocus() }
+    LaunchedEffect(controlsVisible) {
+        if (!controlsVisible) rootFocusRequester.requestFocus()
+    }
     var isLocked by remember { mutableStateOf(false) }
     var showAudioDialog by remember { mutableStateOf(false) }
     var showSubtitleDialog by remember { mutableStateOf(false) }
@@ -315,6 +336,18 @@ fun PlayerScreen(
         modifier = modifier
             .fillMaxSize()
             .background(Color.Black)
+            .focusRequester(rootFocusRequester)
+            .focusable()
+            .onKeyEvent { event ->
+                if (event.type == KeyEventType.KeyDown &&
+                    (event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter)
+                ) {
+                    controlsVisible = !controlsVisible
+                    true
+                } else {
+                    false
+                }
+            }
     ) {
         // Gated on readyForInternalPlayback rather than always rendered: for PlayerMode.EXTERNAL,
         // this whole subtree (video surface, spinner, PiP eligibility below) used to exist for the

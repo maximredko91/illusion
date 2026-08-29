@@ -163,10 +163,8 @@ fun SmbSourceFormFields(
             label = { Text(stringResource(R.string.onboarding_password)) },
             visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
             trailingIcon = {
-                IconButton(
-                    onClick = { passwordVisible = !passwordVisible },
-                    interactionSource = passwordVisibilitySource,
-                    modifier = Modifier.focusHighlight(passwordVisibilitySource)
+                com.illusion.app.ui.common.TvAwareIconButton(
+                    onClick = { passwordVisible = !passwordVisible }
                 ) {
                     Icon(
                         imageVector = if (passwordVisible) Icons.Filled.VisibilityOff else Icons.Filled.Visibility,
@@ -198,12 +196,10 @@ fun SmbSourceFormFields(
             )
         }
 
-        val testConnectionSource = remember { MutableInteractionSource() }
-        OutlinedButton(
+        com.illusion.app.ui.common.TvAwareOutlinedButton(
             onClick = onTestConnection,
             enabled = state.testState != TestConnectionState.Testing,
-            interactionSource = testConnectionSource,
-            modifier = Modifier.fillMaxWidth().focusHighlight(testConnectionSource)
+            modifier = Modifier.fillMaxWidth()
         ) {
             if (state.testState == TestConnectionState.Testing) {
                 CircularProgressIndicator(modifier = Modifier.size(18.dp).padding(end = 8.dp))
@@ -230,15 +226,13 @@ fun SmbSourceFormFields(
             TestConnectionState.Idle -> Unit
         }
 
-        val saveSource = remember { MutableInteractionSource() }
-        Button(
+        com.illusion.app.ui.common.TvAwareButton(
             // Also re-hides here (belt and suspenders alongside the successful-test case above) -
             // a failed save (validation, etc.) keeps this screen open with the password still
             // revealed otherwise.
             onClick = { passwordVisible = false; onSave() },
             enabled = state.canSave,
-            interactionSource = saveSource,
-            modifier = Modifier.fillMaxWidth().focusHighlight(saveSource)
+            modifier = Modifier.fillMaxWidth()
         ) {
             if (state.isSaving) {
                 CircularProgressIndicator(modifier = Modifier.padding(end = 8.dp))
