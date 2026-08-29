@@ -17,6 +17,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.ui.focus.FocusDirection
+import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
@@ -371,6 +372,26 @@ fun BottomGradientBar(
                 modifier = Modifier.width(64.dp)
             )
             val sliderInteractionSource = remember { MutableInteractionSource() }
+            // Releasing a held scrub (or even a single tap-adjust) sometimes sent D-pad focus
+            // flying off to the top-right icon row instead of staying on the seek bar - confirmed
+            // on-device, most reliably reproduced by holding Left/Right rather than a quick press.
+            // The likely trigger is the thumbnail-preview Box above the slider (isDragging - see
+            // below) appearing/disappearing, which shifts this whole row's on-screen position at
+            // the exact moment focus state is most fragile (mid key-repeat). Rather than chase the
+            // exact mechanism blind, explicitly re-claiming focus back onto the slider itself the
+            // moment dragging ends makes the actual symptom impossible regardless of what
+            // triggered it.
+            val sliderFocusRequester = remember { FocusRequester() }
+            // Only reacts to an actual true->false transition (a real drag just ending) - a plain
+            // "if (!isDragging)" would also fire on this composable's very first entry into
+            // composition (isDragging starts false), fighting PlayerScreen's own initial-focus
+            // LaunchedEffect for the play/pause button and non-deterministically stealing that
+            // default entry point away from it.
+            var wasDragging by remember { mutableStateOf(false) }
+            LaunchedEffect(isDragging) {
+                if (wasDragging && !isDragging) runCatching { sliderFocusRequester.requestFocus() }
+                wasDragging = isDragging
+            }
             Slider(
                 value = sliderPosition,
                 onValueChange = { sliderPosition = it; isDragging = true },
@@ -398,6 +419,7 @@ fun BottomGradientBar(
                 // border/scale every other player control has - its default focus indication was
                 // easy to miss entirely.
                 modifier = Modifier.weight(1f)
+                    .focusRequester(sliderFocusRequester)
                     .tvSafeSliderKeys()
                     .focusHighlight(sliderInteractionSource, color = Color.White)
             )
