@@ -60,6 +60,7 @@ import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
@@ -205,6 +206,22 @@ fun PlayerScreen(
     var showAudioDialog by remember { mutableStateOf(false) }
     var showSubtitleDialog by remember { mutableStateOf(false) }
     var showSpeedDialog by remember { mutableStateOf(false) }
+    // There was no BackHandler here at all - the system/remote Back button always fell straight
+    // through to onBack() (exiting the player entirely) regardless of what was open on top,
+    // confirmed on-device: pressing Back to close the settings panel or just hide the controls
+    // instead kicked all the way out to the Details screen. Closes whichever's open first (panel/
+    // dialog takes priority over merely hiding the controls); only when NOTHING is showing does
+    // Back fall through to the natural nav-pop below.
+    androidx.activity.compose.BackHandler(
+        enabled = showSpeedDialog || showSubtitleDialog || showAudioDialog || controlsVisible
+    ) {
+        when {
+            showSpeedDialog -> showSpeedDialog = false
+            showSubtitleDialog -> showSubtitleDialog = false
+            showAudioDialog -> showAudioDialog = false
+            controlsVisible -> controlsVisible = false
+        }
+    }
     var resizeMode by remember { mutableStateOf(AspectRatioFrameLayout.RESIZE_MODE_FIT) }
     var resizeModeLabel by remember { mutableStateOf<String?>(null) }
     var sharpenToggleLabel by remember { mutableStateOf<String?>(null) }
@@ -350,6 +367,18 @@ fun PlayerScreen(
         modifier = modifier
             .fillMaxSize()
             .background(Color.Black)
+            // Any D-pad activity while the controls are visible counts as "still interacting",
+            // same as bumpInteraction() below for actual clicks - previously the 3.5s auto-hide
+            // countdown only reset on a real onClick, so simply moving focus around with the
+            // remote (deciding what to press, without pressing OK yet) did nothing to it, and the
+            // controls could vanish mid-navigation (confirmed on-device: "когда переключаюсь
+            // пультом в меню, то интерфейс плеера пропадает"). onPreviewKeyEvent (not onKeyEvent)
+            // so this observes every key on the way down without consuming it - normal focus-move/
+            // click handling still happens exactly as before.
+            .onPreviewKeyEvent { event ->
+                if (event.type == KeyEventType.KeyDown && controlsVisible) bumpInteraction()
+                false
+            }
             .focusRequester(rootFocusRequester)
             // Only a focus candidate while the controls are hidden - while they're visible, this
             // full-screen node would otherwise sit in the same directional-focus-search pool as

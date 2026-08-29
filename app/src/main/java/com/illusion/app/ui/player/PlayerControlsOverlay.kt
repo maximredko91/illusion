@@ -16,6 +16,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -71,6 +72,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -84,6 +86,7 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.illusion.app.R
+import com.illusion.app.ui.common.dpadFieldNavigation
 import com.illusion.app.ui.common.focusHighlight
 import java.util.Locale
 
@@ -325,6 +328,7 @@ fun BottomGradientBar(
                 textAlign = TextAlign.End,
                 modifier = Modifier.width(64.dp)
             )
+            val sliderInteractionSource = remember { MutableInteractionSource() }
             Slider(
                 value = sliderPosition,
                 onValueChange = { sliderPosition = it; isDragging = true },
@@ -335,7 +339,21 @@ fun BottomGradientBar(
                     activeTrackColor = MaterialTheme.colorScheme.primary,
                     inactiveTrackColor = Color.White.copy(alpha = 0.3f)
                 ),
+                interactionSource = sliderInteractionSource,
+                // Material3's own Slider key handling (verified via javap on the real
+                // material3-1.4.0 jar - SliderKt$slideOnKeyEvents$2) treats DirectionUp/Down
+                // exactly like Left/Right - adjusting the seek position, not moving focus. On a
+                // D-pad that's actively dangerous here: pressing Down once more after landing on
+                // the seek bar (a completely natural "move to the next row" attempt) silently
+                // seeks backward instead, confirmed on-device as the movie restarting from the
+                // beginning. dpadFieldNavigation() intercepts Up/Down in onPreviewKeyEvent (fires
+                // before the Slider's own onKeyEvent) and redirects them to a normal focus move
+                // instead, leaving Left/Right free to actually adjust the seek position.
+                // focusHighlight() also gives it the same visible border/scale every other player
+                // control has - the default Slider focus indication was easy to miss entirely.
                 modifier = Modifier.weight(1f)
+                    .dpadFieldNavigation()
+                    .focusHighlight(sliderInteractionSource, color = Color.White)
             )
             Text(
                 formatTime(durationMs),
@@ -529,7 +547,23 @@ fun PlayerSettingsPanel(
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                     Text(stringResource(R.string.player_settings), color = Color.White, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
                     val closeSource = remember { MutableInteractionSource() }
-                    IconButton(onClick = onDismiss, interactionSource = closeSource, modifier = Modifier.focusHighlight(closeSource, color = Color.White)) {
+                    // Nothing claimed focus when this panel appeared - whatever button opened it
+                    // (the gear icon in the top bar, now hidden behind the scrim) kept focus, so
+                    // D-pad presses had no visible target inside the panel at all (confirmed
+                    // on-device: "окно появляется, но я не могу с ним взаимодействовать"). The
+                    // close button is the panel's first real control - claiming focus on it the
+                    // moment the panel becomes visible gives D-pad navigation somewhere to start.
+                    val closeButtonFocusRequester = remember { androidx.compose.ui.focus.FocusRequester() }
+                    LaunchedEffect(visible) {
+                        if (visible) runCatching { closeButtonFocusRequester.requestFocus() }
+                    }
+                    IconButton(
+                        onClick = onDismiss,
+                        interactionSource = closeSource,
+                        modifier = Modifier
+                            .focusRequester(closeButtonFocusRequester)
+                            .focusHighlight(closeSource, color = Color.White)
+                    ) {
                         Icon(Icons.Default.Close, contentDescription = stringResource(R.string.player_close), tint = Color.White)
                     }
                 }
