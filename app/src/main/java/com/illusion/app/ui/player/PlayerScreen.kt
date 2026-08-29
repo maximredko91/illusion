@@ -187,6 +187,20 @@ fun PlayerScreen(
     LaunchedEffect(controlsVisible) {
         if (!controlsVisible) rootFocusRequester.requestFocus()
     }
+    // Revealing the controls put focus back on the root above, not on any of the actual buttons -
+    // the root spans the whole screen and geometrically overlaps every button inside it, so
+    // Compose's directional (D-pad arrow) focus search from it had no sane "nearest neighbor" to
+    // land on and just stayed put (confirmed on-device: "кнопки в плеере нельзя выбрать, только
+    // плеер по нажатию появляется"). Explicitly moving focus onto the play/pause button - the
+    // most central, always-reachable control - the moment the controls become visible fixes this;
+    // from there D-pad arrows can navigate normally between real sibling buttons instead of never
+    // leaving the oversized root.
+    val controlsFocusRequester = remember { FocusRequester() }
+    LaunchedEffect(controlsVisible, uiState.isLoading) {
+        if (controlsVisible && !uiState.isLoading) {
+            runCatching { controlsFocusRequester.requestFocus() }
+        }
+    }
     var isLocked by remember { mutableStateOf(false) }
     var showAudioDialog by remember { mutableStateOf(false) }
     var showSubtitleDialog by remember { mutableStateOf(false) }
@@ -337,7 +351,14 @@ fun PlayerScreen(
             .fillMaxSize()
             .background(Color.Black)
             .focusRequester(rootFocusRequester)
-            .focusable()
+            // Only a focus candidate while the controls are hidden - while they're visible, this
+            // full-screen node would otherwise sit in the same directional-focus-search pool as
+            // every real button inside it (it spatially overlaps all of them), which broke normal
+            // D-pad navigation between buttons entirely (confirmed on-device). With nothing else
+            // focusable while hidden, it's still the fallback DPAD_CENTER/Enter target that brings
+            // the controls back (see the onKeyEvent below and the controlsVisible-keyed
+            // LaunchedEffect above).
+            .focusable(enabled = !controlsVisible)
             .onKeyEvent { event ->
                 if (event.type == KeyEventType.KeyDown &&
                     (event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter)
@@ -499,7 +520,8 @@ fun PlayerScreen(
                         } else {
                             CenterTransportControls(
                                 isPlaying = uiState.isPlaying,
-                                onTogglePlayPause = { bumpInteraction(); viewModel.togglePlayPause() }
+                                onTogglePlayPause = { bumpInteraction(); viewModel.togglePlayPause() },
+                                modifier = Modifier.focusRequester(controlsFocusRequester)
                             )
                         }
                     }

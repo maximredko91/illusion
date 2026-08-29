@@ -57,8 +57,8 @@ android {
         // 2026-08-25 once the repo went public and beta testers started using the in-app updater -
         // restarted the counter at beta1 rather than continuing the alpha sequence's number, since
         // jumping straight to "beta73" would misleadingly imply 72 prior beta builds existed.
-        versionCode = 108
-        versionName = "0.1.0-beta35"
+        versionCode = 109
+        versionName = "0.1.0-beta36"
 
         // The real bulk of a universal APK's size turned out to be native .so libs bundled per-ABI
         // (ML Kit's on-device tag-translation library alone is ~17MB *per architecture*) - R8
