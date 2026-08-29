@@ -16,7 +16,15 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -89,6 +97,29 @@ import com.illusion.app.R
 import com.illusion.app.ui.common.dpadFieldNavigation
 import com.illusion.app.ui.common.focusHighlight
 import java.util.Locale
+
+/**
+ * Every Material3 Slider in this file needs the same D-pad fix (verified via javap on the real
+ * material3-1.4.0 jar - SliderKt$slideOnKeyEvents$2 treats DirectionUp/Down exactly like
+ * Left/Right, silently changing the value instead of moving focus): Down does nothing (there's
+ * always a next row below to reach some other way, and blindly moveFocus(Down) risks landing
+ * somewhere unrelated with no way back - see the seek bar's own "перескакивает" report), Up moves
+ * focus normally. Applied to every slider in the settings panel (subtitle opacity/text size, seek
+ * duration, sharpen amount) as well as the main seek bar - confirmed on-device that without this,
+ * D-pad down/up on ANY of these sliders was unusable (values jumping, or navigation stuck).
+ */
+@Composable
+private fun Modifier.tvSafeSliderKeys(): Modifier {
+    val focusManager = LocalFocusManager.current
+    return this.onPreviewKeyEvent { event ->
+        if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+        when (event.key) {
+            Key.DirectionDown -> true
+            Key.DirectionUp -> { focusManager.moveFocus(FocusDirection.Up); true }
+            else -> false
+        }
+    }
+}
 
 @Composable
 fun TopGradientBar(
@@ -260,6 +291,7 @@ fun BottomGradientBar(
     onToggleLock: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val focusManager = LocalFocusManager.current
     Column(
         modifier = modifier
             .fillMaxWidth()
@@ -281,13 +313,23 @@ fun BottomGradientBar(
             } else {
                 Spacer(Modifier.weight(1f))
             }
-            val lockSource = remember { MutableInteractionSource() }
-            IconButton(onClick = onToggleLock, interactionSource = lockSource, modifier = Modifier.focusHighlight(lockSource, color = Color.White)) {
-                Icon(
-                    if (isLocked) Icons.Default.Lock else Icons.Default.LockOpen,
-                    contentDescription = stringResource(if (isLocked) R.string.player_unlock else R.string.player_lock),
-                    tint = Color.White
-                )
+            // The lock exists to guard against accidental TOUCHES while the phone is in a pocket
+            // or being handled - meaningless on a D-pad remote, which can't "accidentally" press
+            // anything the same way. Worse than just unnecessary on TV: getting locked left no
+            // reliable way back, since the unlock icon's own screen (LockedOverlay) needs D-pad
+            // focus that the always-present full-screen root behind it kept stealing back
+            // (confirmed on-device: "после блокировки не могу его разблокировать"). Simplest and
+            // most correct fix is what it looks like on paper - don't offer a control that solves
+            // a touch-only problem, and whose own unlock path isn't D-pad-reachable.
+            if (com.illusion.app.ui.common.LocalUiMode.current != com.illusion.app.domain.model.UiMode.TV) {
+                val lockSource = remember { MutableInteractionSource() }
+                IconButton(onClick = onToggleLock, interactionSource = lockSource, modifier = Modifier.focusHighlight(lockSource, color = Color.White)) {
+                    Icon(
+                        if (isLocked) Icons.Default.Lock else Icons.Default.LockOpen,
+                        contentDescription = stringResource(if (isLocked) R.string.player_unlock else R.string.player_lock),
+                        tint = Color.White
+                    )
+                }
             }
         }
         var sliderPosition by remember(currentPositionMs) { mutableFloatStateOf(currentPositionMs.toFloat()) }
@@ -346,13 +388,17 @@ fun BottomGradientBar(
                 // D-pad that's actively dangerous here: pressing Down once more after landing on
                 // the seek bar (a completely natural "move to the next row" attempt) silently
                 // seeks backward instead, confirmed on-device as the movie restarting from the
-                // beginning. dpadFieldNavigation() intercepts Up/Down in onPreviewKeyEvent (fires
-                // before the Slider's own onKeyEvent) and redirects them to a normal focus move
-                // instead, leaving Left/Right free to actually adjust the seek position.
-                // focusHighlight() also gives it the same visible border/scale every other player
-                // control has - the default Slider focus indication was easy to miss entirely.
+                // beginning. DirectionDown is swallowed outright here rather than handed to
+                // dpadFieldNavigation()'s generic moveFocus(Down) - this is already the
+                // bottom-most control, there is nothing below it to move to, and the user's own
+                // framing of the fix was exactly right: "если ты уже внизу, на шкале перемотки, то
+                // ниже не должен уходить курсор и совершать какие-то действия" - do nothing, not
+                // "search for somewhere to go". DirectionUp still moves focus normally - there IS
+                // a real row above it. focusHighlight() gives the slider the same visible
+                // border/scale every other player control has - its default focus indication was
+                // easy to miss entirely.
                 modifier = Modifier.weight(1f)
-                    .dpadFieldNavigation()
+                    .tvSafeSliderKeys()
                     .focusHighlight(sliderInteractionSource, color = Color.White)
             )
             Text(
@@ -540,6 +586,22 @@ fun PlayerSettingsPanel(
                     .fillMaxHeight()
                     .width(300.dp)
                     .background(Color(0xFF141218).copy(alpha = 0.82f))
+                    // Reaching the topmost/bottommost focusable in this panel and pressing
+                    // Up/Down once more sent D-pad focus straight through the (semi-transparent)
+                    // scrim into the player controls behind it, even though the panel was still
+                    // open - confirmed on-device ("меня выкидывает в плеер, хотя настройки
+                    // открыты"). Compose's directional focus search operates over the WHOLE
+                    // composition, not scoped to this panel, so nothing here stopped it on its
+                    // own. onKeyEvent (not onPreviewKeyEvent) bubbles UP from whichever child
+                    // handled the key first - by the time it reaches this outermost Column
+                    // unconsumed, every real in-panel focus move already had its chance, so
+                    // swallowing Up/Down here is exactly "stop trying to leave the panel", not
+                    // "block normal navigation within it" - same principle as the seek bar's own
+                    // fix, applied at the panel's outer boundary instead of a single control's.
+                    .onKeyEvent { event ->
+                        visible && event.type == KeyEventType.KeyDown &&
+                            (event.key == Key.DirectionDown || event.key == Key.DirectionUp)
+                    }
                     .windowInsetsPadding(WindowInsets.safeDrawing)
                     .verticalScroll(rememberScrollState())
                     .padding(20.dp)
@@ -619,7 +681,8 @@ fun PlayerSettingsPanel(
                     value = subtitleBackgroundOpacity.toFloat(),
                     onValueChange = { onSubtitleBackgroundOpacityChange(it.roundToInt()) },
                     valueRange = 0f..100f,
-                    steps = 9
+                    steps = 9,
+                    modifier = Modifier.tvSafeSliderKeys()
                 )
                 Text(
                     stringResource(R.string.player_subtitle_text_size, subtitleTextSizePercent),
@@ -630,13 +693,21 @@ fun PlayerSettingsPanel(
                     value = subtitleTextSizePercent.toFloat(),
                     onValueChange = { onSubtitleTextSizePercentChange(it.roundToInt()) },
                     valueRange = 50f..200f,
-                    steps = 14
+                    steps = 14,
+                    modifier = Modifier.tvSafeSliderKeys()
                 )
                 TextButton(onClick = onResetSubtitleStyle, modifier = Modifier.padding(top = 4.dp)) {
                     Text(stringResource(R.string.player_subtitle_style_reset))
                 }
                 }
 
+                // Entirely touch-gesture concepts (double-tap/swipe/hold-to-seek, and the seek
+                // duration slider that only ever feeds those gestures - there's no D-pad-triggered
+                // rewind/fast-forward anywhere in this app to apply it to either) - meaningless
+                // dead controls on a remote, which can't double-tap/swipe/hold a screen it doesn't
+                // touch. The whole section is nothing but these, so it's hidden outright on TV
+                // rather than emptied out control-by-control.
+                if (com.illusion.app.ui.common.LocalUiMode.current != com.illusion.app.domain.model.UiMode.TV) {
                 CollapsiblePanelSection(stringResource(R.string.player_settings_section_gestures)) {
                 Text(
                     stringResource(R.string.player_seek_duration, seekDurationSeconds),
@@ -647,7 +718,8 @@ fun PlayerSettingsPanel(
                     value = seekDurationSeconds.toFloat(),
                     onValueChange = { onSeekDurationSecondsChange(it.roundToInt()) },
                     valueRange = 5f..30f,
-                    steps = 4
+                    steps = 4,
+                    modifier = Modifier.tvSafeSliderKeys()
                 )
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                     Text(stringResource(R.string.player_double_tap_seek), color = Color.White, modifier = Modifier.weight(1f))
@@ -660,6 +732,7 @@ fun PlayerSettingsPanel(
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                     Text(stringResource(R.string.player_hold_to_seek), color = Color.White, modifier = Modifier.weight(1f))
                     com.illusion.app.ui.common.TvAwareSwitch(checked = holdToSeekEnabled, onCheckedChange = onHoldToSeekEnabledChange)
+                }
                 }
                 }
 
@@ -696,7 +769,8 @@ fun PlayerSettingsPanel(
                         onValueChange = { sharpenDragValue = it },
                         onValueChangeFinished = { onSharpenAmountChange(sharpenDragValue) },
                         valueRange = 0.1f..1f,
-                        steps = 8
+                        steps = 8,
+                        modifier = Modifier.tvSafeSliderKeys()
                     )
                     TextButton(onClick = onResetSharpenAmount, modifier = Modifier.padding(top = 4.dp)) {
                         Text(stringResource(R.string.player_sharpen_amount_reset))

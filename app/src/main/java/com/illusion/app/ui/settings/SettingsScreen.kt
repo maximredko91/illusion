@@ -735,6 +735,11 @@ fun SettingsScreen(
                                 colors = ListItemDefaults.colors(containerColor = Color.Transparent),
                                 modifier = Modifier.fillMaxWidth()
                             )
+                            // Both are touch-only concepts - haptics needs a vibration motor no
+                            // remote/TV box has, and predictive back is Android's edge-swipe
+                            // gesture preview, which doesn't exist without a touchscreen to swipe
+                            // on. Dead, confusing toggles on TV rather than hidden clutter.
+                            if (currentUiMode != UiMode.TV) {
                             SettingsDivider()
                             ListItem(
                                 headlineContent = { Text(stringResource(R.string.settings_haptics)) },
@@ -768,6 +773,7 @@ fun SettingsScreen(
                                 colors = ListItemDefaults.colors(containerColor = Color.Transparent),
                                 modifier = Modifier.fillMaxWidth()
                             )
+                            }
                         }
 
                         // Accent color merged in here (was its own top-level category) per user
