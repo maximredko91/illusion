@@ -45,9 +45,8 @@ class LibraryScanWorker(
             )
             return Result.failure(workDataOf(KEY_ERROR to message))
         }
-        val requireCharging = settingsRepository.requireChargingForHeavyTasks.first()
         if (settingsRepository.posterCachingEnabled.first()) {
-            WorkScheduler.enqueuePosterPreload(applicationContext, requireCharging)
+            WorkScheduler.enqueuePosterPreload(applicationContext)
         }
         val partialErrorMessage = result.sourceErrors
             .takeIf { it.isNotEmpty() }

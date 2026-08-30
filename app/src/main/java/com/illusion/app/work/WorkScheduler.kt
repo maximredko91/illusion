@@ -53,11 +53,16 @@ object WorkScheduler {
         WorkManager.getInstance(context).cancelUniqueWork(ONE_TIME_SCAN_WORK_NAME)
     }
 
-    /** Warms the poster/fanart disk cache for the whole library so grids stop showing loading placeholders on every visit. */
-    fun enqueuePosterPreload(context: Context, requireCharging: Boolean) {
+    /**
+     * Warms the poster/fanart disk cache for the whole library so grids stop showing loading
+     * placeholders on every visit. Deliberately NOT gated on charging (unlike this app's other
+     * heavy background tasks used to be) - per feedback, a charging-only constraint could leave a
+     * user who rarely charges on their exact schedule never seeing a poster load in the
+     * background at all, defeating the whole point of preloading them.
+     */
+    fun enqueuePosterPreload(context: Context) {
         val constraints = Constraints.Builder()
             .setRequiredNetworkType(NetworkType.CONNECTED)
-            .setRequiresCharging(requireCharging)
             .build()
 
         val request = OneTimeWorkRequestBuilder<PosterPreloadWorker>()

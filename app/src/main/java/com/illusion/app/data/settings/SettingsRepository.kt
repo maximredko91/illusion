@@ -30,7 +30,6 @@ const val IMAGE_CACHE_LIMIT_MB_DEFAULT = 1024
 
 class SettingsRepository(private val context: Context) {
     private object Keys {
-        val REQUIRE_CHARGING_FOR_HEAVY_TASKS = booleanPreferencesKey("require_charging_for_heavy_tasks")
         val DEFAULT_SORT_ORDER = stringPreferencesKey("default_sort_order")
         val SHARPEN_ENABLED = booleanPreferencesKey("player_sharpen_enabled")
         val SHARPEN_AMOUNT = floatPreferencesKey("player_sharpen_amount")
@@ -60,10 +59,7 @@ class SettingsRepository(private val context: Context) {
         val LOCAL_UPDATE_SOURCE_ID = longPreferencesKey("local_update_source_id")
         val PLAYER_BUFFER_SIZE = stringPreferencesKey("player_buffer_size")
         val CUES_SEEK_WORKAROUND_STABLE_IDS = stringPreferencesKey("cues_seek_workaround_stable_ids")
-    }
-
-    val requireChargingForHeavyTasks: Flow<Boolean> = context.dataStore.data.map {
-        it[Keys.REQUIRE_CHARGING_FOR_HEAVY_TASKS] ?: true
+        val PERFORMANCE_MODE = stringPreferencesKey("performance_mode")
     }
 
     val defaultSortOrder: Flow<SortOrder> = context.dataStore.data.map {
@@ -92,10 +88,6 @@ class SettingsRepository(private val context: Context) {
 
     suspend fun setSeekDurationSeconds(seconds: Int) {
         context.dataStore.edit { it[Keys.SEEK_DURATION_SECONDS] = seconds.coerceIn(5, 30) }
-    }
-
-    suspend fun setRequireChargingForHeavyTasks(value: Boolean) {
-        context.dataStore.edit { it[Keys.REQUIRE_CHARGING_FOR_HEAVY_TASKS] = value }
     }
 
     suspend fun setDefaultSortOrder(order: SortOrder) {
@@ -190,6 +182,16 @@ class SettingsRepository(private val context: Context) {
 
     suspend fun setPlayerBufferSize(size: PlayerBufferSize) {
         context.dataStore.edit { it[Keys.PLAYER_BUFFER_SIZE] = size.name }
+    }
+
+    /** Defaults to AUTO - see [com.illusion.app.domain.model.PerformanceMode]'s own KDoc for what this drives and how AUTO resolves. */
+    val performanceMode: Flow<com.illusion.app.domain.model.PerformanceMode> = context.dataStore.data.map {
+        it[Keys.PERFORMANCE_MODE]?.let { name -> runCatching { com.illusion.app.domain.model.PerformanceMode.valueOf(name) }.getOrNull() }
+            ?: com.illusion.app.domain.model.PerformanceMode.AUTO
+    }
+
+    suspend fun setPerformanceMode(mode: com.illusion.app.domain.model.PerformanceMode) {
+        context.dataStore.edit { it[Keys.PERFORMANCE_MODE] = mode.name }
     }
 
     /**

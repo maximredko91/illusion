@@ -16,6 +16,18 @@
     <!-- Иконка: фон НЕ зависит от темы, лончер её не переключает -->
     <color name="icon_bg">#FF14100F</color>
 
+    <!-- Альтернативные значки приложения (Настройки > Значок) - каждый цвет совпадает с
+         lightPrimary соответствующего AccentColor, тот же принцип, что и у illusion_crimson
+         (= AccentColor.ILLUSION.lightPrimary) для текущего значка по умолчанию. -->
+    <color name="icon_accent_default">#FF6650A4</color>
+    <color name="icon_accent_blue">#FF3F5CA9</color>
+    <color name="icon_accent_green">#FF3D6B3E</color>
+    <color name="icon_accent_orange">#FFA85400</color>
+    <color name="icon_accent_yellow">#FF8C6D00</color>
+    <color name="icon_accent_red">#FFA13F3F</color>
+    <color name="icon_accent_teal">#FF1C6C68</color>
+    <color name="icon_accent_pink">#FFA13D77</color>
+
     <!-- Сплешскрин, светлая тема -->
     <color name="splash_bg">#FFF4EDE4</color>
     <color name="illusion_ink_on_bg">#FF1A1512</color>

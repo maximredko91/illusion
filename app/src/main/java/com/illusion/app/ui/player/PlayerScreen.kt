@@ -6,6 +6,7 @@ import android.content.ContextWrapper
 import android.media.AudioManager
 import android.view.WindowManager
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
@@ -508,8 +509,8 @@ fun PlayerScreen(
             }
             AnimatedVisibility(
                 visible = controlsVisible && !isLocked,
-                enter = fadeIn(),
-                exit = fadeOut()
+                enter = fadeIn(tween(com.illusion.app.ui.common.economicalDurationMs(300))),
+                exit = fadeOut(tween(com.illusion.app.ui.common.economicalDurationMs(300)))
             ) {
                 Column(
                     modifier = Modifier

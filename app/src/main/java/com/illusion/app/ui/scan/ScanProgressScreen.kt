@@ -160,7 +160,7 @@ fun ScanProgressScreen(
             // per feedback. Matching alignments removes the conflict.
             Crossfade(
                 targetState = phase,
-                animationSpec = tween(500),
+                animationSpec = tween(com.illusion.app.ui.common.economicalDurationMs(500)),
                 modifier = Modifier.animateContentSize(alignment = Alignment.Center),
                 label = "scanPhase"
             ) { currentPhase ->
@@ -320,10 +320,17 @@ fun ScanProgressScreen(
 private fun ScanBackground(modifier: Modifier = Modifier) {
     val primary = MaterialTheme.colorScheme.primary
     val tertiary = MaterialTheme.colorScheme.tertiary
+    val economical = com.illusion.app.ui.common.LocalEconomicalMode.current
     androidx.compose.foundation.layout.Spacer(
         modifier = modifier
             .fillMaxSize()
             .drawBehind {
+                // Flat fill in economical mode - two radial gradients are pure decoration, and
+                // rasterizing a gradient is real GPU cost a flat fill skips entirely.
+                if (economical) {
+                    drawRect(primary.copy(alpha = 0.06f))
+                    return@drawBehind
+                }
                 drawRect(
                     Brush.radialGradient(
                         colors = listOf(primary.copy(alpha = 0.22f), androidx.compose.ui.graphics.Color.Transparent),

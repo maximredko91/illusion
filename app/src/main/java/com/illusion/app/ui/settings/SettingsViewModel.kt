@@ -52,7 +52,6 @@ class SettingsViewModel(
     val sources: StateFlow<List<SmbSourceEntity>> = smbSourceRepository.observeSources()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    val requireChargingForHeavyTasks: Flow<Boolean> = settingsRepository.requireChargingForHeavyTasks
     val imageCacheLimitMb: Flow<Int> = settingsRepository.imageCacheLimitMb
 
     fun setImageCacheLimitMb(value: Int) {
@@ -94,6 +93,12 @@ class SettingsViewModel(
 
     fun setPlayerBufferSize(size: com.illusion.app.domain.model.PlayerBufferSize) {
         viewModelScope.launch { settingsRepository.setPlayerBufferSize(size) }
+    }
+
+    val performanceMode: Flow<com.illusion.app.domain.model.PerformanceMode> = settingsRepository.performanceMode
+
+    fun setPerformanceMode(mode: com.illusion.app.domain.model.PerformanceMode) {
+        viewModelScope.launch { settingsRepository.setPerformanceMode(mode) }
     }
 
     fun setDefaultSortOrder(order: SortOrder) {
@@ -152,10 +157,6 @@ class SettingsViewModel(
 
     fun deleteSource(source: SmbSourceEntity) {
         viewModelScope.launch { smbSourceRepository.deleteSource(source) }
-    }
-
-    fun setRequireChargingForHeavyTasks(value: Boolean) {
-        viewModelScope.launch { settingsRepository.setRequireChargingForHeavyTasks(value) }
     }
 
     fun setUiMode(mode: UiMode) {

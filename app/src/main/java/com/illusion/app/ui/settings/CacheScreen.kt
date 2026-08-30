@@ -12,10 +12,6 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.ListItem
-import androidx.compose.material3.ListItemDefaults
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -28,11 +24,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.ui.unit.dp
 import androidx.work.WorkInfo
 import androidx.work.WorkManager
@@ -187,88 +181,71 @@ fun CacheScreen(
                 .verticalScroll(rememberScrollState())
         ) {
             SettingsGroup(modifier = Modifier.padding(top = 12.dp)) {
-                ListItem(
-                    headlineContent = {
-                        Text(
-                            if (cacheSizeBytes != null) {
-                                stringResource(R.string.settings_cache_size, formatBytes(cacheSizeBytes))
-                            } else {
-                                stringResource(R.string.settings_cache_size_unknown)
-                            }
-                        )
-                    },
-                    trailingContent = {
-                        com.illusion.app.ui.common.TvAwareOutlinedButton(onClick = { showClearCacheConfirm = true }) {
-                            Text(stringResource(R.string.settings_cache_clear))
-                        }
-                    },
-                    colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-                    modifier = Modifier.fillMaxWidth()
-                )
+                SettingsActionCard(
+                    title = if (cacheSizeBytes != null) {
+                        stringResource(R.string.settings_cache_size, formatBytes(cacheSizeBytes))
+                    } else {
+                        stringResource(R.string.settings_cache_size_unknown)
+                    }
+                ) {
+                    com.illusion.app.ui.common.TvAwareOutlinedButton(
+                        onClick = { showClearCacheConfirm = true },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(stringResource(R.string.settings_cache_clear))
+                    }
+                }
                 SettingsDivider()
-                ListItem(
-                    headlineContent = {
-                        Text(
-                            if (posterCacheSizeBytes != null) {
-                                stringResource(R.string.settings_poster_cache_size, formatBytes(posterCacheSizeBytes))
+                SettingsActionCard(
+                    title = if (posterCacheSizeBytes != null) {
+                        stringResource(R.string.settings_poster_cache_size, formatBytes(posterCacheSizeBytes))
+                    } else {
+                        stringResource(R.string.settings_cache_size_unknown)
+                    },
+                    description = when {
+                        preloadRunning -> {
+                            val processed = preloadInfo?.progress?.getInt(PosterPreloadWorker.KEY_PROCESSED, 0) ?: 0
+                            val total = preloadInfo?.progress?.getInt(PosterPreloadWorker.KEY_TOTAL, 0) ?: 0
+                            if (total > 0) {
+                                stringResource(R.string.settings_poster_preload_progress, processed, total)
                             } else {
-                                stringResource(R.string.settings_cache_size_unknown)
+                                stringResource(R.string.settings_poster_preload_starting)
                             }
-                        )
-                    },
-                    supportingContent = {
-                        Text(
-                            when {
-                                preloadRunning -> {
-                                    val processed = preloadInfo?.progress?.getInt(PosterPreloadWorker.KEY_PROCESSED, 0) ?: 0
-                                    val total = preloadInfo?.progress?.getInt(PosterPreloadWorker.KEY_TOTAL, 0) ?: 0
-                                    if (total > 0) {
-                                        stringResource(R.string.settings_poster_preload_progress, processed, total)
-                                    } else {
-                                        stringResource(R.string.settings_poster_preload_starting)
-                                    }
-                                }
-                                preloadInfo?.state == WorkInfo.State.SUCCEEDED -> stringResource(R.string.settings_poster_preload_done)
-                                else -> stringResource(R.string.settings_poster_cache_description)
-                            }
-                        )
-                    },
-                    trailingContent = {
-                        com.illusion.app.ui.common.TvAwareOutlinedButton(onClick = { showClearPosterCacheConfirm = true }) {
-                            Text(stringResource(R.string.settings_cache_clear))
                         }
-                    },
-                    colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-                    modifier = Modifier.fillMaxWidth()
-                )
+                        preloadInfo?.state == WorkInfo.State.SUCCEEDED -> stringResource(R.string.settings_poster_preload_done)
+                        else -> stringResource(R.string.settings_poster_cache_description)
+                    }
+                ) {
+                    com.illusion.app.ui.common.TvAwareOutlinedButton(
+                        onClick = { showClearPosterCacheConfirm = true },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(stringResource(R.string.settings_cache_clear))
+                    }
+                }
                 SettingsDivider()
-                ListItem(
-                    headlineContent = {
-                        Text(
-                            if (fanartCacheSizeBytes != null) {
-                                stringResource(R.string.settings_fanart_cache_size, formatBytes(fanartCacheSizeBytes))
-                            } else {
-                                stringResource(R.string.settings_cache_size_unknown)
-                            }
-                        )
+                SettingsActionCard(
+                    title = if (fanartCacheSizeBytes != null) {
+                        stringResource(R.string.settings_fanart_cache_size, formatBytes(fanartCacheSizeBytes))
+                    } else {
+                        stringResource(R.string.settings_cache_size_unknown)
                     },
-                    supportingContent = { Text(stringResource(R.string.settings_fanart_cache_description)) },
-                    trailingContent = {
-                        com.illusion.app.ui.common.TvAwareOutlinedButton(onClick = { showClearFanartCacheConfirm = true }) {
-                            Text(stringResource(R.string.settings_cache_clear))
-                        }
-                    },
-                    colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-                    modifier = Modifier.fillMaxWidth()
-                )
+                    description = stringResource(R.string.settings_fanart_cache_description)
+                ) {
+                    com.illusion.app.ui.common.TvAwareOutlinedButton(
+                        onClick = { showClearFanartCacheConfirm = true },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(stringResource(R.string.settings_cache_clear))
+                    }
+                }
                 SettingsDivider()
-                ListItem(
-                    headlineContent = { Text(stringResource(R.string.settings_image_cache_limit)) },
-                    supportingContent = { Text(stringResource(R.string.settings_image_cache_limit_description)) },
-                    trailingContent = { ImageCacheLimitMenu(cacheLimitMb, onSetImageCacheLimitMb) },
-                    colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-                    modifier = Modifier.fillMaxWidth()
-                )
+                SettingsActionCard(
+                    title = stringResource(R.string.settings_image_cache_limit),
+                    description = stringResource(R.string.settings_image_cache_limit_description)
+                ) {
+                    ImageCacheLimitMenu(cacheLimitMb, onSetImageCacheLimitMb)
+                }
             }
         }
     }
@@ -278,15 +255,11 @@ fun CacheScreen(
 private fun ImageCacheLimitMenu(currentMb: Int, onChange: (Int) -> Unit) {
     var expanded by remember { mutableStateOf(false) }
     val options = listOf(256, 512, 1024, 2048)
-    androidx.compose.foundation.layout.Box {
+    androidx.compose.foundation.layout.Box(modifier = Modifier.fillMaxWidth()) {
         val triggerSource = remember { MutableInteractionSource() }
-        // A fixed min width, not just wrap-content: "256 МБ"/"512 МБ" vs "1 ГБ"/"2 ГБ" are different
-        // pixel widths, and this button sits in a ListItem's trailingContent next to a long
-        // supportingContent description - letting the button's width vary with the label reflowed
-        // that description onto a different number of lines on every selection, visibly "jumping".
         com.illusion.app.ui.common.TvAwareOutlinedButton(
             onClick = { expanded = true },
-            modifier = Modifier.widthIn(min = 96.dp)
+            modifier = Modifier.fillMaxWidth()
         ) {
             Text(imageCacheLimitLabel(currentMb))
         }

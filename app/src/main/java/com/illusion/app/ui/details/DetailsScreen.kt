@@ -7,6 +7,7 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -1476,10 +1477,11 @@ private fun EpisodeList(
                     tint = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
+            val seasonAnimMs = com.illusion.app.ui.common.economicalDurationMs(300)
             AnimatedVisibility(
                 visible = expanded,
-                enter = fadeIn() + expandVertically(),
-                exit = fadeOut() + shrinkVertically()
+                enter = fadeIn(tween(seasonAnimMs)) + expandVertically(tween(seasonAnimMs)),
+                exit = fadeOut(tween(seasonAnimMs)) + shrinkVertically(tween(seasonAnimMs))
             ) {
                 Column {
                 seasonEpisodes.forEach { episode ->

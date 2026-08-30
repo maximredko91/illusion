@@ -142,10 +142,28 @@ fun IllusionNavHost(
     // individually - overriding the same CompositionLocal androidx itself provides.
     val hapticsEnabled by app.settingsRepository.hapticsEnabled.collectAsState(initial = true)
     val realHapticFeedback = LocalHapticFeedback.current
-    val gatedHapticFeedback = remember(hapticsEnabled, realHapticFeedback) {
+    // Resolves once per (mode, process) rather than on every recomposition - AUTO's device check
+    // is cheap but there's no reason to repeat it. Explicit MAXIMUM/ECONOMICAL always win over the
+    // AUTO guess. See PerformanceMode's own KDoc for the full list of what LocalEconomicalMode ends
+    // up gating.
+    val performanceModeContext = LocalContext.current
+    val performanceMode by app.settingsRepository.performanceMode.collectAsState(
+        initial = com.illusion.app.domain.model.PerformanceMode.AUTO
+    )
+    val economicalMode = remember(performanceMode) {
+        when (performanceMode) {
+            com.illusion.app.domain.model.PerformanceMode.MAXIMUM -> false
+            com.illusion.app.domain.model.PerformanceMode.ECONOMICAL -> true
+            com.illusion.app.domain.model.PerformanceMode.AUTO ->
+                com.illusion.app.data.settings.DevicePerformance.isLowEndDevice(performanceModeContext)
+        }
+    }
+    // Economical mode force-disables haptics regardless of the user's own hapticsEnabled switch -
+    // one of the several things that setting bundles together (see PerformanceMode's own KDoc).
+    val gatedHapticFeedback = remember(hapticsEnabled, economicalMode, realHapticFeedback) {
         object : HapticFeedback {
             override fun performHapticFeedback(hapticFeedbackType: HapticFeedbackType) {
-                if (hapticsEnabled) realHapticFeedback.performHapticFeedback(hapticFeedbackType)
+                if (hapticsEnabled && !economicalMode) realHapticFeedback.performHapticFeedback(hapticFeedbackType)
             }
         }
     }
@@ -170,7 +188,8 @@ fun IllusionNavHost(
         LocalSharedTransitionScope provides this,
         LocalUiMode provides (uiMode ?: UiMode.PHONE),
         LocalShimmerProgress provides shimmerProgressState,
-        LocalHapticFeedback provides gatedHapticFeedback
+        LocalHapticFeedback provides gatedHapticFeedback,
+        com.illusion.app.ui.common.LocalEconomicalMode provides economicalMode
     ) {
         val navController = rememberNavController()
         // Player is deliberately exempt from the overscan margin below - it's a fullscreen
@@ -534,13 +553,14 @@ private fun IllusionNavGraph(app: IllusionApplication, navController: NavHostCon
                 val upToDateMessage by updateViewModel.upToDateMessage.collectAsState()
                 SettingsScreen(
                     sources = sources,
-                    requireChargingForHeavyTasks = settingsViewModel.requireChargingForHeavyTasks,
                     playerMode = settingsViewModel.playerMode,
                     onPlayerModeChange = settingsViewModel::setPlayerMode,
                     externalPlayerPackage = settingsViewModel.externalPlayerPackage,
                     onExternalPlayerPackageChange = settingsViewModel::setExternalPlayerPackage,
                     playerBufferSize = settingsViewModel.playerBufferSize,
                     onPlayerBufferSizeChange = settingsViewModel::setPlayerBufferSize,
+                    performanceMode = settingsViewModel.performanceMode,
+                    onPerformanceModeChange = settingsViewModel::setPerformanceMode,
                     cacheSizeBytes = cacheSizeBytes,
                     onRefreshCacheSize = { settingsViewModel.refreshCacheSize(context) },
                     onOpenCache = { navController.navigate(Destination.Cache) },
@@ -558,9 +578,6 @@ private fun IllusionNavGraph(app: IllusionApplication, navController: NavHostCon
                     onAccentColorChange = settingsViewModel::setAccentColor,
                     themeMode = settingsViewModel.themeMode,
                     onThemeModeChange = settingsViewModel::setThemeMode,
-                    onToggleChargingRequirement = { enabled ->
-                        settingsViewModel.setRequireChargingForHeavyTasks(enabled)
-                    },
                     onRescanNow = {
                         val workId = WorkScheduler.enqueueOneTimeScan(context)
                         navController.navigate(Destination.ScanProgress(workId.toString()))
@@ -848,7 +865,7 @@ private fun TabsHost(
     val content: @Composable (PaddingValues) -> Unit = { innerPadding ->
         Crossfade(
             targetState = selectedCategory,
-            animationSpec = tween(200),
+            animationSpec = tween(com.illusion.app.ui.common.economicalDurationMs(200)),
             modifier = Modifier.padding(innerPadding),
             label = "tabs"
         ) { category -> tabContent(category) }

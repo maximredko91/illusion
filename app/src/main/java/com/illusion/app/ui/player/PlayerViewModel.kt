@@ -308,7 +308,22 @@ class PlayerViewModel(
             // pipeline needs tracking separately from `enabled` itself - see the reload branch
             // below for why.
             var wasEnabled = false
-            kotlinx.coroutines.flow.combine(settingsRepository.sharpenEnabled, settingsRepository.sharpenAmount) { enabled, amount -> enabled to amount }
+            // Economical performance mode force-disables the GPU sharpen shader regardless of the
+            // user's own sharpenEnabled switch - the single most expensive per-frame effect this
+            // player can apply (see PerformanceMode's own KDoc for the other things it bundles).
+            kotlinx.coroutines.flow.combine(
+                settingsRepository.sharpenEnabled,
+                settingsRepository.sharpenAmount,
+                settingsRepository.performanceMode
+            ) { enabled, amount, perfMode ->
+                val economical = when (perfMode) {
+                    com.illusion.app.domain.model.PerformanceMode.MAXIMUM -> false
+                    com.illusion.app.domain.model.PerformanceMode.ECONOMICAL -> true
+                    com.illusion.app.domain.model.PerformanceMode.AUTO ->
+                        com.illusion.app.data.settings.DevicePerformance.isLowEndDevice(appContext)
+                }
+                (enabled && !economical) to amount
+            }
                 .collect { (enabled, amount) ->
                     val reenableAfterOff = enabled && effectsPipelineTainted && !wasEnabled
                     if (enabled) effectsPipelineTainted = true

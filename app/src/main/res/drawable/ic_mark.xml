@@ -17,8 +17,8 @@
         <path android:fillColor="@color/illusion_crimson" android:pathData="M86,21h6a2,2 0 0 1 2,2v62a2,2 0 0 1 -2,2h-6a2,2 0 0 1 -2,-2V23a2,2 0 0 1 2,-2z"/>
         <path android:fillColor="@color/icon_bg" android:pathData="M16.5,25.5h5v7h-5z M16.5,38h5v7h-5z M16.5,50.5h5v7h-5z M16.5,63h5v7h-5z M16.5,75.5h5v7h-5z"/>
         <path android:fillColor="@color/icon_bg" android:pathData="M86.5,25.5h5v7h-5z M86.5,38h5v7h-5z M86.5,50.5h5v7h-5z M86.5,63h5v7h-5z M86.5,75.5h5v7h-5z"/>
-        <path android:fillColor="@color/illusion_cream" android:pathData="M34,30h9v48h-9z"/>
-        <path android:fillColor="@color/illusion_cream" android:pathData="M65,30h9v48h-9z"/>
-        <path android:fillColor="@color/illusion_cream" android:pathData="M43,78v-15L65,30h9v15L52,78z"/>
+        <!-- Один path вместо трёх (было) - раздельные path одного цвета, стыкующиеся по границе,
+             сглаживаются (AA) независимо, из-за чего на стыке проступал тонкий шов фона. -->
+        <path android:fillColor="@color/illusion_cream" android:pathData="M34,30h9v48h-9z M65,30h9v48h-9z M43,78v-15L65,30h9v15L52,78z"/>
     </group>
 </vector>
