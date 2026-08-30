@@ -73,8 +73,19 @@ fun UpdatePrompt(viewModel: UpdateViewModel) {
         // dropped on the floor - see UpdateViewModel.dismissError's own KDoc).
         uiState.error != null -> DownloadErrorDialog(
             message = uiState.error!!,
+            mandatory = mandatory,
             onRetry = { viewModel.dismissError(); viewModel.startDownload() },
-            onDismiss = { viewModel.dismissError() }
+            onDismiss = { viewModel.dismissError() },
+            onOpenReleasesPage = {
+                runCatching {
+                    context.startActivity(
+                        android.content.Intent(
+                            android.content.Intent.ACTION_VIEW,
+                            android.net.Uri.parse("https://github.com/maximredko91/illusion/releases/latest")
+                        )
+                    )
+                }
+            }
         )
         uiState.downloadedFile != null && !installPromptDismissed -> InstallReadyDialog(
             mandatory = mandatory,
@@ -148,14 +159,45 @@ private fun DownloadProgressDialog(progress: Float?, onCancel: () -> Unit) {
     )
 }
 
+/**
+ * If in-app download keeps failing (a persistent network/timeout issue on the device's own
+ * connection, not a one-off) retrying forever never gets the user anywhere - especially bad for a
+ * mandatory release, which otherwise has no other escape hatch. Surfaces the same manual-download
+ * fallback [UpdatePrompt]'s launchFailed dialog already points to (GitHub releases page), so
+ * there's always a way out even when the automatic path is stuck.
+ */
 @Composable
-private fun DownloadErrorDialog(message: String, onRetry: () -> Unit, onDismiss: () -> Unit) {
+private fun DownloadErrorDialog(
+    message: String,
+    mandatory: Boolean,
+    onRetry: () -> Unit,
+    onDismiss: () -> Unit,
+    onOpenReleasesPage: () -> Unit
+) {
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Не удалось скачать обновление") },
-        text = { Text(message) },
+        text = {
+            Column {
+                Text(message)
+                if (mandatory) {
+                    Text(
+                        "Если ошибка повторяется, скачайте APK вручную со страницы релизов на GitHub и установите через файловый менеджер.",
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.padding(top = 8.dp)
+                    )
+                }
+            }
+        },
         confirmButton = { TextButton(onClick = onRetry) { Text("Повторить") } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Закрыть") } }
+        dismissButton = {
+            Row {
+                if (mandatory) {
+                    TextButton(onClick = onOpenReleasesPage) { Text("Открыть GitHub") }
+                }
+                TextButton(onClick = onDismiss) { Text("Закрыть") }
+            }
+        }
     )
 }
 

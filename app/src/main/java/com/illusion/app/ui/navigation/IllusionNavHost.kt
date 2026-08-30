@@ -167,6 +167,7 @@ fun IllusionNavHost(
             }
         }
     }
+    val glassEffectEnabled by app.settingsRepository.glassEffectEnabled.collectAsState(initial = false)
     val shimmerTransition = rememberInfiniteTransition(label = "shimmer")
     // Deliberately NOT unwrapped with `by` here - reading .value in this composable's own body
     // would make this whole scope (everything CompositionLocalProvider wraps, all the way down
@@ -189,7 +190,8 @@ fun IllusionNavHost(
         LocalUiMode provides (uiMode ?: UiMode.PHONE),
         LocalShimmerProgress provides shimmerProgressState,
         LocalHapticFeedback provides gatedHapticFeedback,
-        com.illusion.app.ui.common.LocalEconomicalMode provides economicalMode
+        com.illusion.app.ui.common.LocalEconomicalMode provides economicalMode,
+        com.illusion.app.ui.common.LocalGlassEffectEnabled provides glassEffectEnabled
     ) {
         val navController = rememberNavController()
         // Player is deliberately exempt from the overscan margin below - it's a fullscreen
@@ -574,6 +576,8 @@ private fun IllusionNavGraph(app: IllusionApplication, navController: NavHostCon
                     onHapticsEnabledChange = settingsViewModel::setHapticsEnabled,
                     predictiveBackEnabled = settingsViewModel.predictiveBackEnabled,
                     onPredictiveBackEnabledChange = settingsViewModel::setPredictiveBackEnabled,
+                    glassEffectEnabled = settingsViewModel.glassEffectEnabled,
+                    onGlassEffectEnabledChange = settingsViewModel::setGlassEffectEnabled,
                     accentColor = settingsViewModel.accentColor,
                     onAccentColorChange = settingsViewModel::setAccentColor,
                     themeMode = settingsViewModel.themeMode,

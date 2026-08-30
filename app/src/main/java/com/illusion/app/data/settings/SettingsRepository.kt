@@ -39,6 +39,7 @@ class SettingsRepository(private val context: Context) {
         val DOWNLOADS_FOLDER_URI = stringPreferencesKey("downloads_folder_uri")
         val UI_MODE = stringPreferencesKey("ui_mode")
         val HAPTICS_ENABLED = booleanPreferencesKey("haptics_enabled")
+        val GLASS_EFFECT_ENABLED = booleanPreferencesKey("glass_effect_enabled")
         val ACCENT_COLOR = stringPreferencesKey("accent_color")
         val THEME_MODE = stringPreferencesKey("theme_mode")
         val PLAYER_MODE = stringPreferencesKey("player_mode")
@@ -143,6 +144,13 @@ class SettingsRepository(private val context: Context) {
 
     suspend fun setHapticsEnabled(value: Boolean) {
         context.dataStore.edit { it[Keys.HAPTICS_ENABLED] = value }
+    }
+
+    /** Off by default - the hand-rolled AGSL glass/refraction effect (see GlassBackdrop.kt) is opt-in, currently only wired to the library's scroll-to-top FAB. */
+    val glassEffectEnabled: Flow<Boolean> = context.dataStore.data.map { it[Keys.GLASS_EFFECT_ENABLED] ?: false }
+
+    suspend fun setGlassEffectEnabled(value: Boolean) {
+        context.dataStore.edit { it[Keys.GLASS_EFFECT_ENABLED] = value }
     }
 
     /** ILLUSION (the app's own brand crimson, matching the launcher icon/splash) is the actual out-of-box default - not AccentColor.DEFAULT, which would let Material You's wallpaper-based dynamic color override the brand on API 31+ and undercut the "one consistent style" the icon/splash rename was for. DEFAULT is still a real selectable option in Settings for anyone who wants dynamic color instead. */

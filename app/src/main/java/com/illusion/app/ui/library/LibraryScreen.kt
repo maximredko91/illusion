@@ -9,6 +9,9 @@ import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusGroup
+import com.illusion.app.ui.common.glassBackdropSource
+import com.illusion.app.ui.common.glassSurface
+import com.illusion.app.ui.common.rememberGlassBackdropState
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -212,6 +215,16 @@ fun LibraryScreen(
     val showScrollToTop by remember {
         derivedStateOf { gridState.firstVisibleItemIndex > 6 }
     }
+    // Small "glass" touch on the scroll-to-top FAB (not the video player - see GlassBackdrop.kt's
+    // own KDoc for why that's off the table) - a frosted/refracted replay of the grid content
+    // directly behind the button, not just a flat tinted circle. Opt-in (Settings > Интерфейс >
+    // "Эффект стекла"), off by default - still creates the backdrop capture state either way since
+    // that itself is cheap and this composable can't cheaply "undo" already having called
+    // rememberGlassBackdropState, but the actually expensive per-frame recording/shader work only
+    // runs once something below applies glassBackdropSource/glassSurface, which are gated on the
+    // setting instead.
+    val glassBackdropState = rememberGlassBackdropState()
+    val glassEffectEnabled = com.illusion.app.ui.common.LocalGlassEffectEnabled.current
 
     // The former TopAppBar's content, manually laid out (no TopAppBar composable - see this
     // function's own top comment for why) - rendered as the grid's own first item so it's
@@ -295,8 +308,43 @@ fun LibraryScreen(
                     // tertiary, leaving the *Container roles at Material3's own baseline
                     // derivation, so this FAB stayed the same purple-ish gray no matter which
                     // accent was selected. Using primary/onPrimary directly makes it react.
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    contentColor = MaterialTheme.colorScheme.onPrimary
+                    // Semi-transparent (was fully opaque) only when the glass effect is actually on
+                    // - a solid containerColor would just paint over glassSurface's blurred/
+                    // refracted backdrop and hide it entirely, so the low alpha only makes sense
+                    // paired with the modifier below. With the effect off (default), stay fully
+                    // opaque like a normal FAB - a half-see-through button with nothing blurred
+                    // behind it just looks washed out, not "glass".
+                    containerColor = if (glassEffectEnabled) {
+                        MaterialTheme.colorScheme.primary.copy(alpha = 0.32f)
+                    } else {
+                        MaterialTheme.colorScheme.primary
+                    },
+                    contentColor = MaterialTheme.colorScheme.onPrimary,
+                    elevation = if (glassEffectEnabled) {
+                        // Zero elevation only needed for the glass look - Material3's default FAB
+                        // shadow on this device rasterizes as a visible faceted octagon rather than
+                        // a smooth circle (confirmed on-device, reproduces even with zero custom
+                        // modifiers - a pre-existing platform/OEM rendering quirk, not this effect's
+                        // own bug), and that artifact is far more noticeable through a translucent
+                        // glass surface than through a normal opaque FAB.
+                        androidx.compose.material3.FloatingActionButtonDefaults.elevation(
+                            defaultElevation = 0.dp,
+                            pressedElevation = 0.dp,
+                            focusedElevation = 0.dp,
+                            hoveredElevation = 0.dp
+                        )
+                    } else {
+                        androidx.compose.material3.FloatingActionButtonDefaults.elevation()
+                    },
+                    modifier = if (glassEffectEnabled) {
+                        Modifier.glassSurface(
+                            glassBackdropState,
+                            blurRadiusPx = 14f,
+                            refractionStrength = 0.7f
+                        )
+                    } else {
+                        Modifier
+                    }
                 ) {
                     Icon(Icons.Default.KeyboardArrowUp, contentDescription = stringResource(R.string.library_scroll_to_top))
                 }
@@ -308,7 +356,11 @@ fun LibraryScreen(
         // before the first emission lands would otherwise hard-cut from spinner to grid with no
         // animation of its own once the (separately animated) tab-switch transition has already
         // finished playing.
-        Box(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
+        Box(
+            modifier = Modifier.fillMaxSize().padding(innerPadding).let {
+                if (glassEffectEnabled) it.glassBackdropSource(glassBackdropState) else it
+            }
+        ) {
         Crossfade(
             targetState = if (isLoading) 0 else if (items.isEmpty()) 1 else 2,
             modifier = Modifier.fillMaxSize()

@@ -118,6 +118,15 @@ class UpdateViewModel(
                             "Не удалось скачать обновление"
                         }
                         _state.update { it.copy(isDownloading = false, error = message) }
+                        // Same staleness problem as SUCCEEDED above, but FAILED has no versionCode
+                        // to compare against to tell "still relevant" from "stale" - without this,
+                        // the failed WorkInfo row just sits there forever and every future app
+                        // launch re-collects this exact same FAILED state and re-shows the error
+                        // dialog again, even long after the user already saw and dismissed it once
+                        // (this is exactly the "error dialog every time I open the app" bug).
+                        // pruneWork() removes all finished (non-running) work from WorkManager's own
+                        // database, so the next launch's fresh collect has nothing stale to replay.
+                        androidx.work.WorkManager.getInstance(appContext).pruneWork()
                     }
                     else -> Unit
                 }

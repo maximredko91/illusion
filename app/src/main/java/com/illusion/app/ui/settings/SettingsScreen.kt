@@ -130,6 +130,8 @@ fun SettingsScreen(
     onHapticsEnabledChange: (Boolean) -> Unit,
     predictiveBackEnabled: Flow<Boolean>,
     onPredictiveBackEnabledChange: (Boolean) -> Unit,
+    glassEffectEnabled: Flow<Boolean>,
+    onGlassEffectEnabledChange: (Boolean) -> Unit,
     accentColor: Flow<com.illusion.app.domain.model.AccentColor>,
     onAccentColorChange: (com.illusion.app.domain.model.AccentColor) -> Unit,
     themeMode: Flow<com.illusion.app.domain.model.ThemeMode>,
@@ -187,6 +189,7 @@ fun SettingsScreen(
     val currentPerformanceMode by performanceMode.collectAsState(initial = com.illusion.app.domain.model.PerformanceMode.AUTO)
     val hapticsOn by hapticsEnabled.collectAsState(initial = true)
     val predictiveBackOn by predictiveBackEnabled.collectAsState(initial = true)
+    val glassEffectOn by glassEffectEnabled.collectAsState(initial = false)
     val currentAccentColor by accentColor.collectAsState(initial = com.illusion.app.domain.model.AccentColor.ILLUSION)
     val currentThemeMode by themeMode.collectAsState(initial = com.illusion.app.domain.model.ThemeMode.SYSTEM)
     // Same effective-dark logic as IllusionTheme itself - the accent swatches need to preview
@@ -798,6 +801,19 @@ fun SettingsScreen(
                                     TvAwareSwitch(
                                         checked = predictiveBackOn,
                                         onCheckedChange = onPredictiveBackEnabledChange
+                                    )
+                                },
+                                colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                            SettingsDivider()
+                            ListItem(
+                                headlineContent = { Text(stringResource(R.string.settings_glass_effect)) },
+                                supportingContent = { Text(stringResource(R.string.settings_glass_effect_description)) },
+                                trailingContent = {
+                                    TvAwareSwitch(
+                                        checked = glassEffectOn,
+                                        onCheckedChange = onGlassEffectEnabledChange
                                     )
                                 },
                                 colors = ListItemDefaults.colors(containerColor = Color.Transparent),

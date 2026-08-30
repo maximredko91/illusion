@@ -157,6 +157,13 @@ fun IllusionTheme(
         )
     }
 
+    // Tried MaterialExpressiveTheme here first per user request - reverted. Verified against the
+    // real material3-android 1.4.0 Kotlin sources (the version this project's Compose BOM
+    // actually pins): MaterialExpressiveTheme is still `internal fun` there, not callable from
+    // app code at all. It only becomes `public fun` starting in 1.5.0-alpha27 (the latest
+    // available build as of this check, still alpha - no stable 1.5.0 release exists yet). Not
+    // worth taking an unstable alpha dependency on the app's whole theme entry point for this -
+    // revisit once material3 ships a stable 1.5.0.
     MaterialTheme(
         colorScheme = colorScheme,
         typography = Typography,
