@@ -41,9 +41,11 @@ class UpdateDownloadWorker(
         val outFile = File(apkDir(applicationContext), "illusion-$versionCode.apk")
         try {
             if (LocalUpdateUri.isLocal(url)) downloadFromSmb(url, outFile) else downloadFromHttp(url, outFile)
+        } catch (e: java.util.concurrent.CancellationException) {
+            throw e
         } catch (e: Exception) {
             runCatching { outFile.delete() }
-            return@withContext Result.failure()
+            return@withContext Result.failure(workDataOf(KEY_ERROR to (e.message ?: e::class.simpleName)))
         }
         Result.success(workDataOf(KEY_FILE_PATH to outFile.absolutePath))
     }
@@ -51,7 +53,20 @@ class UpdateDownloadWorker(
     private suspend fun downloadFromHttp(url: String, outFile: File) {
         val http = OkHttpClient.Builder()
             .connectTimeout(10, TimeUnit.SECONDS)
-            .readTimeout(60, TimeUnit.SECONDS)
+            // Was 60s - confirmed on-device (real report: progress stalls near 1%, then the whole
+            // "what's new" dialog silently reappears and the user re-taps "Обновить" only to hit
+            // the same wall again) that this was tripping readTimeout on a connection with real
+            // multi-second-to-tens-of-second stalls between chunks (satellite/high-jitter link),
+            // not an actually-dead connection - each individual stall was well under a sane
+            // "this transfer is dead" threshold, just over the old 60s one. 5 minutes tolerates a
+            // real stall without waiting forever on a truly dead connection.
+            .readTimeout(5, TimeUnit.MINUTES)
+            // callTimeout bounds the WHOLE request in addition to readTimeout's per-gap bound, so
+            // a connection that keeps trickling data forever (never triggering readTimeout) still
+            // eventually fails instead of hanging indefinitely - surfaces as a normal error the
+            // user can act on (see the Cancel button added to DownloadProgressDialog) rather than
+            // an unbounded hang.
+            .callTimeout(15, TimeUnit.MINUTES)
             .build()
         val request = Request.Builder().url(url).build()
         http.newCall(request).execute().use { response ->
@@ -105,6 +120,7 @@ class UpdateDownloadWorker(
         const val KEY_DOWNLOADED = "downloaded"
         const val KEY_TOTAL = "total"
         const val KEY_FILE_PATH = "filePath"
+        const val KEY_ERROR = "error"
 
         fun apkDir(context: Context): File = File(context.cacheDir, "updates").apply { mkdirs() }
     }

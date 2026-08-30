@@ -33,6 +33,10 @@ class UpdateChecker(
     private val http = OkHttpClient.Builder()
         .connectTimeout(10, TimeUnit.SECONDS)
         .readTimeout(15, TimeUnit.SECONDS)
+        // Bounds the WHOLE request, not just gaps between reads - see UpdateDownloadWorker's own
+        // comment on the same setting for why readTimeout alone isn't enough on a connection that
+        // trickles data in just under that window.
+        .callTimeout(30, TimeUnit.SECONDS)
         .build()
 
     private val json = Json { ignoreUnknownKeys = true }

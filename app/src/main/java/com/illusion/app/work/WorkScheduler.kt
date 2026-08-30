@@ -149,4 +149,9 @@ object WorkScheduler {
     fun updateDownloadWorkInfo(context: Context): Flow<androidx.work.WorkInfo?> =
         WorkManager.getInstance(context).getWorkInfosForUniqueWorkFlow(UPDATE_DOWNLOAD_WORK_NAME)
             .map { infos -> infos.firstOrNull() }
+
+    /** Lets the user bail out of a stuck/too-slow update download instead of staring at a progress dialog with no way out - see the Cancel button in DownloadProgressDialog. */
+    fun cancelUpdateDownload(context: Context) {
+        WorkManager.getInstance(context).cancelUniqueWork(UPDATE_DOWNLOAD_WORK_NAME)
+    }
 }

@@ -102,8 +102,22 @@ class UpdateViewModel(
                             _state.update { it.copy(isDownloading = false, downloadProgress = null, downloadedFile = null) }
                         }
                     }
-                    WorkInfo.State.FAILED, WorkInfo.State.CANCELLED -> {
-                        _state.update { it.copy(isDownloading = false, error = "Не удалось скачать обновление") }
+                    // CANCELLED deliberately shows no error - it's always the user's own
+                    // cancelDownload() action (see its own KDoc), which already reset this same
+                    // state directly; setting an error message here too would just race that
+                    // reset and flash a confusing "не удалось скачать" right after the user
+                    // chose to cancel themselves.
+                    WorkInfo.State.CANCELLED -> {
+                        _state.update { it.copy(isDownloading = false) }
+                    }
+                    WorkInfo.State.FAILED -> {
+                        val reason = info.outputData.getString(UpdateDownloadWorker.KEY_ERROR)
+                        val message = if (reason != null) {
+                            "Не удалось скачать обновление: $reason"
+                        } else {
+                            "Не удалось скачать обновление"
+                        }
+                        _state.update { it.copy(isDownloading = false, error = message) }
                     }
                     else -> Unit
                 }
@@ -204,6 +218,17 @@ class UpdateViewModel(
         }
         WorkScheduler.enqueueUpdateDownload(appContext, update.apkDownloadUrl, update.versionCode)
         _state.update { it.copy(isDownloading = true, downloadProgress = 0f, error = null) }
+    }
+
+    /** Bails out of a stuck/too-slow download - see DownloadProgressDialog's own Cancel button. Resets state directly rather than waiting for the WorkInfo observer's own CANCELLED branch to catch up, so the user lands straight back on the "what's new" offer instead of a transient "не удалось скачать" error. */
+    fun cancelDownload() {
+        WorkScheduler.cancelUpdateDownload(appContext)
+        _state.update { it.copy(isDownloading = false, downloadProgress = null, error = null) }
+    }
+
+    /** Was set but never actually shown anywhere - a failed download (e.g. the readTimeout that used to trip on a stalled-but-alive connection) silently fell through straight back to the "what's new" offer with zero explanation, which on-device read as "1%, hangs, then the update dialog just pops up again" on repeat with no visible error at all. */
+    fun dismissError() {
+        _state.update { it.copy(error = null) }
     }
 
     /** Either sends the ready-to-launch install Intent, or - the first time this app tries to install an update - redirects to the one-time "install unknown apps" toggle instead. See UpdateInstaller's own KDoc for why that gate can't be skipped. */

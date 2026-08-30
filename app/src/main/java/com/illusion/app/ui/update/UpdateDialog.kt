@@ -68,12 +68,23 @@ fun UpdatePrompt(viewModel: UpdateViewModel) {
     // one dialog without acting on it.
     val mandatory = update?.mandatory == true
     when {
+        // Checked first so a failed download is never silently masked by another branch (it used
+        // to just fall through straight back to WhatsNewDialog below, with the failure itself
+        // dropped on the floor - see UpdateViewModel.dismissError's own KDoc).
+        uiState.error != null -> DownloadErrorDialog(
+            message = uiState.error!!,
+            onRetry = { viewModel.dismissError(); viewModel.startDownload() },
+            onDismiss = { viewModel.dismissError() }
+        )
         uiState.downloadedFile != null && !installPromptDismissed -> InstallReadyDialog(
             mandatory = mandatory,
             onInstall = { viewModel.install() },
             onLater = { installPromptDismissed = true }
         )
-        uiState.isDownloading -> DownloadProgressDialog(progress = uiState.downloadProgress)
+        uiState.isDownloading -> DownloadProgressDialog(
+            progress = uiState.downloadProgress,
+            onCancel = { viewModel.cancelDownload() }
+        )
         update != null -> WhatsNewDialog(
             update = update,
             onUpdate = { viewModel.startDownload() },
@@ -111,7 +122,7 @@ private fun WhatsNewDialog(update: UpdateInfo, onUpdate: () -> Unit, onLater: ()
 }
 
 @Composable
-private fun DownloadProgressDialog(progress: Float?) {
+private fun DownloadProgressDialog(progress: Float?, onCancel: () -> Unit) {
     AlertDialog(
         onDismissRequest = {},
         title = { Text("Загрузка обновления") },
@@ -129,7 +140,22 @@ private fun DownloadProgressDialog(progress: Float?) {
                 }
             }
         },
-        confirmButton = {}
+        confirmButton = {},
+        // Was no way out of this dialog at all if the download stalled (real report: "висит на
+        // 1%") short of force-closing the app - now bounded anyway by callTimeout on the HTTP
+        // client (see UpdateDownloadWorker), but this is the immediate, user-driven escape hatch.
+        dismissButton = { TextButton(onClick = onCancel) { Text("Отмена") } }
+    )
+}
+
+@Composable
+private fun DownloadErrorDialog(message: String, onRetry: () -> Unit, onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Не удалось скачать обновление") },
+        text = { Text(message) },
+        confirmButton = { TextButton(onClick = onRetry) { Text("Повторить") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Закрыть") } }
     )
 }
 
