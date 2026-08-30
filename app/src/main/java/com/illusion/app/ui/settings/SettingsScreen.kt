@@ -1174,7 +1174,10 @@ fun SettingsScreen(
                                             val intent = DownloadStorage.openFolderIntent(context, downloadsFolder)
                                             if (intent != null) {
                                                 runCatching { context.startActivity(intent) }
-                                                    .onFailure { android.widget.Toast.makeText(context, noFileAppMessage, android.widget.Toast.LENGTH_SHORT).show() }
+                                                    .onFailure {
+                                                        android.util.Log.w("SettingsScreen", "openFolderIntent failed", it)
+                                                        android.widget.Toast.makeText(context, noFileAppMessage, android.widget.Toast.LENGTH_SHORT).show()
+                                                    }
                                             } else {
                                                 android.widget.Toast.makeText(context, noFileAppMessage, android.widget.Toast.LENGTH_SHORT).show()
                                             }

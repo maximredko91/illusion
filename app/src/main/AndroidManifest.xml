@@ -46,6 +46,18 @@
             <action android:name="android.intent.action.VIEW" />
             <data android:mimeType="video/*" />
         </intent>
+        <!-- Same package-visibility gap as above, for DownloadStorage.openFolderIntent()'s
+             "Открыть папку" button - queryIntentActivities() for a folder-view ACTION_VIEW
+             (vnd.android.document/directory) or DownloadManager.ACTION_VIEW_DOWNLOADS returned
+             empty even with a real file manager (built-in MIUI one, Solid Explorer) installed,
+             so the code always concluded "no app found" and never even tried startActivity. -->
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:mimeType="vnd.android.document/directory" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW_DOWNLOADS" />
+        </intent>
     </queries>
 
     <application

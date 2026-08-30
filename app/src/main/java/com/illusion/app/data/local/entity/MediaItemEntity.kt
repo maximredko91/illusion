@@ -56,6 +56,8 @@ data class MediaItemEntity(
     val tagline: String? = null,
     val studio: String? = null,
     val premiered: String? = null,
+    /** Series-level only (tvshow.nfo's <status>, e.g. "Continuing"/"Ended") - see [com.illusion.app.domain.model.statusLabel] for the Russian display mapping, never shown as-is. */
+    val status: String? = null,
     val imdbId: String? = null,
     val tmdbId: String? = null,
     /** Kodi's separate freeform <tag> field - distinct from [genres], often left in whatever language the scraper that wrote them used. */

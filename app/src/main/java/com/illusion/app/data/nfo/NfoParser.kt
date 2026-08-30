@@ -35,6 +35,7 @@ class NfoParser {
         var tagline: String? = null
         var studio: String? = null
         var premiered: String? = null
+        var status: String? = null
         var imdbId: String? = null
         var tmdbId: String? = null
         var edition: String? = null
@@ -106,6 +107,11 @@ class NfoParser {
                             "tagline" -> tagline = text
                             "studio" -> studio = studio ?: text
                             "premiered", "aired" -> premiered = premiered ?: text
+                            // tvshow.nfo only (Kodi/tinyMediaManager never write this on a movie or
+                            // episodedetails root) - the show's own airing status, e.g. "Continuing"/
+                            // "Ended"/"Canceled". Raw code stored, translated in
+                            // domain/model/SeriesStatus.kt's own statusLabel, same pattern as edition.
+                            "status" -> status = status ?: text
                             "tmdbid" -> tmdbId = tmdbId ?: text
                             // Legacy Kodi scrapers wrote the IMDb id as a bare top-level <id>tt...</id>
                             // instead of <uniqueid> - only trust it when it actually looks like an
@@ -165,6 +171,7 @@ class NfoParser {
             tagline = tagline,
             studio = studio,
             premiered = premiered,
+            status = status,
             imdbId = imdbId,
             tmdbId = tmdbId,
             edition = edition,

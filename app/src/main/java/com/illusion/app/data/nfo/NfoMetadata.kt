@@ -22,6 +22,8 @@ data class NfoMetadata(
     val tagline: String? = null,
     val studio: String? = null,
     val premiered: String? = null,
+    /** tvshow.nfo's own <status> (e.g. "Continuing"/"Ended"/"Canceled") - see [com.illusion.app.domain.model.statusLabel] for the Russian display mapping. */
+    val status: String? = null,
     val imdbId: String? = null,
     val tmdbId: String? = null,
     /** Kodi/tinyMediaManager's <edition> - a fixed set of English codes (e.g. "DIRECTORS_CUT", "EXTENDED_EDITION"), not freeform text. See [com.illusion.app.domain.model.editionLabel] for the Russian display mapping. */

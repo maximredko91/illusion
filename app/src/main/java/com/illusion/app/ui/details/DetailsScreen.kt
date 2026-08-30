@@ -129,6 +129,7 @@ import com.illusion.app.data.local.entity.MediaItemEntity
 import com.illusion.app.data.local.entity.hasForcedSubtitles
 import com.illusion.app.domain.model.UiMode
 import com.illusion.app.domain.model.editionLabel
+import com.illusion.app.domain.model.statusLabel
 import com.illusion.app.domain.model.videoQualityLabel
 import com.illusion.app.data.player.AudioTrackProber
 import com.illusion.app.data.repository.AudioTrackRepository
@@ -788,6 +789,10 @@ private fun DetailsContent(
         val studio = item.studio?.takeIf { it.isNotBlank() }
         val mpaa = item.mpaa?.takeIf { it.isNotBlank() }
         val premiered = item.premiered?.takeIf { it.isNotBlank() }
+        // Only ever non-null for a series item (show-level tvshow.nfo <status> - see
+        // MediaItemEntity.status's own KDoc), so this doubles as the "is this a series" gate here
+        // without needing a separate category check.
+        val seriesStatus = item.statusLabel
         val collectionName = item.collectionName?.takeIf { it.isNotBlank() }
         // Always rendered now (not gated on tagline/studio existing) - the audio/subtitle row
         // below moved in here per feedback and has content to show regardless of whether this
@@ -883,7 +888,7 @@ private fun DetailsContent(
             // name (e.g. "Очень страшное кино (Коллекция)") wanted enough of that to squeeze the
             // left column down to almost nothing, forcing the tagline to wrap one syllable per
             // line instead of at word boundaries.
-            if (mpaa != null || premiered != null || collectionName != null) {
+            if (mpaa != null || premiered != null || collectionName != null || seriesStatus != null) {
                 Column(
                     modifier = Modifier.weight(1f),
                     horizontalAlignment = Alignment.End,
@@ -914,6 +919,17 @@ private fun DetailsContent(
                         Column(horizontalAlignment = Alignment.End) {
                             Text(
                                 stringResource(R.string.details_premiered_label),
+                                style = MaterialTheme.typography.bodySmall,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(it, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = 2.dp))
+                        }
+                    }
+                    seriesStatus?.let {
+                        Column(horizontalAlignment = Alignment.End) {
+                            Text(
+                                stringResource(R.string.details_series_status_label),
                                 style = MaterialTheme.typography.bodySmall,
                                 fontWeight = FontWeight.SemiBold,
                                 color = MaterialTheme.colorScheme.onSurface

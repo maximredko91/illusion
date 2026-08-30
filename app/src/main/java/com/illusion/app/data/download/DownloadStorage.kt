@@ -63,9 +63,17 @@ object DownloadStorage {
      */
     fun openFolderIntent(context: Context, treeUri: String?): Intent? {
         val targetUri = treeUri?.let(Uri::parse) ?: defaultDownloadsFolderUri()
+        // FLAG_GRANT_READ_URI_PERMISSION used to be set here too, but startActivity() then threw
+        // SecurityException for the (common - never explicitly picked a folder) default-URI case:
+        // granting a permission requires the GRANTING app to itself already hold real, persisted
+        // access to that exact Uri (e.g. via ACTION_OPEN_DOCUMENT_TREE), and this default Uri is
+        // just constructed by hand, never obtained through a picker - the app has no grant of its
+        // own to hand out. The receiving file manager (DocumentsUI, Solid Explorer, etc.) can
+        // browse a well-known system-provider Uri like this on its own regardless - it doesn't
+        // need OUR grant to do that, so the flag was both wrong and unnecessary here.
         val viewIntent = Intent(Intent.ACTION_VIEW)
             .setDataAndType(targetUri, DocumentsContract.Document.MIME_TYPE_DIR)
-            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         if (context.packageManager.queryIntentActivities(viewIntent, 0).isNotEmpty()) {
             return Intent.createChooser(viewIntent, null)
         }

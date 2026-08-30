@@ -29,6 +29,7 @@
     <string name="details_studio_label">Студия:</string>
     <string name="details_mpaa_label">Рейтинг:</string>
     <string name="details_premiered_label">Премьера:</string>
+    <string name="details_series_status_label">Статус:</string>
     <string name="details_collection_name_label">Коллекция:</string>
 
     <string name="settings_factory_reset">Полный сброс приложения</string>

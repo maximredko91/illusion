@@ -464,6 +464,9 @@ class LibraryScanner(
             tagline = metadata?.tagline,
             studio = metadata?.studio ?: showMetadata?.studio,
             premiered = metadata?.premiered,
+            // Show-level only - episodedetails.nfo never carries its own <status>, only tvshow.nfo
+            // does (per Kodi's spec), same reasoning as the showMetadata fallbacks above.
+            status = showMetadata?.status,
             imdbId = metadata?.imdbId ?: showMetadata?.imdbId,
             tmdbId = metadata?.tmdbId ?: showMetadata?.tmdbId,
             // From the nfo's own <fileinfo><streamdetails><video> - not re-probed by this app (see
