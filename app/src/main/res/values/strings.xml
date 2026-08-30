@@ -236,12 +236,16 @@
     <string name="settings_performance_mode_auto">Авто</string>
     <string name="settings_performance_mode_maximum">Максимум</string>
     <string name="settings_performance_mode_economical">Экономичный</string>
+    <string name="settings_performance_device_class_low">Это устройство определено как маломощное (ядер CPU: %1$d) — «Авто» включит экономичный режим</string>
+    <string name="settings_performance_device_class_normal">Это устройство определено как достаточно мощное (ядер CPU: %1$d) — «Авто» оставит максимум</string>
     <string name="settings_haptics">Вибрация</string>
     <string name="settings_haptics_description">Тактильный отклик на нажатия и переключатели</string>
     <string name="settings_predictive_back">Анимация жеста «назад»</string>
     <string name="settings_predictive_back_description">Плавный анимированный предпросмотр экрана при свайпе назад (Android 13+). Отключите, если анимация подтормаживает на вашем устройстве — возврат назад будет мгновенным, без анимации</string>
     <string name="settings_accent_color">Акцентный цвет</string>
     <string name="settings_app_icon">Значок приложения</string>
+    <string name="settings_expand">Развернуть</string>
+    <string name="settings_collapse">Свернуть</string>
     <string name="settings_theme_mode">Тема</string>
     <string name="settings_theme_mode_system">Системная</string>
     <string name="settings_theme_mode_light">Светлая</string>

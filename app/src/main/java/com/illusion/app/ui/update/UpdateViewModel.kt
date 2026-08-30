@@ -128,16 +128,25 @@ class UpdateViewModel(
     /**
      * [force] bypasses the configured interval/off setting and a previously-skipped versionCode -
      * used by Settings' manual check button; the automatic on-launch check (MainActivity) always
-     * passes false, and respects [SettingsRepository.updateCheckIntervalHours] (0 = never
-     * auto-check, only the manual button works).
+     * passes false.
+     *
+     * "Автопроверка обновлений: Отключена" ([SettingsRepository.updateCheckIntervalHours] == 0)
+     * used to mean this whole function returned immediately on every automatic call - which also
+     * silently defeated `[MANDATORY]` releases (see UpdateInfo.mandatory's own KDoc) for anyone
+     * with it off, since a mandatory release can only reach the user if a check actually runs.
+     * The network call itself still always happens now (throttled to at most once per
+     * [MANDATORY_FALLBACK_CHECK_INTERVAL_HOURS] even when disabled, so "disabled" doesn't turn
+     * into "checks on every single launch") - "disabled" now only means the RESULT is discarded
+     * unless the release it finds is actually mandatory.
      */
     fun checkForUpdate(force: Boolean = false) {
         viewModelScope.launch {
+            val intervalHours = settingsRepository.updateCheckIntervalHours.first()
+            val autoCheckDisabled = intervalHours <= 0
             if (!force) {
-                val intervalHours = settingsRepository.updateCheckIntervalHours.first()
-                if (intervalHours <= 0) return@launch
+                val effectiveIntervalHours = if (autoCheckDisabled) MANDATORY_FALLBACK_CHECK_INTERVAL_HOURS else intervalHours
                 val lastCheckedAt = settingsRepository.lastUpdateCheckAtMs.first()
-                if (System.currentTimeMillis() - lastCheckedAt < intervalHours * 60 * 60 * 1000L) return@launch
+                if (System.currentTimeMillis() - lastCheckedAt < effectiveIntervalHours * 60 * 60 * 1000L) return@launch
             }
             settingsRepository.setLastUpdateCheckAtMs(System.currentTimeMillis())
             val source = settingsRepository.updateSource.first()
@@ -171,6 +180,11 @@ class UpdateViewModel(
                     }
                 }
                 is UpdateCheckResult.Available -> {
+                    // "Автопроверка обновлений: Отключена" only suppresses ordinary releases -
+                    // same reasoning as "skip this version" below, a mandatory release must always
+                    // reach the user regardless of what they'd rather not be bothered with for a
+                    // routine one.
+                    if (autoCheckDisabled && !force && !result.info.mandatory) return@launch
                     // A "skip this version" from before a release was (re-)marked mandatory
                     // should never be able to suppress it once it is - see UpdateInfo.mandatory's
                     // own KDoc for why a mandatory release must always reach the user.
@@ -244,6 +258,9 @@ class UpdateViewModel(
     }
 
     companion object {
+        /** How often the automatic check still runs even with "Автопроверка обновлений: Отключена" - just frequently enough that a `[MANDATORY]` release doesn't sit unreachable for weeks, not so often that "disabled" stops meaning anything. */
+        private const val MANDATORY_FALLBACK_CHECK_INTERVAL_HOURS = 24
+
         fun factory(
             context: Context,
             updateChecker: UpdateChecker,

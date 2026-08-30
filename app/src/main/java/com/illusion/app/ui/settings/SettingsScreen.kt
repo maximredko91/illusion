@@ -35,8 +35,11 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Devices
 import androidx.compose.material.icons.filled.Dns
 import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Feedback
 import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.LibraryAdd
 import androidx.compose.material.icons.filled.Palette
@@ -790,19 +793,36 @@ fun SettingsScreen(
                         // in this same screen too but moved out to its own "Режим экрана" category -
                         // it's a structural/functional choice (which whole layout the app uses),
                         // not an appearance one like everything else here.
+                        var accentColorExpanded by remember { mutableStateOf(false) }
                         SettingsGroup(modifier = Modifier.padding(top = 12.dp, bottom = 24.dp)) {
-                            Text(
-                                stringResource(R.string.settings_accent_color),
-                                style = MaterialTheme.typography.titleSmall,
-                                modifier = Modifier.padding(start = 16.dp, top = 12.dp, bottom = 4.dp)
-                            )
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(start = 16.dp, end = 4.dp, top = 12.dp, bottom = 4.dp)
+                            ) {
+                                Text(
+                                    stringResource(R.string.settings_accent_color),
+                                    style = MaterialTheme.typography.titleSmall,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                com.illusion.app.ui.common.TvAwareIconButton(onClick = { accentColorExpanded = !accentColorExpanded }) {
+                                    Icon(
+                                        if (accentColorExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                                        contentDescription = stringResource(
+                                            if (accentColorExpanded) R.string.settings_collapse else R.string.settings_expand
+                                        )
+                                    )
+                                }
+                            }
                             // FlowRow, not a plain Row - 7 swatches at 40dp + spacing (~352dp) can
                             // exceed a narrow phone's available width once the Card's own padding
-                            // is subtracted, and a plain Row doesn't wrap. Wrapping to a second
-                            // line reaches every swatch without needing a horizontal scroll (tried
-                            // first, dropped per user feedback - swatches should all be visible at
-                            // once, not scrolled through).
+                            // is subtracted, and a plain Row doesn't wrap. Collapsed to maxLines = 1
+                            // by default (per feedback - one row of icons, expandable) rather than
+                            // always showing every swatch at once, which pushed this whole category
+                            // panel quite tall for something most visits don't need to touch.
                             androidx.compose.foundation.layout.FlowRow(
+                                maxLines = if (accentColorExpanded) Int.MAX_VALUE else 1,
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .padding(horizontal = 16.dp, vertical = 12.dp),
@@ -841,13 +861,30 @@ fun SettingsScreen(
                         // mechanism a bunch of well-known apps use (Twitter/X, Spotify, ...); see
                         // IconVariantManager's own KDoc for why this can't be a plain
                         // SettingsRepository-backed value.
+                        var appIconExpanded by remember { mutableStateOf(false) }
                         SettingsGroup(modifier = Modifier.padding(top = 12.dp, bottom = 24.dp)) {
-                            Text(
-                                stringResource(R.string.settings_app_icon),
-                                style = MaterialTheme.typography.titleSmall,
-                                modifier = Modifier.padding(start = 16.dp, top = 12.dp, bottom = 4.dp)
-                            )
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(start = 16.dp, end = 4.dp, top = 12.dp, bottom = 4.dp)
+                            ) {
+                                Text(
+                                    stringResource(R.string.settings_app_icon),
+                                    style = MaterialTheme.typography.titleSmall,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                com.illusion.app.ui.common.TvAwareIconButton(onClick = { appIconExpanded = !appIconExpanded }) {
+                                    Icon(
+                                        if (appIconExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                                        contentDescription = stringResource(
+                                            if (appIconExpanded) R.string.settings_collapse else R.string.settings_expand
+                                        )
+                                    )
+                                }
+                            }
                             androidx.compose.foundation.layout.FlowRow(
+                                maxLines = if (appIconExpanded) Int.MAX_VALUE else 1,
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .padding(horizontal = 16.dp, vertical = 12.dp),
@@ -945,15 +982,27 @@ fun SettingsScreen(
 
                     "performance" -> {
                         SettingsGroup {
-                            ListItem(
-                                headlineContent = { Text(stringResource(R.string.settings_performance_mode)) },
-                                supportingContent = { Text(stringResource(R.string.settings_performance_mode_description)) },
-                                trailingContent = {
-                                    PerformanceModeMenu(currentPerformanceMode, onPerformanceModeChange)
-                                },
-                                colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-                                modifier = Modifier.fillMaxWidth()
-                            )
+                            SettingsActionCard(
+                                title = stringResource(R.string.settings_performance_mode),
+                                description = stringResource(R.string.settings_performance_mode_description)
+                            ) {
+                                PerformanceModeMenu(currentPerformanceMode, onPerformanceModeChange, modifier = Modifier.fillMaxWidth())
+                                // Shows what AUTO actually resolved to on this specific device, not
+                                // just the abstract rule - per feedback, "Авто" alone left the user
+                                // with no way to tell which class their device landed in without
+                                // guessing from how smooth/janky things felt.
+                                val deviceClass = remember { com.illusion.app.data.settings.DevicePerformance.classify(context) }
+                                Text(
+                                    if (deviceClass.isLowEnd) {
+                                        stringResource(R.string.settings_performance_device_class_low, deviceClass.coreCount)
+                                    } else {
+                                        stringResource(R.string.settings_performance_device_class_normal, deviceClass.coreCount)
+                                    },
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(top = 8.dp)
+                                )
+                            }
                         }
                     }
 
@@ -1109,6 +1158,11 @@ fun SettingsScreen(
                                         onClick = { folderPicker.launch(DownloadStorage.pickerInitialUri()) },
                                         modifier = Modifier.weight(1f)
                                     ) {
+                                        // Was text-only next to "Открыть папку"'s icon+text - same
+                                        // weight(1f) width, but the missing icon still read as a
+                                        // different, lighter style sitting right next to it. Per
+                                        // feedback.
+                                        Icon(Icons.Default.FolderOpen, contentDescription = null, modifier = Modifier.padding(end = 6.dp))
                                         Text(stringResource(R.string.settings_downloads_choose_folder))
                                     }
                                 }
@@ -1760,12 +1814,12 @@ private fun playerBufferSizeLabel(size: com.illusion.app.domain.model.PlayerBuff
 }
 
 @Composable
-private fun PerformanceModeMenu(current: com.illusion.app.domain.model.PerformanceMode, onChange: (com.illusion.app.domain.model.PerformanceMode) -> Unit) {
+private fun PerformanceModeMenu(current: com.illusion.app.domain.model.PerformanceMode, onChange: (com.illusion.app.domain.model.PerformanceMode) -> Unit, modifier: Modifier = Modifier) {
     var expanded by remember { mutableStateOf(false) }
     val haptics = LocalHapticFeedback.current
-    Box {
+    Box(modifier = modifier) {
         val triggerSource = remember { MutableInteractionSource() }
-        TvAwareOutlinedButton(onClick = { expanded = true }) {
+        TvAwareOutlinedButton(onClick = { expanded = true }, modifier = Modifier.fillMaxWidth()) {
             Text(performanceModeLabel(current))
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
