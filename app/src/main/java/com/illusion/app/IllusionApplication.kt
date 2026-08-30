@@ -1,6 +1,7 @@
 package com.illusion.app
 
 import android.app.Application
+import androidx.appcompat.app.AppCompatDelegate
 import androidx.work.Configuration
 import coil3.ImageLoader
 import coil3.PlatformContext
@@ -66,7 +67,7 @@ class IllusionApplication : Application(), Configuration.Provider, SingletonImag
     }
 
     val thumbnailRepository: ThumbnailRepository by lazy {
-        ThumbnailRepository(database.thumbnailSpriteDao(), database.mediaItemDao())
+        ThumbnailRepository(database.thumbnailSpriteDao())
     }
     val thumbnailGenerator: ThumbnailGenerator by lazy {
         ThumbnailGenerator(smbSourceRepository, smbClient, this)
@@ -95,8 +96,6 @@ class IllusionApplication : Application(), Configuration.Provider, SingletonImag
                 IllusionWorkerFactory(
                     libraryScanner,
                     settingsRepository,
-                    thumbnailGenerator,
-                    thumbnailRepository,
                     libraryRepository,
                     smbSourceRepository,
                     smbClient,
@@ -109,6 +108,12 @@ class IllusionApplication : Application(), Configuration.Provider, SingletonImag
 
     override fun onCreate() {
         super.onCreate()
+        // Должно случиться раньше создания MainActivity (Application.onCreate() всегда
+        // завершается до Activity.onCreate() системой) - системный SplashScreen резолвит
+        // values/values-night для @color/splash_bg по актуальной Configuration.uiMode
+        // процесса. Без этого он следует только реальной теме ОС и не знает о выборе
+        // пользователя внутри приложения (тот применяется later, на уровне Compose/IllusionTheme).
+        applyPersistedThemeMode()
         CrashReporter.install(this)
         applicationScope.launch {
             settingsRepository.posterCachingEnabled.collect { PosterCacheSettings.cachingEnabled = it }
@@ -133,6 +138,36 @@ class IllusionApplication : Application(), Configuration.Provider, SingletonImag
     // API, only a full clear() - two disk caches was the only way to make the two independently
     // clearable. Same size limit setting applies to both (a per-cache ceiling, not a shared pool).
     val fanartImageLoader: ImageLoader by lazy { buildImageLoader(this, FANART_CACHE_DIR_NAME) }
+
+    /**
+     * Called by [com.illusion.app.ui.player.PlayerViewModel] when an item is opened without a
+     * cached scrub-preview sprite - generates it lazily instead of the old whole-library
+     * background scan. Runs on [applicationScope], not the ViewModel's own scope, since the
+     * ViewModel (and its scope) is torn down the moment the player screen closes, while
+     * [com.illusion.app.data.scan.ThumbnailGenerator] deliberately no-ops until real playback
+     * finishes (see its own KDoc on decoder contention) - this has to keep running after that.
+     */
+    fun generateThumbnailIfMissing(item: com.illusion.app.data.local.entity.MediaItemEntity) {
+        applicationScope.launch {
+            if (thumbnailRepository.getForItem(item.stableId) != null) return@launch
+            runCatching { thumbnailGenerator.generate(item) }.getOrNull()?.let { thumbnailRepository.save(it) }
+        }
+    }
+
+    // Синхронное чтение (runBlocking), тот же паттерн, что и imageCacheLimitMb ниже - должно
+    // отработать до создания первой Activity, а DataStore тут работает с Flow, не с
+    // блокирующим API.
+    private fun applyPersistedThemeMode() {
+        val mode = kotlinx.coroutines.runBlocking { settingsRepository.themeMode.first() }
+        AppCompatDelegate.setDefaultNightMode(
+            when (mode) {
+                com.illusion.app.domain.model.ThemeMode.LIGHT -> AppCompatDelegate.MODE_NIGHT_NO
+                com.illusion.app.domain.model.ThemeMode.DARK,
+                com.illusion.app.domain.model.ThemeMode.BLACK -> AppCompatDelegate.MODE_NIGHT_YES
+                com.illusion.app.domain.model.ThemeMode.SYSTEM -> AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM
+            }
+        )
+    }
 
     private fun buildImageLoader(context: PlatformContext, cacheDirName: String): ImageLoader =
         ImageLoader.Builder(context)

@@ -37,8 +37,10 @@ import kotlinx.coroutines.withContext
  * trip each), so both fan out across a small pool of connections instead of going one request at
  * a time - a share with thousands of files/folders was otherwise the slow, silent part of a scan.
  */
-data class ScanResult(val totalIndexed: Int, val sourceErrors: List<SourceScanError>)
+/** [newlyAddedStableIds] - items this specific scan found that weren't already indexed (not merely updated) - see [LibraryScanner.hasNewContent]'s sibling use of the same "new" definition, and [com.illusion.app.ui.scan.ScanProgressScreen]'s "что добавилось" summary. */
+data class ScanResult(val totalIndexed: Int, val sourceErrors: List<SourceScanError>, val newlyAddedStableIds: List<String> = emptyList())
 data class SourceScanError(val sourceName: String, val message: String)
+private data class SourceScanOutcome(val indexed: Int, val newlyAddedStableIds: List<String>)
 
 class LibraryScanner(
     private val sourceRepository: SmbSourceRepository,
@@ -68,12 +70,36 @@ class LibraryScanner(
     suspend fun scanAll(force: Boolean = false, onProgress: suspend (ScanProgress) -> Unit = {}): ScanResult = withContext(Dispatchers.IO) {
         val sources = sourceRepository.getEnabledSources()
         val errors = mutableListOf<SourceScanError>()
+        val newlyAdded = mutableListOf<String>()
         val total = sources.foldIndexed(0) { index, sum, source ->
             val outcome = runCatching { scanSource(source, index, sources.size, force, onProgress) }
             outcome.exceptionOrNull()?.let { errors += SourceScanError(source.displayName, classifySmbError(it)) }
-            sum + outcome.getOrDefault(0)
+            outcome.getOrNull()?.let { newlyAdded += it.newlyAddedStableIds }
+            sum + (outcome.getOrNull()?.indexed ?: 0)
         }
-        ScanResult(totalIndexed = total, sourceErrors = errors)
+        ScanResult(totalIndexed = total, sourceErrors = errors, newlyAddedStableIds = newlyAdded)
+    }
+
+    /**
+     * Cheap "has anything new turned up on the NAS" check for [com.illusion.app.ui.home.HomeScreen]'s
+     * new-content banner - reuses the same directory walk [scanSource] uses for file discovery,
+     * but never opens/parses a single `.nfo`, probes a video's container header, or writes
+     * anything to Room, and stops at the first source with something new rather than walking every
+     * source. A real rescan is still what actually indexes anything found here - this only answers
+     * "is it worth telling the user to go rescan", not "what changed".
+     */
+    suspend fun hasNewContent(): Boolean = withContext(Dispatchers.IO) {
+        sourceRepository.getEnabledSources().any { source -> runCatching { sourceHasNewContent(source) }.getOrDefault(false) }
+    }
+
+    private suspend fun sourceHasNewContent(source: SmbSourceEntity): Boolean {
+        val info = sourceRepository.connectionInfo(source) ?: return false
+        val existingPaths = libraryRepository.getBySource(source.id).map { it.filePath }.toSet()
+        return withConnectionPool(info) { pool ->
+            val discovered = AtomicInteger(0)
+            val allFiles = walkConcurrent(pool, source.rootPath, discovered) {}
+            allFiles.any { it.isVideo && !it.isTrailer && it.path !in existingPaths }
+        }
     }
 
     private suspend fun scanSource(
@@ -82,8 +108,8 @@ class LibraryScanner(
         sourceCount: Int,
         force: Boolean,
         onProgress: suspend (ScanProgress) -> Unit
-    ): Int {
-        val info = sourceRepository.connectionInfo(source) ?: return 0
+    ): SourceScanOutcome {
+        val info = sourceRepository.connectionInfo(source) ?: return SourceScanOutcome(0, emptyList())
         return withConnectionPool(info) { pool ->
             val discovered = AtomicInteger(0)
             val allFiles = walkConcurrent(pool, source.rootPath, discovered) { count ->
@@ -121,12 +147,18 @@ class LibraryScanner(
             // in the show-root tvshow.nfo - so fetch it once per show (not once per episode) and
             // reuse across every episode of the same series within this scan.
             val showNfoCache = ConcurrentHashMap<String, NfoMetadata?>()
+            // A file's own path (not its stableId) is what "already indexed" actually means here -
+            // stableId can't be known before toMediaItem builds it. Collected concurrently from
+            // every videoFiles.map{async{}} below, same reasoning as ConcurrentHashMap above.
+            val newlyAddedStableIds = java.util.concurrent.ConcurrentLinkedQueue<String>()
             val items = coroutineScope {
                 videoFiles.map { file ->
                     async {
+                        val isNew = file.path !in existingByPath
                         val item = withConnection(pool) { connection ->
                             toMediaItem(source, connection, file, subtitleFiles, imageFiles, trailerFiles, filesByPath, existingByPath, showNfoCache, force)
                         }
+                        if (isNew) newlyAddedStableIds += item.stableId
                         // Upserted per-file as each one finishes, not batched into one call after
                         // every file in the source has processed - confirmed on-device that losing
                         // Wi-Fi partway through a large share (10000+ files) threw the whole scan
@@ -150,7 +182,7 @@ class LibraryScanner(
                     }
                 }.awaitAll()
             }
-            items.size
+            SourceScanOutcome(items.size, newlyAddedStableIds.toList())
         }
     }
 

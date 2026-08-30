@@ -20,5 +20,8 @@ data class DownloadEntity(
     val totalBytes: Long,
     val downloadedBytes: Long,
     val updatedAt: Long,
-    val errorMessage: String? = null
+    val errorMessage: String? = null,
+    /** Local content:// Uri of a poster/fanart copied alongside the video, if the source had one - see [com.illusion.app.work.DownloadWorker]'s own KDoc. Lets a recovered orphaned download (data wipe/reinstall) still show a poster/fanart with no SMB source to fetch one from. Null for downloads made before this existed. */
+    val posterUri: String? = null,
+    val fanartUri: String? = null
 )

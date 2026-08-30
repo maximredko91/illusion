@@ -77,7 +77,7 @@ class MediaItemDaoSearchTest {
             )
         )
 
-        val results = dao.search("престиж").first()
+        val results = dao.search("престиж", translatedGenre = null).first()
 
         assertEquals(2, results.size)
         assertEquals("title-hit", results.first().stableId)
@@ -92,7 +92,7 @@ class MediaItemDaoSearchTest {
             )
         )
 
-        val results = dao.search("inception").first()
+        val results = dao.search("inception", translatedGenre = null).first()
 
         assertEquals("orig-title-hit", results.first().stableId)
     }
@@ -106,7 +106,7 @@ class MediaItemDaoSearchTest {
             )
         )
 
-        val results = dao.search("брат").first()
+        val results = dao.search("брат", translatedGenre = null).first()
 
         assertEquals(listOf("a", "b"), results.map { it.stableId })
     }
@@ -115,7 +115,7 @@ class MediaItemDaoSearchTest {
     fun noMatchReturnsEmptyList() = runBlocking {
         dao.upsertAll(listOf(item("x", title = "Something")))
 
-        val results = dao.search("zzz-nonexistent").first()
+        val results = dao.search("zzz-nonexistent", translatedGenre = null).first()
 
         assertEquals(emptyList<MediaItemEntity>(), results)
     }

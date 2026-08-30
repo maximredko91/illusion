@@ -129,9 +129,6 @@ interface MediaItemDao {
     @Query("SELECT * FROM media_items WHERE sourceId = :sourceId")
     suspend fun getBySource(sourceId: Long): List<MediaItemEntity>
 
-    @Query("SELECT * FROM media_items WHERE stableId NOT IN (SELECT mediaItemStableId FROM thumbnail_sprites)")
-    suspend fun getItemsWithoutThumbnails(): List<MediaItemEntity>
-
     @Query("UPDATE media_items SET introStartMs = :startMs, introEndMs = :endMs WHERE stableId = :stableId")
     suspend fun setIntroMarkers(stableId: String, startMs: Long, endMs: Long)
 

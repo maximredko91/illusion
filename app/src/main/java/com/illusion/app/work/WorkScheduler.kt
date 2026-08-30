@@ -2,46 +2,20 @@ package com.illusion.app.work
 
 import android.content.Context
 import androidx.work.Constraints
-import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.ExistingWorkPolicy
 import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
-import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.workDataOf
 import java.util.UUID
-import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 
 object WorkScheduler {
-    private const val PERIODIC_SCAN_WORK_NAME = "library_scan_periodic"
     private const val ONE_TIME_SCAN_WORK_NAME = "library_scan_manual"
-    private const val THUMBNAIL_WORK_NAME = "thumbnail_generation"
     const val POSTER_PRELOAD_WORK_NAME = "poster_preload"
     private fun downloadWorkName(stableId: String) = "download_$stableId"
-
-    fun schedulePeriodicScan(context: Context, intervalHours: Int, requireCharging: Boolean) {
-        val constraints = Constraints.Builder()
-            .setRequiredNetworkType(NetworkType.CONNECTED)
-            .setRequiresCharging(requireCharging)
-            .build()
-
-        val request = PeriodicWorkRequestBuilder<LibraryScanWorker>(
-            intervalHours.toLong(), TimeUnit.HOURS
-        ).setConstraints(constraints).build()
-
-        WorkManager.getInstance(context).enqueueUniquePeriodicWork(
-            PERIODIC_SCAN_WORK_NAME,
-            ExistingPeriodicWorkPolicy.UPDATE,
-            request
-        )
-    }
-
-    fun cancelPeriodicScan(context: Context) {
-        WorkManager.getInstance(context).cancelUniqueWork(PERIODIC_SCAN_WORK_NAME)
-    }
 
     /** Runs a scan right away (e.g. after onboarding or adding a source) and returns its work id so the UI can observe progress. [force] bypasses the unchanged-file fast path - see LibraryScanner.scanAll's own KDoc. */
     fun enqueueOneTimeScan(context: Context, force: Boolean = false): UUID {
@@ -55,14 +29,6 @@ object WorkScheduler {
             .build()
 
         val workManager = WorkManager.getInstance(context)
-        // The periodic auto-rescan (rescheduled on every app launch, see Splash) uses a separate
-        // unique work name, so REPLACE below only dedupes against a previous manual scan - it
-        // does nothing to stop the periodic one from running at the same time. Two LibraryScanner
-        // passes over the same SMB source concurrently was observed on-device to produce
-        // incomplete/incorrect rescans (both racing the same Room writes and the same limited SMB
-        // session budget) - cancel the periodic run explicitly so a manual "rescan now" always has
-        // the source to itself. It's harmless to cancel: the next app launch reschedules it.
-        workManager.cancelUniqueWork(PERIODIC_SCAN_WORK_NAME)
         workManager.enqueueUniqueWork(
             ONE_TIME_SCAN_WORK_NAME,
             ExistingWorkPolicy.REPLACE,
@@ -85,24 +51,6 @@ object WorkScheduler {
     /** Stops a running manual "rescan now" - WorkManager cancels the underlying coroutine (CancellationException at its next suspend point), so whatever source was mid-scan simply never gets its upsertAll() call, same end state as the app being killed mid-scan. Nothing to clean up: already-scanned sources from earlier in this same run were already persisted (see LibraryScanner's own per-source upsertAll timing). */
     fun cancelOneTimeScan(context: Context) {
         WorkManager.getInstance(context).cancelUniqueWork(ONE_TIME_SCAN_WORK_NAME)
-    }
-
-    /** Generates scrubbing-preview sprites for any library items that don't have one yet. Slow - honors the charging-only setting. */
-    fun enqueueThumbnailGeneration(context: Context, requireCharging: Boolean) {
-        val constraints = Constraints.Builder()
-            .setRequiredNetworkType(NetworkType.CONNECTED)
-            .setRequiresCharging(requireCharging)
-            .build()
-
-        val request = OneTimeWorkRequestBuilder<ThumbnailGenerationWorker>()
-            .setConstraints(constraints)
-            .build()
-
-        WorkManager.getInstance(context).enqueueUniqueWork(
-            THUMBNAIL_WORK_NAME,
-            ExistingWorkPolicy.KEEP,
-            request
-        )
     }
 
     /** Warms the poster/fanart disk cache for the whole library so grids stop showing loading placeholders on every visit. */

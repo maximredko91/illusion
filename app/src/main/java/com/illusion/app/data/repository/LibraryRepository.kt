@@ -5,6 +5,8 @@ import com.illusion.app.data.local.dao.MediaItemDao
 import com.illusion.app.data.local.entity.MediaItemEntity
 import com.illusion.app.domain.model.Category
 import com.illusion.app.domain.model.SortOrder
+import com.illusion.app.domain.model.canonicalGenre
+import com.illusion.app.domain.model.genreSynonyms
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
@@ -92,14 +94,20 @@ class LibraryRepository(private val dao: MediaItemDao) {
     suspend fun getSimilar(item: MediaItemEntity, limit: Int = 12): List<MediaItemEntity> {
         if (item.genres.isEmpty()) return emptyList()
         val minShared = minOf(2, item.genres.size)
-        // Narrows to "shares at least one genre" at the SQL level before the precise
-        // shares->=minShared scoring below - see getByCategoryMatchingAnyGenre's KDoc for why the
-        // exact threshold itself still lives in Kotlin.
-        val genreClauses = item.genres.joinToString(" OR ") { "genres LIKE ?" }
-        val args: Array<Any> = (listOf(item.category.name) + item.genres.map { "%\"$it\"%" }).toTypedArray()
+        // Widened with every known synonym across both languages (see GenreTranslation.kt) - a
+        // genre written in English (this app's own TMDB add-media flow) must still find a
+        // Russian-scraped candidate meaning the same genre, and vice versa. Over-fetches
+        // (multiple LIKE variants per genre) rather than under-fetches; narrows to "shares at
+        // least one genre" at the SQL level before the precise shares->=minShared scoring below -
+        // see getByCategoryMatchingAnyGenre's KDoc for why the exact threshold itself still lives
+        // in Kotlin.
+        val genreVariants = item.genres.flatMap { genreSynonyms(it) }.distinct()
+        val genreClauses = genreVariants.joinToString(" OR ") { "genres LIKE ?" }
+        val args: Array<Any> = (listOf(item.category.name) + genreVariants.map { "%\"$it\"%" }).toTypedArray()
         val candidates = dao.getByCategoryMatchingAnyGenre(
             SimpleSQLiteQuery("SELECT * FROM media_items WHERE category = ? AND ($genreClauses)", args)
         )
+        val itemGenresCanonical = item.genres.map { canonicalGenre(it) }.toSet()
         return candidates
             .asSequence()
             .filter { it.stableId != item.stableId }
@@ -112,7 +120,7 @@ class LibraryRepository(private val dao: MediaItemDao) {
                     (item.tmdbId == null || candidate.tmdbId != item.tmdbId)
             }
             .distinctBy { it.seriesStableId ?: it.stableId }
-            .map { candidate -> candidate to candidate.genres.count { genre -> genre in item.genres } }
+            .map { candidate -> candidate to candidate.genres.count { genre -> canonicalGenre(genre) in itemGenresCanonical } }
             .filter { (_, shared) -> shared >= minShared }
             .sortedWith(compareByDescending<Pair<MediaItemEntity, Int>> { it.second }.thenByDescending { it.first.rating ?: 0.0 })
             .map { (candidate, _) -> candidate }

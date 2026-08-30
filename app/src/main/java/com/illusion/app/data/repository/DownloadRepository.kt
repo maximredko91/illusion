@@ -9,6 +9,7 @@ import com.illusion.app.data.local.entity.DownloadStatus
 import com.illusion.app.data.local.entity.MediaItemEntity
 import com.illusion.app.data.smb.VIDEO_EXTENSIONS
 import com.illusion.app.domain.model.Category
+import com.illusion.app.work.DownloadWorker
 import kotlinx.coroutines.flow.Flow
 import java.security.MessageDigest
 
@@ -57,13 +58,27 @@ class DownloadRepository(private val context: Context, private val dao: Download
         val known = dao.getAllOnce().map { it.contentUri }.toSet()
         val now = System.currentTimeMillis()
         var recovered = 0
-        DownloadStorage.listFilesUnderTree(context, treeUri)
+        val allFiles = DownloadStorage.listFilesUnderTree(context, treeUri)
+        // poster.jpg/fanart.jpg siblings DownloadWorker.downloadImages wrote next to the video, if
+        // any - the only way a recovered item (sourceId=-1, no real SMB source to fetch a live
+        // image from, see MediaItemEntity's own posterModel/fanartModel) can still show one.
+        // Grouped by parent folder name, same key parseTitleYear below already relies on.
+        val imagesByFolder = allFiles
+            .filter { it.parentFolderName != null }
+            .groupBy { it.parentFolderName!! }
+            .mapValues { (_, files) ->
+                val poster = files.firstOrNull { it.displayName.equals(DownloadWorker.POSTER_FILE_NAME, ignoreCase = true) }?.uri
+                val fanart = files.firstOrNull { it.displayName.equals(DownloadWorker.FANART_FILE_NAME, ignoreCase = true) }?.uri
+                poster to fanart
+            }
+        allFiles
             .filter { it.uri.toString() !in known }
             .filter { it.displayName.substringAfterLast('.', "").lowercase() in VIDEO_EXTENSIONS }
             .forEach { file ->
                 recovered++
                 val stableId = "recovered:" + sha256(file.uri.toString())
                 val (title, year) = parseTitleYear(file.parentFolderName, file.displayName)
+                val (posterUri, fanartUri) = imagesByFolder[file.parentFolderName] ?: (null to null)
                 libraryRepository.upsertAll(
                     listOf(
                         MediaItemEntity(
@@ -82,8 +97,8 @@ class DownloadRepository(private val context: Context, private val dao: Download
                             director = emptyList(),
                             actors = emptyList(),
                             collectionName = null,
-                            posterPath = null,
-                            fanartPath = null,
+                            posterPath = posterUri?.toString(),
+                            fanartPath = fanartUri?.toString(),
                             seasonNumber = null,
                             episodeNumber = null,
                             seriesStableId = null,
@@ -101,7 +116,9 @@ class DownloadRepository(private val context: Context, private val dao: Download
                         status = DownloadStatus.COMPLETED,
                         totalBytes = file.sizeBytes,
                         downloadedBytes = file.sizeBytes,
-                        updatedAt = now
+                        updatedAt = now,
+                        posterUri = posterUri?.toString(),
+                        fanartUri = fanartUri?.toString()
                     )
                 )
             }

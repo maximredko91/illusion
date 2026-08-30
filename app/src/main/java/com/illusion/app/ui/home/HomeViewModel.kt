@@ -7,6 +7,7 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import com.illusion.app.data.local.entity.MediaItemEntity
 import com.illusion.app.data.repository.LibraryRepository
 import com.illusion.app.data.repository.WatchProgressRepository
+import com.illusion.app.data.scan.NewContentNotifier
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -46,6 +47,10 @@ class HomeViewModel(
 
     val collections: StateFlow<List<LibraryRepository.CollectionSummary>> = libraryRepository.observeCollections()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val hasNewContent: StateFlow<Boolean> = NewContentNotifier.hasNewContent
+
+    fun dismissNewContentBanner() = NewContentNotifier.clear()
 
     init {
         refreshRandomPicks()

@@ -45,6 +45,9 @@
 
     <string name="home_continue_watching">Продолжить просмотр</string>
     <string name="home_random_picks">Случайная подборка</string>
+    <string name="home_new_content_banner">Доступны новые файлы на NAS</string>
+    <string name="home_new_content_banner_action">Обновить библиотеку</string>
+    <string name="home_new_content_banner_dismiss">Скрыть</string>
     <string name="home_collections">Коллекции</string>
     <string name="home_collection_item_count">%1$d</string>
     <string name="home_random_picks_refresh">Обновить подборку</string>
@@ -62,7 +65,6 @@
     <string name="settings_category_reset_description">Сброс настроек или полный сброс приложения</string>
     <string name="settings_smb_sources">Источники SMB</string>
     <string name="settings_scan_section">Сканирование</string>
-    <string name="settings_rescan_interval">Интервал пересканирования</string>
     <string name="settings_rescan_now">Пересканировать библиотеку</string>
     <string name="settings_rescan_now_description">Найдёт новые файлы и обновит постеры/фанарт для уже добавленных</string>
     <string name="settings_rescan_now_action">Сканировать</string>
@@ -71,8 +73,6 @@
     <string name="settings_scan_running">Сканирование уже идёт</string>
     <string name="settings_scan_running_description">Запущено ранее и продолжается в фоне</string>
     <string name="settings_scan_running_open">Открыть</string>
-    <string name="settings_rescan_off">Отключено</string>
-    <string name="settings_rescan_hours">Каждые %1$d ч</string>
     <string name="settings_player_section">Плеер</string>
     <string name="settings_cache">Кэш</string>
     <string name="settings_cache_size">Занято: %1$s</string>
@@ -81,7 +81,7 @@
     <string name="settings_cache_clear_confirm_title">Очистить кэш?</string>
     <string name="settings_cache_clear_confirm_message">Все временные файлы будут удалены. Постеры и фоны, если кеширование включено, подгрузятся заново с сервера при следующем открытии.</string>
     <string name="settings_charging_only">Фоновые задачи только при зарядке</string>
-    <string name="settings_charging_only_description">Генерация превью-кадров для перемотки и фоновое пересканирование библиотеки — не будут запускаться от батареи</string>
+    <string name="settings_charging_only_description">Фоновая подгрузка постеров/фанартов после сканирования — не будет запускаться от батареи</string>
     <string name="settings_image_cache_limit">Лимит кеша изображений</string>
     <string name="settings_image_cache_limit_description">Максимальный размер кеша постеров и фанартов на устройстве (по отдельности для каждого). Изменение применится после перезапуска приложения. Уменьшите, если места на устройстве мало</string>
     <string name="settings_fanart_cache_size">Кеш фанартов: %1$s</string>
@@ -113,6 +113,7 @@
     <string name="settings_downloads_recover_none">В выбранной папке не нашлось новых файлов</string>
     <string name="settings_downloads_recover_result">Восстановлено файлов: %1$d</string>
     <string name="settings_backup">Резервное копирование</string>
+    <string name="settings_backup_description">Сохраняет источники SMB (без паролей — их нужно будет ввести заново при импорте), избранное и историю просмотров в один файл. Пригодится при переустановке приложения или переходе на новое устройство. Библиотека и сама медиатека не включаются — после импорта источников нужно будет пересканировать библиотеку заново</string>
     <string name="settings_version">Версия: %1$s</string>
     <string name="settings_build_number">Номер сборки: %1$d</string>
     <string name="settings_easter_egg_countdown">Ещё %1$d, и что-то произойдёт…</string>
@@ -227,6 +228,9 @@
     <string name="settings_ui_mode_section">Интерфейс</string>
     <string name="settings_ui_mode_phone">Телефон или планшет</string>
     <string name="settings_ui_mode_tv">Телевизор (пульт)</string>
+    <string name="settings_ui_mode_tv_warning_title">Включить режим ТВ?</string>
+    <string name="settings_ui_mode_tv_warning_message">Интерфейс режима ТВ реагирует только на пульт (D-pad), а не на касания экрана — включая кнопки в самих Настройках. Если на этом устройстве нет физического пульта, пользоваться приложением станет невозможно, и вернуть телефонный режим можно будет только очисткой данных приложения через настройки Android (Приложения → Иллюзион → Хранилище → Очистить данные) — это сотрёт все настройки и источники SMB. Включить всё равно?</string>
+    <string name="settings_ui_mode_tv_warning_confirm">Включить</string>
     <string name="settings_haptics">Вибрация</string>
     <string name="settings_haptics_description">Тактильный отклик на нажатия и переключатели</string>
     <string name="settings_predictive_back">Анимация жеста «назад»</string>
@@ -300,6 +304,7 @@
     <string name="scan_progress_files">Найдено файлов: %1$d из %2$d</string>
     <string name="scan_progress_done">Готово</string>
     <string name="scan_progress_done_count">Готово! Найдено видео: %1$d</string>
+    <string name="scan_progress_newly_added_title">Добавлено новое</string>
     <string name="scan_progress_failed">Не удалось выполнить сканирование. Проверьте соединение с источником в настройках</string>
     <string name="scan_progress_partial_error">Не всё удалось просканировать: %1$s</string>
     <string name="scan_progress_continue">Продолжить</string>
@@ -458,7 +463,7 @@
 
     <string name="addmedia_title">Добавить медиа</string>
     <string name="settings_add_media">Добавление медиа</string>
-    <string name="settings_add_media_description">Скачать метаданные с TMDB и загрузить файл на NAS</string>
+    <string name="settings_add_media_description">Скачать метаданные с TMDB и загрузить файл на NAS. Только для разработчика — требует пароль</string>
     <string name="settings_add_media_open">Открыть</string>
     <string name="addmedia_source">Источник SMB</string>
     <string name="addmedia_kind_movie">Фильм</string>

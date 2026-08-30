@@ -90,6 +90,7 @@ class DownloadWorker(
         return try {
             copyWithReconnect(info, item.filePath, videoUri, item.sizeBytes, resumeFrom, stableId)
             val subtitles = downloadSubtitles(info, item, treeUri)
+            val (posterUri, fanartUri) = downloadImages(info, item, treeUri)
             downloadRepository.upsert(
                 DownloadEntity(
                     stableId = stableId,
@@ -98,7 +99,9 @@ class DownloadWorker(
                     status = DownloadStatus.COMPLETED,
                     totalBytes = item.sizeBytes,
                     downloadedBytes = item.sizeBytes,
-                    updatedAt = System.currentTimeMillis()
+                    updatedAt = System.currentTimeMillis(),
+                    posterUri = posterUri,
+                    fanartUri = fanartUri
                 )
             )
             Result.success()
@@ -210,6 +213,40 @@ class DownloadWorker(
         }
     }
 
+    /**
+     * Copies poster.jpg/fanart.jpg into the same per-title folder as the video and subtitles -
+     * small files, one read+write each, same reconnect-free approach as [downloadSubtitles]. Not
+     * for making the Downloads/Details screens work offline right now (they still fetch live via
+     * [com.illusion.app.data.image.SmbImageUri] as long as the SMB source is reachable, unchanged) -
+     * this is purely so [DownloadRepository.recoverOrphanedDownloads] has a local copy to fall back
+     * on if the app's data (and with it, the SMB source's saved credentials) is ever wiped or the
+     * app reinstalled while the downloaded files themselves survive on the SAF-picked folder. A
+     * remote http(s) poster/fanart URL is skipped - Coil already fetches those directly with no
+     * SMB source involved, so there's nothing this needs to preserve locally for that case.
+     */
+    private suspend fun downloadImages(info: SmbConnectionInfo, item: MediaItemEntity, treeUri: String?): Pair<String?, String?> {
+        val toFetch = listOfNotNull(
+            item.posterPath?.takeIf { it.isNotBlank() && !it.startsWith("http") }?.let { POSTER_FILE_NAME to it },
+            item.fanartPath?.takeIf { it.isNotBlank() && !it.startsWith("http") }?.let { FANART_FILE_NAME to it }
+        )
+        if (toFetch.isEmpty()) return null to null
+        val segments = folderSegments(item)
+        val connection = smbClient.connect(info)
+        return try {
+            val results = toFetch.associate { (fileName, remotePath) ->
+                fileName to runCatching {
+                    val uri = DownloadStorage.create(applicationContext, treeUri, segments, fileName) ?: return@runCatching null
+                    val out = DownloadStorage.openOutput(applicationContext, uri, append = false) ?: return@runCatching null
+                    connection.openInputStream(remotePath).use { input -> out.use { input.copyTo(it) } }
+                    uri.toString()
+                }.getOrNull()
+            }
+            results[POSTER_FILE_NAME] to results[FANART_FILE_NAME]
+        } finally {
+            runCatching { connection.close() }
+        }
+    }
+
     private suspend fun failWith(stableId: String, videoUri: Uri?, totalBytes: Long, message: String): Result {
         val existing = downloadRepository.getForItem(stableId)
         downloadRepository.upsert(
@@ -234,6 +271,9 @@ class DownloadWorker(
         private const val PROGRESS_INTERVAL_MS = 500L
         private const val MAX_CONSECUTIVE_FAILURES = 5
         private const val RECONNECT_BACKOFF_MS = 2000L
+        /** Shared with [com.illusion.app.data.repository.DownloadRepository.recoverOrphanedDownloads], which looks for these exact names as siblings of a recovered video file. */
+        const val POSTER_FILE_NAME = "poster.jpg"
+        const val FANART_FILE_NAME = "fanart.jpg"
 
         private fun sanitizeFileName(name: String): String =
             name.replace(Regex("[\\\\/:*?\"<>|]"), "_").trim().ifBlank { "video" }

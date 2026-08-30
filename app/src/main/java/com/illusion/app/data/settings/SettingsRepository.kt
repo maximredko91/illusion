@@ -31,7 +31,6 @@ const val IMAGE_CACHE_LIMIT_MB_DEFAULT = 1024
 class SettingsRepository(private val context: Context) {
     private object Keys {
         val REQUIRE_CHARGING_FOR_HEAVY_TASKS = booleanPreferencesKey("require_charging_for_heavy_tasks")
-        val RESCAN_INTERVAL_HOURS = intPreferencesKey("rescan_interval_hours")
         val DEFAULT_SORT_ORDER = stringPreferencesKey("default_sort_order")
         val SHARPEN_ENABLED = booleanPreferencesKey("player_sharpen_enabled")
         val SHARPEN_AMOUNT = floatPreferencesKey("player_sharpen_amount")
@@ -67,10 +66,6 @@ class SettingsRepository(private val context: Context) {
         it[Keys.REQUIRE_CHARGING_FOR_HEAVY_TASKS] ?: true
     }
 
-    val rescanIntervalHours: Flow<Int> = context.dataStore.data.map {
-        it[Keys.RESCAN_INTERVAL_HOURS] ?: 0
-    }
-
     val defaultSortOrder: Flow<SortOrder> = context.dataStore.data.map {
         it[Keys.DEFAULT_SORT_ORDER]?.let { name -> runCatching { SortOrder.valueOf(name) }.getOrNull() }
             ?: SortOrder.RATING
@@ -101,10 +96,6 @@ class SettingsRepository(private val context: Context) {
 
     suspend fun setRequireChargingForHeavyTasks(value: Boolean) {
         context.dataStore.edit { it[Keys.REQUIRE_CHARGING_FOR_HEAVY_TASKS] = value }
-    }
-
-    suspend fun setRescanIntervalHours(hours: Int) {
-        context.dataStore.edit { it[Keys.RESCAN_INTERVAL_HOURS] = hours }
     }
 
     suspend fun setDefaultSortOrder(order: SortOrder) {

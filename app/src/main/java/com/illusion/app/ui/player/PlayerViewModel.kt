@@ -123,6 +123,7 @@ class PlayerViewModel(
     private val libraryRepository: LibraryRepository,
     private val watchProgressRepository: WatchProgressRepository,
     private val thumbnailRepository: ThumbnailRepository,
+    private val generateThumbnailIfMissing: (MediaItemEntity) -> Unit,
     private val settingsRepository: SettingsRepository,
     private val dataSourceFactory: SmbDataSourceFactory,
     private val downloadRepository: DownloadRepository,
@@ -583,7 +584,7 @@ class PlayerViewModel(
         }
 
         checkNextEpisode(item)
-        viewModelScope.launch { loadThumbnailFrames(item.stableId) }
+        viewModelScope.launch { loadThumbnailFrames(item) }
     }
 
     /**
@@ -748,9 +749,26 @@ class PlayerViewModel(
         return intent.takeIf { it.resolvesToRealApp() }
     }
 
-    private suspend fun loadThumbnailFrames(stableId: String) {
+    /**
+     * No more proactive whole-library background scan (removed [com.illusion.app.work.ThumbnailGenerationWorker]) -
+     * a sprite is generated lazily the first time each item is opened, and cached from then on.
+     * Can't generate it synchronously right here though: by this point [PlaybackActivity.isActive]
+     * is already true for *this* item's own playback (set in [playItem] just before this is
+     * called), and [com.illusion.app.data.scan.ThumbnailGenerator] deliberately no-ops while any
+     * playback is active - it shares the one hardware video decoder with real playback and
+     * contending for it was confirmed on-device to blank the video. So a missing sprite instead
+     * just kicks off [generateThumbnailIfMissing] (runs on an application-scoped coroutine, not
+     * [viewModelScope], so it survives this screen closing) - it'll actually generate once
+     * PlaybackActivity.isActive goes back to false, i.e. once nothing is playing. This session's
+     * own scrub bar simply has no preview thumbnails; the next time this item is opened, it will.
+     */
+    private suspend fun loadThumbnailFrames(item: MediaItemEntity) {
+        val stableId = item.stableId
         val frames = withContext(Dispatchers.IO) {
-            val sprite = thumbnailRepository.getForItem(stableId) ?: return@withContext null
+            val sprite = thumbnailRepository.getForItem(stableId) ?: run {
+                generateThumbnailIfMissing(item)
+                return@withContext null
+            }
             val sheet = BitmapFactory.decodeFile(sprite.filePath) ?: return@withContext null
             val sliced = (0 until sprite.frameCount).mapNotNull { index ->
                 val col = index % sprite.columns
@@ -1143,6 +1161,7 @@ class PlayerViewModel(
             libraryRepository: LibraryRepository,
             watchProgressRepository: WatchProgressRepository,
             thumbnailRepository: ThumbnailRepository,
+            generateThumbnailIfMissing: (MediaItemEntity) -> Unit,
             settingsRepository: SettingsRepository,
             dataSourceFactory: SmbDataSourceFactory,
             downloadRepository: DownloadRepository,
@@ -1155,6 +1174,7 @@ class PlayerViewModel(
                     libraryRepository,
                     watchProgressRepository,
                     thumbnailRepository,
+                    generateThumbnailIfMissing,
                     settingsRepository,
                     dataSourceFactory,
                     downloadRepository,

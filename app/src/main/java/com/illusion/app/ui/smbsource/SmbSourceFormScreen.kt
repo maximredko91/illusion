@@ -39,8 +39,6 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import com.illusion.app.R
-import com.illusion.app.domain.model.UiMode
-import com.illusion.app.ui.common.LocalUiMode
 import com.illusion.app.ui.common.dpadFieldNavigation
 import com.illusion.app.ui.common.focusHighlight
 
@@ -104,15 +102,13 @@ fun SmbSourceFormFields(
             suggestions = shareSuggestions,
             modifier = Modifier.fillMaxWidth()
         )
-        // Collapsed by default on TV, expanded by default on phone (unchanged behavior there) -
-        // these four fields are all optional-in-practice (root path only matters when videos
-        // aren't at the share's own root; domain/username/password only for a non-guest share),
-        // but on a real Android TV every field is a full trip through the on-screen keyboard even
-        // to skip past it, per the user's own feedback that tabbing through all seven in a row
-        // (D-pad up/down, plus opening/closing the keyboard for each) before ever reaching
-        // Test/Save was tedious for fields most setups never touch.
-        val uiMode = LocalUiMode.current
-        var advancedExpanded by remember { mutableStateOf(uiMode != UiMode.TV) }
+        // Collapsed by default everywhere (phone and TV alike, per feedback) - these four fields
+        // are all optional-in-practice (root path only matters when videos aren't at the share's
+        // own root; domain/username/password only for a non-guest share), and most setups never
+        // touch them. Was expanded-by-default on phone until now - collapsed-by-default on TV
+        // was already the case (see historical reasoning: on a real Android TV every field is a
+        // full trip through the on-screen keyboard even to skip past it).
+        var advancedExpanded by remember { mutableStateOf(false) }
         // Declared here (not next to the password field itself, further down) so both that field
         // and the Save button below can reset it back to hidden.
         var passwordVisible by remember { mutableStateOf(false) }

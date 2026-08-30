@@ -42,3 +42,31 @@ private val RU_TO_EN_GENRES: Map<String, String> = mapOf(
 
 /** Genre only, not a general-purpose translator - returns null for anything not a known genre synonym. */
 fun russianGenreToEnglish(query: String): String? = RU_TO_EN_GENRES[query.trim().lowercase()]
+
+/** Reverse of [RU_TO_EN_GENRES], one-to-many (several Russian spellings can map to the same English name, e.g. "боевик"/"экшн" -> "Action"). */
+private val EN_TO_RU_GENRES: Map<String, List<String>> = RU_TO_EN_GENRES.entries.groupBy({ it.value }, { it.key })
+
+/**
+ * Normalizes a genre string to its canonical (TMDB English) name if it's a known synonym in
+ * either language, so items scraped in different languages (e.g. this app's own TMDB add-media
+ * flow, English, vs. a Russian-scraped .nfo) still count as "the same genre" when scoring
+ * similarity - see [LibraryRepository.getSimilar]. Falls back to the trimmed original for
+ * anything outside the fixed ~19-genre vocabulary.
+ */
+fun canonicalGenre(name: String): String {
+    val trimmed = name.trim()
+    return russianGenreToEnglish(trimmed) ?: trimmed
+}
+
+/**
+ * Every known spelling of [name]'s genre across both languages - itself plus its English
+ * translation if [name] is a Russian synonym, or itself plus every Russian synonym if [name] is
+ * already the canonical English name. Used to widen a genre-based SQL prefilter so it isn't blind
+ * to a differently-scraped candidate meaning the same genre - the precise match still happens
+ * afterward via [canonicalGenre].
+ */
+fun genreSynonyms(name: String): List<String> {
+    val trimmed = name.trim()
+    val english = russianGenreToEnglish(trimmed)
+    return if (english != null) listOf(trimmed, english) else listOf(trimmed) + EN_TO_RU_GENRES[trimmed].orEmpty()
+}

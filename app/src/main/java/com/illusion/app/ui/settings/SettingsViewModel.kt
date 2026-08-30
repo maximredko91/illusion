@@ -21,7 +21,6 @@ import com.illusion.app.data.settings.SettingsRepository
 import com.illusion.app.domain.model.PlayerMode
 import com.illusion.app.domain.model.SortOrder
 import com.illusion.app.domain.model.UiMode
-import com.illusion.app.work.WorkScheduler
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -54,7 +53,6 @@ class SettingsViewModel(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val requireChargingForHeavyTasks: Flow<Boolean> = settingsRepository.requireChargingForHeavyTasks
-    val rescanIntervalHours: Flow<Int> = settingsRepository.rescanIntervalHours
     val imageCacheLimitMb: Flow<Int> = settingsRepository.imageCacheLimitMb
 
     fun setImageCacheLimitMb(value: Int) {
@@ -118,8 +116,7 @@ class SettingsViewModel(
      * True factory reset - unlike [resetToDefaults] (settings/preferences only), this wipes every
      * piece of app data: SMB sources + their stored credentials, the whole library index,
      * favorites/watch history, downloaded files, cached thumbnails/posters, the dev-access
-     * password, and finally the settings themselves. Also cancels the periodic background rescan
-     * (nothing left for it to scan against until a source is re-added).
+     * password, and finally the settings themselves.
      */
     fun factoryReset(context: Context) {
         viewModelScope.launch {
@@ -132,7 +129,6 @@ class SettingsViewModel(
             devAccessStore.clearAll()
             settingsRepository.resetToDefaults()
             withContext(Dispatchers.IO) { context.cacheDir.deleteRecursively() }
-            WorkScheduler.cancelPeriodicScan(context)
             refreshCacheSize(context)
             refreshDownloadsSize()
         }
@@ -158,33 +154,12 @@ class SettingsViewModel(
         viewModelScope.launch { smbSourceRepository.deleteSource(source) }
     }
 
-    fun setRequireChargingForHeavyTasks(context: Context, value: Boolean) {
-        viewModelScope.launch {
-            settingsRepository.setRequireChargingForHeavyTasks(value)
-            rescheduleIfEnabled(context)
-        }
-    }
-
-    /** [hours] <= 0 disables periodic rescanning entirely. */
-    fun setRescanIntervalHours(context: Context, hours: Int) {
-        viewModelScope.launch {
-            settingsRepository.setRescanIntervalHours(hours)
-            rescheduleIfEnabled(context)
-        }
+    fun setRequireChargingForHeavyTasks(value: Boolean) {
+        viewModelScope.launch { settingsRepository.setRequireChargingForHeavyTasks(value) }
     }
 
     fun setUiMode(mode: UiMode) {
         viewModelScope.launch { settingsRepository.setUiMode(mode) }
-    }
-
-    private suspend fun rescheduleIfEnabled(context: Context) {
-        val hours = settingsRepository.rescanIntervalHours.first()
-        if (hours <= 0) {
-            WorkScheduler.cancelPeriodicScan(context)
-        } else {
-            val requireCharging = settingsRepository.requireChargingForHeavyTasks.first()
-            WorkScheduler.schedulePeriodicScan(context, hours, requireCharging)
-        }
     }
 
     fun refreshCacheSize(context: Context) {

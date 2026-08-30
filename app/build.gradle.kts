@@ -57,8 +57,8 @@ android {
         // 2026-08-25 once the repo went public and beta testers started using the in-app updater -
         // restarted the counter at beta1 rather than continuing the alpha sequence's number, since
         // jumping straight to "beta73" would misleadingly imply 72 prior beta builds existed.
-        versionCode = 114
-        versionName = "0.1.0-beta41"
+        versionCode = 115
+        versionName = "0.1.0-beta42"
 
         // The real bulk of a universal APK's size turned out to be native .so libs bundled per-ABI
         // (ML Kit's on-device tag-translation library alone is ~17MB *per architecture*) - R8
@@ -151,6 +151,13 @@ configurations.all {
 dependencies {
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.activity.compose)
+    // Только ради AppCompatDelegate.setDefaultNightMode() - системный SplashScreen (см.
+    // Theme.Illusion.Splash) резолвит values/values-night по РЕАЛЬНОЙ теме ОС, а не по
+    // выбору пользователя внутри приложения (тот применяется только на уровне Compose,
+    // см. IllusionApplication.onCreate()) - без этого на устройстве, где системная тема
+    // светлая (типично для ATV-приставок, где нет даже переключателя тёмной темы), заставка
+    // всегда светлая, даже если в приложении выбрана тёмная.
+    implementation(libs.androidx.appcompat)
     implementation(libs.androidx.compose.material3)
     implementation(libs.androidx.compose.material.icons.core)
     implementation(libs.androidx.compose.material.icons.extended)

@@ -27,10 +27,11 @@ object SmbImageUri {
         return Parsed(sourceId, filePath)
     }
 
-    /** [posterOrFanartPath] as stored on [com.illusion.app.data.local.entity.MediaItemEntity] - a remote URL is passed straight through, a share-relative path is wrapped as a Coil model. */
+    /** [posterOrFanartPath] as stored on [com.illusion.app.data.local.entity.MediaItemEntity] - a remote URL or a local content:// Uri (a recovered orphaned download's own copy, see DownloadRepository.recoverOrphanedDownloads) is passed straight through, a share-relative path is wrapped as a Coil model. */
     fun resolve(sourceId: Long, posterOrFanartPath: String?): Any? = when {
         posterOrFanartPath.isNullOrBlank() -> null
         posterOrFanartPath.startsWith("http://") || posterOrFanartPath.startsWith("https://") -> posterOrFanartPath
+        posterOrFanartPath.startsWith("content://") -> posterOrFanartPath
         else -> build(sourceId, posterOrFanartPath)
     }
 }

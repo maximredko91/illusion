@@ -7,6 +7,7 @@ import androidx.work.WorkerParameters
 import androidx.work.workDataOf
 import com.illusion.app.R
 import com.illusion.app.data.scan.LibraryScanner
+import com.illusion.app.data.scan.NewContentNotifier
 import com.illusion.app.data.settings.SettingsRepository
 import kotlinx.coroutines.flow.first
 
@@ -45,7 +46,6 @@ class LibraryScanWorker(
             return Result.failure(workDataOf(KEY_ERROR to message))
         }
         val requireCharging = settingsRepository.requireChargingForHeavyTasks.first()
-        WorkScheduler.enqueueThumbnailGeneration(applicationContext, requireCharging)
         if (settingsRepository.posterCachingEnabled.first()) {
             WorkScheduler.enqueuePosterPreload(applicationContext, requireCharging)
         }
@@ -62,10 +62,18 @@ class LibraryScanWorker(
             applicationContext.getString(R.string.scan_notification_result_success_title),
             resultText
         )
+        // Any completed rescan (not just one started from the banner itself) already picked up
+        // whatever was new - the banner shouldn't keep nagging about it.
+        NewContentNotifier.clear()
         return Result.success(
             workDataOf(
                 KEY_TOTAL_INDEXED to result.totalIndexed,
-                KEY_PARTIAL_ERROR to partialErrorMessage
+                KEY_PARTIAL_ERROR to partialErrorMessage,
+                // Capped - WorkManager's Data has a ~10KB serialized limit, and stableId is a
+                // 64-char SHA-256 hex string; a huge first-ever scan (thousands of new items)
+                // would blow past that anyway and doesn't need this "что добавилось" summary as
+                // much as a routine incremental rescan (a handful of new episodes/movies) does.
+                KEY_NEWLY_ADDED to result.newlyAddedStableIds.take(MAX_REPORTED_NEWLY_ADDED).toTypedArray()
             )
         )
     }
@@ -74,7 +82,9 @@ class LibraryScanWorker(
         const val KEY_TOTAL_INDEXED = "total_indexed"
         const val KEY_ERROR = "error"
         const val KEY_PARTIAL_ERROR = "partial_error"
+        const val KEY_NEWLY_ADDED = "newly_added"
         /** Input key - see LibraryScanner.scanAll's own KDoc for what this actually does and why it exists. */
         const val KEY_FORCE = "force"
+        private const val MAX_REPORTED_NEWLY_ADDED = 100
     }
 }

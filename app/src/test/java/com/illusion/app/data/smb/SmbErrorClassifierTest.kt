@@ -52,9 +52,13 @@ class SmbErrorClassifierTest {
     }
 
     @Test
-    fun accessDeniedIsClassifiedAsBadCredentials() {
+    fun accessDeniedIsClassifiedAsPermissionsIssueNotBadCredentials() {
+        // STATUS_ACCESS_DENIED means the credentials themselves are fine but this specific
+        // path is off-limits per the NAS's own ACL - deliberately a different (and more
+        // specific) message than STATUS_LOGON_FAILURE, see classifySmbError's own comment.
         val message = classifySmbError(RuntimeException("STATUS_ACCESS_DENIED"))
-        assertEquals("Неверный логин или пароль", message)
+        assertTrue(message.contains("права"))
+        assertTrue(message.contains("STATUS_ACCESS_DENIED"))
     }
 
     @Test
@@ -66,7 +70,7 @@ class SmbErrorClassifierTest {
     @Test
     fun statusCodeMatchingIsCaseInsensitive() {
         val message = classifySmbError(RuntimeException("status_access_denied"))
-        assertEquals("Неверный логин или пароль", message)
+        assertTrue(message.contains("права"))
     }
 
     @Test

@@ -14,12 +14,16 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
@@ -58,8 +62,12 @@ import androidx.lifecycle.repeatOnLifecycle
 import androidx.work.WorkInfo
 import androidx.work.WorkManager
 import com.illusion.app.R
+import com.illusion.app.data.local.entity.MediaItemEntity
+import com.illusion.app.data.repository.LibraryRepository
 import com.illusion.app.data.scan.ScanProgress
+import com.illusion.app.ui.common.PosterCard
 import com.illusion.app.ui.common.focusHighlight
+import com.illusion.app.ui.common.posterCardMinWidth
 import com.illusion.app.work.LibraryScanWorker
 import java.util.UUID
 import kotlinx.coroutines.delay
@@ -71,11 +79,13 @@ private enum class ScanPhase { STARTING, LISTING, INDEXING, SUCCEEDED, FAILED }
 @Composable
 fun ScanProgressScreen(
     workId: String,
+    libraryRepository: LibraryRepository,
     onComplete: () -> Unit,
     /** Leaves this screen for the library while the scan (a WorkManager job, entirely independent of this screen) keeps running in the background - per feedback, someone who just wants to watch something shouldn't be stuck staring at a progress bar until it finishes. */
     onDismiss: () -> Unit,
     /** False for the very first scan straight out of onboarding - the library is still empty, so there's nothing to "watch while it scans" yet. */
     allowDismiss: Boolean = true,
+    onOpenItem: (String) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -96,6 +106,16 @@ fun ScanProgressScreen(
         else -> ScanPhase.INDEXING
     }
     val isScanning = phase != ScanPhase.SUCCEEDED && phase != ScanPhase.FAILED
+
+    // "Что добавилось" row - resolved from the worker's own output (a capped list of stableIds,
+    // see LibraryScanWorker's own KDoc on why it's capped) once the scan actually succeeds, not
+    // fetched eagerly on every recomposition.
+    var newlyAddedItems by remember { mutableStateOf<List<MediaItemEntity>>(emptyList()) }
+    LaunchedEffect(phase == ScanPhase.SUCCEEDED) {
+        if (phase != ScanPhase.SUCCEEDED) return@LaunchedEffect
+        val ids = workInfo?.outputData?.getStringArray(LibraryScanWorker.KEY_NEWLY_ADDED)?.toList().orEmpty()
+        newlyAddedItems = ids.mapNotNull { libraryRepository.getById(it) }
+    }
 
     Scaffold(modifier = modifier) { innerPadding ->
         Box(modifier = Modifier.fillMaxSize()) {
@@ -213,6 +233,26 @@ fun ScanProgressScreen(
                                     textAlign = TextAlign.Center,
                                     modifier = Modifier.fillMaxWidth().padding(top = 4.dp)
                                 )
+                            }
+                            if (newlyAddedItems.isNotEmpty()) {
+                                Text(
+                                    stringResource(R.string.scan_progress_newly_added_title),
+                                    textAlign = TextAlign.Center,
+                                    modifier = Modifier.fillMaxWidth().padding(top = 16.dp)
+                                )
+                                LazyRow(
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    items(newlyAddedItems, key = { it.stableId }) { item ->
+                                        PosterCard(
+                                            item = item,
+                                            onClick = { onOpenItem(item.stableId) },
+                                            modifier = Modifier.width(posterCardMinWidth())
+                                        )
+                                    }
+                                }
                             }
                             com.illusion.app.ui.common.TvAwareButton(
                                 onClick = onComplete,

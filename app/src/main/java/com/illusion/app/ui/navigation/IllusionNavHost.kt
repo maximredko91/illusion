@@ -332,11 +332,10 @@ private fun IllusionNavGraph(app: IllusionApplication, navController: NavHostCon
                     }
                     val hasSources = app.smbSourceRepository.observeSources().first().isNotEmpty()
                     if (hasSources) {
-                        val hours = app.settingsRepository.rescanIntervalHours.first()
-                        if (hours > 0) {
-                            val requireCharging = app.settingsRepository.requireChargingForHeavyTasks.first()
-                            WorkScheduler.schedulePeriodicScan(app, hours, requireCharging)
-                        }
+                        // Fire-and-forget (launch, not awaited) - a real SMB directory walk, even
+                        // a "cheap" one, is still real network latency and must never delay
+                        // opening the app itself. See NewContentNotifier's own KDoc.
+                        launch { com.illusion.app.data.scan.NewContentNotifier.check(app.libraryScanner) }
                     }
                     val target = if (hasSources) Destination.Tabs else Destination.Onboarding
                     navController.navigate(target) {
@@ -367,6 +366,7 @@ private fun IllusionNavGraph(app: IllusionApplication, navController: NavHostCon
                 val route = entry.toRoute<Destination.ScanProgress>()
                 ScanProgressScreen(
                     workId = route.workId,
+                    libraryRepository = app.libraryRepository,
                     allowDismiss = route.allowDismiss,
                     onComplete = {
                         navController.navigate(Destination.Tabs) {
@@ -377,7 +377,8 @@ private fun IllusionNavGraph(app: IllusionApplication, navController: NavHostCon
                         navController.navigate(Destination.Tabs) {
                             popUpTo(Destination.Tabs) { inclusive = true }
                         }
-                    }
+                    },
+                    onOpenItem = { stableId -> navController.navigate(Destination.Details(stableId)) }
                 )
             }
 
@@ -499,6 +500,7 @@ private fun IllusionNavGraph(app: IllusionApplication, navController: NavHostCon
                     libraryRepository = app.libraryRepository,
                     watchProgressRepository = app.watchProgressRepository,
                     thumbnailRepository = app.thumbnailRepository,
+                    generateThumbnailIfMissing = app::generateThumbnailIfMissing,
                     settingsRepository = app.settingsRepository,
                     smbDataSourceFactory = app.smbDataSourceFactory,
                     downloadRepository = app.downloadRepository,
@@ -533,7 +535,6 @@ private fun IllusionNavGraph(app: IllusionApplication, navController: NavHostCon
                 SettingsScreen(
                     sources = sources,
                     requireChargingForHeavyTasks = settingsViewModel.requireChargingForHeavyTasks,
-                    rescanIntervalHours = settingsViewModel.rescanIntervalHours,
                     playerMode = settingsViewModel.playerMode,
                     onPlayerModeChange = settingsViewModel::setPlayerMode,
                     externalPlayerPackage = settingsViewModel.externalPlayerPackage,
@@ -558,9 +559,8 @@ private fun IllusionNavGraph(app: IllusionApplication, navController: NavHostCon
                     themeMode = settingsViewModel.themeMode,
                     onThemeModeChange = settingsViewModel::setThemeMode,
                     onToggleChargingRequirement = { enabled ->
-                        settingsViewModel.setRequireChargingForHeavyTasks(context, enabled)
+                        settingsViewModel.setRequireChargingForHeavyTasks(enabled)
                     },
-                    onRescanIntervalChange = { hours -> settingsViewModel.setRescanIntervalHours(context, hours) },
                     onRescanNow = {
                         val workId = WorkScheduler.enqueueOneTimeScan(context)
                         navController.navigate(Destination.ScanProgress(workId.toString()))
@@ -765,6 +765,8 @@ private fun TabsHost(
             val continueWatching by homeViewModel.continueWatching.collectAsState()
             val randomPicks by homeViewModel.randomPicks.collectAsState()
             val collections by homeViewModel.collections.collectAsState()
+            val hasNewContent by homeViewModel.hasNewContent.collectAsState()
+            val homeContext = LocalContext.current
             HomeScreen(
                 continueWatching = continueWatching,
                 randomPicks = randomPicks,
@@ -775,7 +777,14 @@ private fun TabsHost(
                 onOpenHistory = { navController.navigate(Destination.History) },
                 onOpenDownloads = { navController.navigate(Destination.Downloads) },
                 onOpenSearch = { navController.navigate(Destination.Search()) },
-                onOpenItem = { stableId -> navController.navigate(Destination.Details(stableId)) }
+                onOpenItem = { stableId -> navController.navigate(Destination.Details(stableId)) },
+                hasNewContent = hasNewContent,
+                onRescanNow = {
+                    homeViewModel.dismissNewContentBanner()
+                    val workId = WorkScheduler.enqueueOneTimeScan(homeContext)
+                    navController.navigate(Destination.ScanProgress(workId.toString()))
+                },
+                onDismissNewContentBanner = homeViewModel::dismissNewContentBanner
             )
         } else {
             val libraryViewModel: LibraryViewModel = viewModel(

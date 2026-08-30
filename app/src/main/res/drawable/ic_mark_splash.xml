@@ -17,8 +17,10 @@
         <path android:fillColor="@color/illusion_crimson" android:pathData="M86,21h6a2,2 0 0 1 2,2v62a2,2 0 0 1 -2,2h-6a2,2 0 0 1 -2,-2V23a2,2 0 0 1 2,-2z"/>
         <path android:fillColor="@color/splash_bg" android:pathData="M16.5,25.5h5v7h-5z M16.5,38h5v7h-5z M16.5,50.5h5v7h-5z M16.5,63h5v7h-5z M16.5,75.5h5v7h-5z"/>
         <path android:fillColor="@color/splash_bg" android:pathData="M86.5,25.5h5v7h-5z M86.5,38h5v7h-5z M86.5,50.5h5v7h-5z M86.5,63h5v7h-5z M86.5,75.5h5v7h-5z"/>
-        <path android:fillColor="@color/illusion_ink_on_bg" android:pathData="M34,30h9v48h-9z"/>
-        <path android:fillColor="@color/illusion_ink_on_bg" android:pathData="M65,30h9v48h-9z"/>
-        <path android:fillColor="@color/illusion_ink_on_bg" android:pathData="M43,78v-15L65,30h9v15L52,78z"/>
+        <!-- Все три штриха "И" объединены в один path (было 3 отдельных) - раздельные path
+             одного цвета, стыкующиеся ровно по границе, каждый сглаживается (AA) независимо,
+             из-за чего на стыке проступает тонкий шов фонового цвета. Один path с несколькими
+             subpath растеризуется за один проход, шва не остаётся. -->
+        <path android:fillColor="@color/illusion_ink_on_bg" android:pathData="M34,30h9v48h-9z M65,30h9v48h-9z M43,78v-15L65,30h9v15L52,78z"/>
     </group>
 </vector>

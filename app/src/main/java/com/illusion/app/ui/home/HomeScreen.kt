@@ -16,9 +16,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.History
@@ -33,6 +35,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -60,6 +63,9 @@ fun HomeScreen(
     onOpenDownloads: () -> Unit,
     onOpenSearch: () -> Unit,
     onOpenItem: (String) -> Unit,
+    hasNewContent: Boolean = false,
+    onRescanNow: () -> Unit = {},
+    onDismissNewContentBanner: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     Scaffold(
@@ -126,6 +132,13 @@ fun HomeScreen(
                 .padding(vertical = 16.dp),
             verticalArrangement = Arrangement.spacedBy(24.dp)
         ) {
+            if (hasNewContent) {
+                NewContentBanner(
+                    onRescanNow = onRescanNow,
+                    onDismiss = onDismissNewContentBanner,
+                    modifier = Modifier.padding(horizontal = 16.dp)
+                )
+            }
             if (continueWatching.isNotEmpty()) {
                 MediaCarousel(
                     title = stringResource(R.string.home_continue_watching),
@@ -144,6 +157,42 @@ fun HomeScreen(
             )
             if (collections.isNotEmpty()) {
                 CollectionCarousel(collections = collections, onOpenItem = onOpenItem)
+            }
+        }
+    }
+}
+
+/**
+ * Nudges the user to rescan when [com.illusion.app.data.scan.LibraryScanner.hasNewContent]'s cheap
+ * NAS-listing check (run once on app launch, see the Splash destination in IllusionNavHost) found
+ * a video file not yet in the library index - without this, the only way to notice new content
+ * added outside the app (or via the developer-only add-media flow) is to remember to check
+ * Settings by hand. Dismissible on its own, and also cleared automatically once any rescan
+ * completes by any means (see NewContentNotifier's own KDoc).
+ */
+@Composable
+private fun NewContentBanner(onRescanNow: () -> Unit, onDismiss: () -> Unit, modifier: Modifier = Modifier) {
+    androidx.compose.material3.Card(
+        modifier = modifier.fillMaxWidth(),
+        colors = androidx.compose.material3.CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth().padding(start = 16.dp, top = 8.dp, bottom = 8.dp, end = 4.dp)
+        ) {
+            Text(
+                stringResource(R.string.home_new_content_banner),
+                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                modifier = Modifier.weight(1f)
+            )
+            com.illusion.app.ui.common.TvAwareButton(onClick = onRescanNow) {
+                Text(stringResource(R.string.home_new_content_banner_action))
+            }
+            com.illusion.app.ui.common.TvAwareIconButton(onClick = onDismiss) {
+                Icon(
+                    Icons.Default.Close,
+                    contentDescription = stringResource(R.string.home_new_content_banner_dismiss)
+                )
             }
         }
     }
@@ -230,7 +279,19 @@ private fun MediaCarousel(
                 )
             }
         }
+        // A LazyRow keeps its scroll position across recomposition by default - fine for
+        // continueWatching/collections (their content only ever grows/shrinks in place), but for
+        // a refreshable row (onRefresh != null, i.e. random picks) a scrolled-to-the-end position
+        // stayed scrolled to the end after "Обновить" swapped in a whole new shuffled list, which
+        // read as "nothing happened" since the visible cards were now just whatever landed at
+        // that same index in the new list. Per feedback, only refreshable rows reset to the start
+        // on every new list.
+        val listState = rememberLazyListState()
+        if (onRefresh != null) {
+            LaunchedEffect(items) { listState.scrollToItem(0) }
+        }
         LazyRow(
+            state = listState,
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             contentPadding = PaddingValues(horizontal = 16.dp),
             modifier = Modifier.focusGroup()

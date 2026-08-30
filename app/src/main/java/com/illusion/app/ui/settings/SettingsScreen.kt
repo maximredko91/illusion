@@ -98,14 +98,11 @@ import com.illusion.app.ui.common.toggle
 import com.illusion.app.ui.library.sortLabel
 import kotlinx.coroutines.flow.Flow
 
-private val RESCAN_OPTIONS = listOf(0, 6, 12, 24, 48)
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
     sources: List<SmbSourceEntity>,
     requireChargingForHeavyTasks: Flow<Boolean>,
-    rescanIntervalHours: Flow<Int>,
     playerMode: Flow<com.illusion.app.domain.model.PlayerMode>,
     onPlayerModeChange: (com.illusion.app.domain.model.PlayerMode) -> Unit,
     externalPlayerPackage: Flow<String?>,
@@ -130,7 +127,6 @@ fun SettingsScreen(
     themeMode: Flow<com.illusion.app.domain.model.ThemeMode>,
     onThemeModeChange: (com.illusion.app.domain.model.ThemeMode) -> Unit,
     onToggleChargingRequirement: (Boolean) -> Unit,
-    onRescanIntervalChange: (Int) -> Unit,
     onRescanNow: () -> Unit,
     onRescanForceNow: () -> Unit,
     isScanRunning: Boolean,
@@ -194,7 +190,6 @@ fun SettingsScreen(
         com.illusion.app.domain.model.ThemeMode.DARK, com.illusion.app.domain.model.ThemeMode.BLACK -> true
     }
     val chargingOnly by requireChargingForHeavyTasks.collectAsState(initial = true)
-    val rescanHours by rescanIntervalHours.collectAsState(initial = 0)
     val downloadsFolder by downloadsFolderUri.collectAsState(initial = null)
     // Deleting a source used to fire straight from the trash icon with no confirmation - the most
     // destructive action on this whole screen (orphans everything that source scanned into the
@@ -289,6 +284,7 @@ fun SettingsScreen(
     var devPasswordError by remember { mutableStateOf(false) }
     var showResetConfirm by remember { mutableStateOf(false) }
     var showFactoryResetConfirm by remember { mutableStateOf(false) }
+    var showTvModeWarning by remember { mutableStateOf(false) }
 
     Scaffold(
         modifier = modifier,
@@ -849,19 +845,27 @@ fun SettingsScreen(
                             )
                             SettingsDivider()
                             val tvRowSource = remember { MutableInteractionSource() }
+                            // Switching TO TV mode needs a confirmation first (not switching away
+                            // from it, and not re-selecting it while already on it) - tv-material
+                            // components only respond to a D-pad Enter while already focused, never
+                            // to a plain touch tap (see TvAwareControls.kt's own KDoc) - a
+                            // touch-only device stuck in TV mode can't tap its way back out of this
+                            // exact screen either, since Settings' own buttons switch to tv-material
+                            // the instant this takes effect. Per feedback.
+                            val requestTvMode = { if (currentUiMode == UiMode.TV) Unit else showTvModeWarning = true }
                             ListItem(
                                 headlineContent = { Text(stringResource(R.string.settings_ui_mode_tv)) },
                                 trailingContent = {
                                     RadioButton(
                                         selected = currentUiMode == UiMode.TV,
-                                        onClick = { onUiModeChange(UiMode.TV) }
+                                        onClick = requestTvMode
                                     )
                                 },
                                 colors = ListItemDefaults.colors(containerColor = Color.Transparent),
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .focusHighlight(tvRowSource)
-                                    .clickable(interactionSource = tvRowSource, indication = LocalIndication.current) { onUiModeChange(UiMode.TV) }
+                                    .clickable(interactionSource = tvRowSource, indication = LocalIndication.current, onClick = requestTvMode)
                             )
                         }
                         // Only meaningful in TV mode (IllusionNavHost only ever applies this
@@ -958,13 +962,6 @@ fun SettingsScreen(
                                     modifier = Modifier.fillMaxWidth()
                                 )
                             }
-                            SettingsDivider()
-                            ListItem(
-                                headlineContent = { Text(stringResource(R.string.settings_rescan_interval)) },
-                                trailingContent = { RescanIntervalMenu(rescanHours, onRescanIntervalChange) },
-                                colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-                                modifier = Modifier.fillMaxWidth()
-                            )
                             SettingsDivider()
                             ListItem(
                                 headlineContent = { Text(stringResource(R.string.settings_charging_only)) },
@@ -1154,6 +1151,7 @@ fun SettingsScreen(
                         SettingsGroup(modifier = Modifier.padding(bottom = 24.dp)) {
                             ListItem(
                                 headlineContent = { Text(stringResource(R.string.settings_backup)) },
+                                supportingContent = { Text(stringResource(R.string.settings_backup_description)) },
                                 trailingContent = {
                                     Row {
                                         val exportSource = remember { MutableInteractionSource() }
@@ -1333,6 +1331,24 @@ fun SettingsScreen(
             },
             dismissButton = {
                 TextButton(onClick = { showResetConfirm = false }) { Text(stringResource(R.string.action_cancel)) }
+            }
+        )
+    }
+
+    if (showTvModeWarning) {
+        AlertDialog(
+            onDismissRequest = { showTvModeWarning = false },
+            title = { Text(stringResource(R.string.settings_ui_mode_tv_warning_title)) },
+            text = { Text(stringResource(R.string.settings_ui_mode_tv_warning_message)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    haptics.reject()
+                    onUiModeChange(UiMode.TV)
+                    showTvModeWarning = false
+                }) { Text(stringResource(R.string.settings_ui_mode_tv_warning_confirm)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showTvModeWarning = false }) { Text(stringResource(R.string.action_cancel)) }
             }
         )
     }
@@ -1574,35 +1590,6 @@ private fun DefaultSortOrderMenu(current: SortOrder, onChange: (SortOrder) -> Un
         }
     }
 }
-
-@Composable
-private fun RescanIntervalMenu(hours: Int, onChange: (Int) -> Unit) {
-    var expanded by remember { mutableStateOf(false) }
-    Box {
-        val triggerSource = remember { MutableInteractionSource() }
-        TvAwareOutlinedButton(onClick = { expanded = true }) {
-            Text(rescanLabel(hours))
-        }
-        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            RESCAN_OPTIONS.forEach { option ->
-                val itemSource = remember { MutableInteractionSource() }
-                DropdownMenuItem(
-                    text = { Text(rescanLabel(option)) },
-                    onClick = {
-                        onChange(option)
-                        expanded = false
-                    },
-                    interactionSource = itemSource,
-                    modifier = Modifier.focusHighlight(itemSource)
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun rescanLabel(hours: Int): String =
-    if (hours <= 0) stringResource(R.string.settings_rescan_off) else stringResource(R.string.settings_rescan_hours, hours)
 
 private val TV_OVERSCAN_MARGIN_OPTIONS = listOf(0, 2, 4, 6, 8, 10)
 

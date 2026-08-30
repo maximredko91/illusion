@@ -61,7 +61,7 @@
         android:theme="@style/Theme.Illusion">
         <!-- IllusionApplication supplies a custom WorkerFactory (see Configuration.Provider) - the
              default WorkManager auto-initializer must be removed or it silently wins, leaving
-             LibraryScanWorker/ThumbnailGenerationWorker to be built via the no-arg default
+             LibraryScanWorker/DownloadWorker to be built via the no-arg default
              factory, which fails since they take injected dependencies, not a bare constructor. -->
         <provider
             android:name="androidx.startup.InitializationProvider"

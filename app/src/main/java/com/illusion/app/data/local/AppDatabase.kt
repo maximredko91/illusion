@@ -32,7 +32,7 @@ import com.illusion.app.data.local.entity.WatchProgressEntity
         DownloadEntity::class,
         AudioTrackEntity::class
     ],
-    version = 19
+    version = 20
 )
 @TypeConverters(Converters::class)
 abstract class AppDatabase : RoomDatabase() {
@@ -232,6 +232,18 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        // DownloadWorker now also copies poster.jpg/fanart.jpg alongside the video (small SMB
+        // reads) so a download recovered after a data wipe/reinstall (recoverOrphanedDownloads,
+        // where there's no SMB source left to fetch a poster from) still has one - see
+        // DownloadEntity's own KDoc. Null for every pre-existing row, same "not fetched yet"
+        // convention as introStartMs/outroStartMs.
+        private val MIGRATION_19_20 = object : Migration(19, 20) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `downloads` ADD COLUMN `posterUri` TEXT")
+                db.execSQL("ALTER TABLE `downloads` ADD COLUMN `fanartUri` TEXT")
+            }
+        }
+
         private val MIGRATION_9_10 = object : Migration(9, 10) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("CREATE INDEX IF NOT EXISTS `index_media_items_category` ON `media_items` (`category`)")
@@ -330,7 +342,7 @@ abstract class AppDatabase : RoomDatabase() {
                     context.applicationContext,
                     AppDatabase::class.java,
                     "illusion.db"
-                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18, MIGRATION_18_19).build().also { instance = it }
+                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18, MIGRATION_18_19, MIGRATION_19_20).build().also { instance = it }
             }
     }
 }
