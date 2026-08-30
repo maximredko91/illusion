@@ -34,11 +34,11 @@ import com.illusion.app.domain.model.UiMode
  * changes on the actual TV Box hardware, not by tapping TV mode on a phone.
  */
 @Composable
-fun TvAwareSwitch(checked: Boolean, onCheckedChange: (Boolean) -> Unit, modifier: Modifier = Modifier) {
+fun TvAwareSwitch(checked: Boolean, onCheckedChange: (Boolean) -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true) {
     if (LocalUiMode.current == UiMode.TV) {
-        androidx.tv.material3.Switch(checked = checked, onCheckedChange = onCheckedChange, modifier = modifier)
+        androidx.tv.material3.Switch(checked = checked, onCheckedChange = onCheckedChange, enabled = enabled, modifier = modifier)
     } else {
-        Switch(checked = checked, onCheckedChange = onCheckedChange, modifier = modifier)
+        Switch(checked = checked, onCheckedChange = onCheckedChange, enabled = enabled, modifier = modifier)
     }
 }
 

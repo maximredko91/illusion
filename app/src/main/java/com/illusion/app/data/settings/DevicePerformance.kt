@@ -11,16 +11,26 @@ import android.content.Context
  * misses.
  */
 /** The raw signals behind [DevicePerformance.classify], for the Settings note showing the user which class their own device landed in - not just the final yes/no. */
-data class DeviceClass(val isLowEnd: Boolean, val coreCount: Int, val isLowRamDevice: Boolean)
+data class DeviceClass(val isLowEnd: Boolean, val coreCount: Int, val totalRamMb: Long, val isLowRamDevice: Boolean)
 
 object DevicePerformance {
-    private const val LOW_CORE_COUNT_THRESHOLD = 4
+    // Core count alone turned out to be a weak/misleading signal - plenty of genuinely weak
+    // budget phones ship 8 cheap cores, and plenty of capable ones ship 4-6 fast ones (per
+    // feedback). RAM total is a far better cheap proxy for "can this render smoothly" than core
+    // count - there's no public, permission-free API for the actual CPU model/tier, so total RAM
+    // plus the OS's own isLowRamDevice flag (which factors in more than raw RAM - see its own
+    // platform docs) are what this settles for instead.
+    private const val LOW_RAM_MB_THRESHOLD = 3072L
 
     fun classify(context: Context): DeviceClass {
         val activityManager = context.applicationContext.getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager
-        val lowRam = activityManager?.isLowRamDevice == true
+        val lowRamFlag = activityManager?.isLowRamDevice == true
+        val memoryInfo = ActivityManager.MemoryInfo()
+        activityManager?.getMemoryInfo(memoryInfo)
+        val totalRamMb = memoryInfo.totalMem / (1024 * 1024)
         val coreCount = Runtime.getRuntime().availableProcessors()
-        return DeviceClass(isLowEnd = lowRam || coreCount <= LOW_CORE_COUNT_THRESHOLD, coreCount = coreCount, isLowRamDevice = lowRam)
+        val isLowEnd = lowRamFlag || (totalRamMb in 1..LOW_RAM_MB_THRESHOLD)
+        return DeviceClass(isLowEnd = isLowEnd, coreCount = coreCount, totalRamMb = totalRamMb, isLowRamDevice = lowRamFlag)
     }
 
     fun isLowEndDevice(context: Context): Boolean = classify(context).isLowEnd

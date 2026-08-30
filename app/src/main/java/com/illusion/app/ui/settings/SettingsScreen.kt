@@ -44,6 +44,8 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.LibraryAdd
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.PlayCircle
+import androidx.compose.material.icons.filled.Smartphone
+import androidx.compose.material.icons.filled.Tv
 import androidx.compose.material.icons.filled.RestartAlt
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Storage
@@ -752,12 +754,29 @@ fun SettingsScreen(
                             // on. Dead, confusing toggles on TV rather than hidden clutter.
                             if (currentUiMode != UiMode.TV) {
                             SettingsDivider()
+                            // Economical performance mode already force-mutes real haptic output
+                            // (IllusionNavHost's gated HapticFeedback - see PerformanceMode's own
+                            // KDoc) regardless of this switch's own state - leaving the switch
+                            // itself interactive read as "this setting didn't actually do
+                            // anything" since flipping it produced no felt difference while
+                            // economical was active. Disabled outright instead, same fix as the
+                            // player's sharpen toggle.
+                            val hapticsDisabledByPerformanceMode = com.illusion.app.ui.common.LocalEconomicalMode.current
                             ListItem(
                                 headlineContent = { Text(stringResource(R.string.settings_haptics)) },
-                                supportingContent = { Text(stringResource(R.string.settings_haptics_description)) },
+                                supportingContent = {
+                                    Text(
+                                        if (hapticsDisabledByPerformanceMode) {
+                                            stringResource(R.string.settings_haptics_disabled_by_performance_mode)
+                                        } else {
+                                            stringResource(R.string.settings_haptics_description)
+                                        }
+                                    )
+                                },
                                 trailingContent = {
                                     TvAwareSwitch(
                                         checked = hapticsOn,
+                                        enabled = !hapticsDisabledByPerformanceMode,
                                         onCheckedChange = { enabled ->
                                             // Fires regardless of direction (even turning off) -
                                             // this Switch's own toggle click is itself gated by
@@ -919,24 +938,24 @@ fun SettingsScreen(
                     }
 
                     "screen_mode" -> {
-                        SettingsGroup {
+                        // Was two bare ListItems (title + radio, no icon, no description) glued
+                        // into one card by a divider - per feedback that read as plain/unclear
+                        // next to the rest of Settings. Each option now its own card (same
+                        // one-option-per-card separation "Сброс" uses) with a leading icon in the
+                        // same tonal-container style as CategoryRow's own leading icon, plus a
+                        // one-line description of what the mode actually means.
+                        SettingsGroup(modifier = Modifier.padding(bottom = 12.dp)) {
                             val phoneRowSource = remember { MutableInteractionSource() }
-                            ListItem(
-                                headlineContent = { Text(stringResource(R.string.settings_ui_mode_phone)) },
-                                trailingContent = {
-                                    RadioButton(
-                                        selected = currentUiMode == UiMode.PHONE,
-                                        onClick = { onUiModeChange(UiMode.PHONE) }
-                                    )
-                                },
-                                colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .focusHighlight(phoneRowSource)
-                                    .clickable(interactionSource = phoneRowSource, indication = LocalIndication.current) { onUiModeChange(UiMode.PHONE) }
+                            ScreenModeOptionRow(
+                                title = stringResource(R.string.settings_ui_mode_phone),
+                                description = stringResource(R.string.settings_ui_mode_phone_description),
+                                icon = Icons.Default.Smartphone,
+                                selected = currentUiMode == UiMode.PHONE,
+                                interactionSource = phoneRowSource,
+                                onClick = { onUiModeChange(UiMode.PHONE) }
                             )
-                            SettingsDivider()
-                            val tvRowSource = remember { MutableInteractionSource() }
+                        }
+                        SettingsGroup {
                             // Switching TO TV mode needs a confirmation first (not switching away
                             // from it, and not re-selecting it while already on it) - tv-material
                             // components only respond to a D-pad Enter while already focused, never
@@ -945,19 +964,14 @@ fun SettingsScreen(
                             // exact screen either, since Settings' own buttons switch to tv-material
                             // the instant this takes effect. Per feedback.
                             val requestTvMode = { if (currentUiMode == UiMode.TV) Unit else showTvModeWarning = true }
-                            ListItem(
-                                headlineContent = { Text(stringResource(R.string.settings_ui_mode_tv)) },
-                                trailingContent = {
-                                    RadioButton(
-                                        selected = currentUiMode == UiMode.TV,
-                                        onClick = requestTvMode
-                                    )
-                                },
-                                colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .focusHighlight(tvRowSource)
-                                    .clickable(interactionSource = tvRowSource, indication = LocalIndication.current, onClick = requestTvMode)
+                            val tvRowSource = remember { MutableInteractionSource() }
+                            ScreenModeOptionRow(
+                                title = stringResource(R.string.settings_ui_mode_tv),
+                                description = stringResource(R.string.settings_ui_mode_tv_description),
+                                icon = Icons.Default.Tv,
+                                selected = currentUiMode == UiMode.TV,
+                                interactionSource = tvRowSource,
+                                onClick = requestTvMode
                             )
                         }
                         // Only meaningful in TV mode (IllusionNavHost only ever applies this
@@ -994,9 +1008,9 @@ fun SettingsScreen(
                                 val deviceClass = remember { com.illusion.app.data.settings.DevicePerformance.classify(context) }
                                 Text(
                                     if (deviceClass.isLowEnd) {
-                                        stringResource(R.string.settings_performance_device_class_low, deviceClass.coreCount)
+                                        stringResource(R.string.settings_performance_device_class_low, deviceClass.totalRamMb)
                                     } else {
-                                        stringResource(R.string.settings_performance_device_class_normal, deviceClass.coreCount)
+                                        stringResource(R.string.settings_performance_device_class_normal, deviceClass.totalRamMb)
                                     },
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -1461,6 +1475,43 @@ private fun categoryTitle(key: String): String = when (key) {
     "reset" -> stringResource(R.string.settings_reset_section)
     "about" -> stringResource(R.string.settings_about_section)
     else -> stringResource(R.string.settings_title)
+}
+
+/** One radio-selectable Phone/TV option on "Режим экрана" - same leading tonal-icon-container look as [CategoryRow], own card per option like "Сброс"'s two cards, plus a one-line description (neither existed before, per feedback). */
+@Composable
+private fun ScreenModeOptionRow(
+    title: String,
+    description: String,
+    icon: ImageVector,
+    selected: Boolean,
+    interactionSource: MutableInteractionSource,
+    onClick: () -> Unit
+) {
+    ListItem(
+        headlineContent = {
+            Column {
+                Text(title)
+                Text(description, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        },
+        leadingContent = {
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .clip(androidx.compose.foundation.shape.RoundedCornerShape(12.dp))
+                    .background(MaterialTheme.colorScheme.primaryContainer),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimaryContainer, modifier = Modifier.size(22.dp))
+            }
+        },
+        trailingContent = { RadioButton(selected = selected, onClick = onClick) },
+        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+        modifier = Modifier
+            .fillMaxWidth()
+            .focusHighlight(interactionSource)
+            .clickable(interactionSource = interactionSource, indication = LocalIndication.current, onClick = onClick)
+    )
 }
 
 /** One row on the top-level settings screen - tapping it navigates into that category's own full-screen content (or, for Cache, straight to its own real screen). */

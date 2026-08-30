@@ -18,6 +18,9 @@ import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.offset
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.WindowInsets
@@ -230,6 +233,15 @@ fun PlayerScreen(
     var sharpenToggleLabel by remember { mutableStateOf<String?>(null) }
     var showAspectRatioBlockedDialog by remember { mutableStateOf(false) }
     var playerViewRef by remember { mutableStateOf<PlayerView?>(null) }
+    // The seek-drag toast (GestureLayer, a full-screen sibling of this Column) used to center on
+    // the TRUE screen center via its own root Box, while CenterTransportControls below centers on
+    // the narrower area BETWEEN the top/bottom bars - two different points whenever the bars are
+    // showing, most visible in landscape where they eat a much bigger share of the height (real
+    // report: the dark seek-time backdrop sat visibly above the play/pause icon it should line up
+    // with). Measuring both bars' real heights lets GestureLayer apply the same offset
+    // CenterTransportControls effectively already gets "for free" from being nested between them.
+    var topBarHeightPx by remember { mutableIntStateOf(0) }
+    var bottomBarHeightPx by remember { mutableIntStateOf(0) }
 
     val fitLabel = stringResource(R.string.player_aspect_ratio_fit)
     val zoomLabel = stringResource(R.string.player_aspect_ratio_zoom)
@@ -296,9 +308,21 @@ fun PlayerScreen(
 
     // AspectRatioFrameLayout's own measure pass usually re-scales the video surface on rotation,
     // but when playback is paused (no new decoder frames arriving) that relayout can be missed -
-    // force one explicitly so a paused frame isn't left stretched to the pre-rotation size.
+    // a bare requestLayout() alone wasn't enough (confirmed on-device: repeated rotation could
+    // leave the video rendered as a small rectangle, or briefly black). AspectRatioFrameLayout's
+    // own aspect ratio field is only ever set from a Player.Listener's onVideoSizeChanged
+    // callback, not from a plain View relayout - requestLayout() re-measures with whatever
+    // aspect ratio it already has, which can be stale/wrong after several rotations in a row.
+    // Detaching and reattaching the player forces PlayerView to re-bind its video output to the
+    // surface from scratch, which re-fires that video-size callback and rebuilds the correct
+    // aspect ratio and surface size together instead of trusting stale state.
     val configuration = LocalConfiguration.current
     LaunchedEffect(configuration.orientation) {
+        playerViewRef?.let { view ->
+            val boundPlayer = view.player
+            view.player = null
+            view.player = boundPlayer
+        }
         playerViewRef?.requestLayout()
     }
 
@@ -445,6 +469,11 @@ fun PlayerScreen(
                 onSingleTap = { controlsVisible = !controlsVisible },
                 onDoubleTapSeek = viewModel::seekBy,
                 onSeekByCommit = viewModel::seekBy,
+                // Only meaningful while the bars (and so CenterTransportControls' own off-true-
+                // center position) are actually showing - with controls hidden there's no play/
+                // pause icon to line up with, and GestureLayer's own true-screen-center is already
+                // correct then.
+                centerToastOffsetPx = if (controlsVisible) (topBarHeightPx - bottomBarHeightPx) / 2 else 0,
                 modifier = Modifier.fillMaxSize()
             )
         }
@@ -517,6 +546,7 @@ fun PlayerScreen(
                         .fillMaxSize()
                         .windowInsetsPadding(WindowInsets.safeDrawing)
                 ) {
+                    Box(modifier = Modifier.onSizeChanged { topBarHeightPx = it.height }) {
                     TopGradientBar(
                         title = uiState.title,
                         episodeLabel = uiState.episodeLabel,
@@ -536,6 +566,7 @@ fun PlayerScreen(
                         onSetSleepTimer = { duration -> bumpInteraction(); viewModel.setSleepTimer(duration) },
                         onCancelSleepTimer = { bumpInteraction(); viewModel.cancelSleepTimer() }
                     )
+                    }
                     Box(modifier = Modifier.fillMaxSize().weight(1f), contentAlignment = Alignment.Center) {
                         // Both used to render unconditionally, stacked on the exact same center
                         // point - a bare spinner is thin enough that the overlap with the play
@@ -557,6 +588,7 @@ fun PlayerScreen(
                             )
                         }
                     }
+                    Box(modifier = Modifier.onSizeChanged { bottomBarHeightPx = it.height }) {
                     BottomGradientBar(
                         currentPositionMs = uiState.currentPositionMs,
                         durationMs = uiState.durationMs,
@@ -568,6 +600,7 @@ fun PlayerScreen(
                         onNextEpisode = { bumpInteraction(); viewModel.playNext() },
                         onToggleLock = { bumpInteraction(); isLocked = true; lockIconVisible = true; controlsVisible = false }
                     )
+                    }
                 }
             }
 
@@ -770,6 +803,7 @@ private fun GestureLayer(
     onSingleTap: () -> Unit,
     onDoubleTapSeek: (Long) -> Unit,
     onSeekByCommit: (Long) -> Unit,
+    centerToastOffsetPx: Int = 0,
     modifier: Modifier = Modifier
 ) {
     if (!enabled) {
@@ -1035,6 +1069,16 @@ private fun GestureLayer(
                 modifier = Modifier
                     .align(seekToastAlignment)
                     .padding(horizontal = 96.dp)
+                    // Only the drag-seek toast uses Center (hold/double-tap seek use
+                    // CenterStart/CenterEnd, already correctly positioned at the screen edges) -
+                    // see centerToastOffsetPx's own KDoc at the call site for why this is needed.
+                    .then(
+                        if (seekToastAlignment == Alignment.Center && centerToastOffsetPx != 0) {
+                            Modifier.offset { IntOffset(0, centerToastOffsetPx) }
+                        } else {
+                            Modifier
+                        }
+                    )
             )
         }
     }

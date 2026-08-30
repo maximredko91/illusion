@@ -1,0 +1,17 @@
+<!-- Status-bar (small) icon for the media playback notification - PlaybackService.kt wires this
+     into DefaultMediaNotificationProvider.setSmallIcon(). Media3's own default fallback pulls
+     from the app's manifest @mipmap/ic_launcher, which is an ADAPTIVE icon (colored layers) - the
+     OS can't render that as a status-bar glyph and shows a blank/missing icon there instead (the
+     notification's own expanded content in the shade still renders fine either way, which is why
+     this went unnoticed at first - only the tiny status-bar tray icon was affected). Same flat,
+     single-color-plus-alpha convention as ic_stat_scan (used by Scan/Download notifications). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24"
+    android:tint="#FFFFFF">
+    <path
+        android:fillColor="#FF000000"
+        android:pathData="M8,5v14l11,-7z" />
+</vector>

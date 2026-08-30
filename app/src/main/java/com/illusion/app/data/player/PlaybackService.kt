@@ -4,8 +4,10 @@ import android.content.Intent
 import android.os.Binder
 import android.os.IBinder
 import androidx.media3.common.Player
+import androidx.media3.session.DefaultMediaNotificationProvider
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
+import com.illusion.app.R
 
 /**
  * Exists purely so the OS shows a real media notification (shade + lock screen, play/pause/seek)
@@ -24,6 +26,16 @@ import androidx.media3.session.MediaSessionService
 class PlaybackService : MediaSessionService() {
     private var mediaSession: MediaSession? = null
     private val binder = LocalBinder()
+
+    override fun onCreate() {
+        super.onCreate()
+        // Without this, Media3's own default notification builder falls back to the app's
+        // manifest @mipmap/ic_launcher for the status-bar (small) icon - an ADAPTIVE icon (colored
+        // layers), which the OS can't render as a status-bar glyph, so the tray icon showed up
+        // blank/missing while the notification's own expanded content in the shade rendered fine
+        // regardless (confirmed on-device: exactly that split symptom). See ic_stat_play's own KDoc.
+        setMediaNotificationProvider(DefaultMediaNotificationProvider(this).apply { setSmallIcon(R.drawable.ic_stat_play) })
+    }
 
     inner class LocalBinder : Binder() {
         fun getService(): PlaybackService = this@PlaybackService

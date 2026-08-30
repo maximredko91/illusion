@@ -759,13 +759,28 @@ fun PlayerSettingsPanel(
                 }
 
                 CollapsiblePanelSection(stringResource(R.string.player_settings_section_image)) {
+                // Economical performance mode already force-disables the actual shader
+                // (PlayerViewModel's own sharpenEnabled collector - see PerformanceMode's own
+                // KDoc), but leaving this switch merely no-op-interactive read as "you can still
+                // turn it on" - tapping it flipped the switch, then it silently snapped back off
+                // once the collector recomputed, with no clear feedback either way. Disabling it
+                // outright removes that ambiguity.
+                val sharpenDisabledByPerformanceMode = com.illusion.app.ui.common.LocalEconomicalMode.current
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                     Text(stringResource(R.string.player_sharpen_toggle), color = Color.White, modifier = Modifier.weight(1f))
                     com.illusion.app.ui.common.TvAwareSwitch(
                         checked = sharpenEnabled,
+                        enabled = !sharpenDisabledByPerformanceMode,
                         onCheckedChange = { enabled ->
                             if (enabled) showEnableWarning = true else onSharpenEnabledChange(false)
                         }
+                    )
+                }
+                if (sharpenDisabledByPerformanceMode) {
+                    Text(
+                        stringResource(R.string.player_sharpen_disabled_by_performance_mode),
+                        color = Color.White.copy(alpha = 0.7f),
+                        style = MaterialTheme.typography.bodySmall
                     )
                 }
                 if (sharpenEnabled) {
