@@ -15,6 +15,8 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -301,6 +303,7 @@ fun SettingsScreen(
 
     Scaffold(
         modifier = modifier,
+        contentWindowInsets = com.illusion.app.ui.common.tvSafeContentWindowInsets(WindowInsets.safeDrawing),
         topBar = {
             TopAppBar(
                 windowInsets = com.illusion.app.ui.common.rememberLatchedStatusBarsInsets(),
@@ -555,63 +558,65 @@ fun SettingsScreen(
                                 )
                             }
                             SettingsDivider()
-                            ListItem(
-                                headlineContent = { Text(stringResource(R.string.settings_check_updates)) },
-                                supportingContent = if (upToDateMessage != null) {
-                                    {
-                                        LaunchedEffect(upToDateMessage) {
-                                            kotlinx.coroutines.delay(4000)
-                                            onDismissUpToDateMessage()
-                                        }
-                                        // Only the "already up to date" success message gets the
-                                        // green pill treatment - a failure message (no internet,
-                                        // manifest not found, ...) shares this same
-                                        // supportingContent slot and should never look like a
-                                        // success by association.
-                                        val successPrefix = "У вас последняя версия!"
-                                        if (upToDateMessage.startsWith(successPrefix)) {
-                                            Box(
-                                                modifier = Modifier
-                                                    .clip(RoundedCornerShape(50))
-                                                    .background(Color(0xFF2E7D32).copy(alpha = 0.15f))
-                                                    .padding(horizontal = 10.dp, vertical = 4.dp)
-                                            ) {
-                                                Text(
-                                                    upToDateMessage,
-                                                    color = Color(0xFF2E7D32),
-                                                    style = MaterialTheme.typography.labelMedium
-                                                )
-                                            }
-                                        } else {
-                                            Text(upToDateMessage)
-                                        }
+                            // Card style, not ListItem(trailingContent = button) - see
+                            // SettingsActionCard's own KDoc for why that pattern breaks (badly, on
+                            // TV especially - confirmed from on-device photos: TvAwareOutlinedButton
+                            // squeezed this row's whole headline into a vertical one-letter-per-line
+                            // column). Kept as a hand-built Column (not SettingsActionCard itself)
+                            // only because of the pill-styled dynamic up-to-date/error message,
+                            // which doesn't fit SettingsActionCard's plain-String description param.
+                            Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp)) {
+                                Text(stringResource(R.string.settings_check_updates), style = MaterialTheme.typography.bodyLarge)
+                                if (upToDateMessage != null) {
+                                    LaunchedEffect(upToDateMessage) {
+                                        kotlinx.coroutines.delay(4000)
+                                        onDismissUpToDateMessage()
                                     }
-                                } else null,
-                                trailingContent = {
-                                    TvAwareOutlinedButton(onClick = onCheckForUpdates) {
-                                        Text(stringResource(R.string.action_check))
+                                    // Only the "already up to date" success message gets the
+                                    // green pill treatment - a failure message (no internet,
+                                    // manifest not found, ...) shares this same slot and should
+                                    // never look like a success by association.
+                                    val successPrefix = "У вас последняя версия!"
+                                    if (upToDateMessage.startsWith(successPrefix)) {
+                                        Box(
+                                            modifier = Modifier
+                                                .padding(top = 4.dp)
+                                                .clip(RoundedCornerShape(50))
+                                                .background(Color(0xFF2E7D32).copy(alpha = 0.15f))
+                                                .padding(horizontal = 10.dp, vertical = 4.dp)
+                                        ) {
+                                            Text(
+                                                upToDateMessage,
+                                                color = Color(0xFF2E7D32),
+                                                style = MaterialTheme.typography.labelMedium
+                                            )
+                                        }
+                                    } else {
+                                        Text(
+                                            upToDateMessage,
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            modifier = Modifier.padding(top = 2.dp)
+                                        )
                                     }
-                                },
-                                colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-                                modifier = Modifier.fillMaxWidth()
-                            )
+                                }
+                                TvAwareOutlinedButton(onClick = onCheckForUpdates, modifier = Modifier.fillMaxWidth().padding(top = 12.dp)) {
+                                    Text(stringResource(R.string.action_check))
+                                }
+                            }
                             SettingsDivider()
                             val currentUpdateCheckIntervalHours by updateCheckIntervalHours.collectAsState(initial = 720)
-                            ListItem(
-                                headlineContent = { Text(stringResource(R.string.settings_update_check_interval)) },
-                                trailingContent = { UpdateCheckIntervalMenu(currentUpdateCheckIntervalHours, onUpdateCheckIntervalChange) },
-                                colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-                                modifier = Modifier.fillMaxWidth()
-                            )
+                            SettingsActionCard(title = stringResource(R.string.settings_update_check_interval)) {
+                                UpdateCheckIntervalMenu(currentUpdateCheckIntervalHours, onUpdateCheckIntervalChange, modifier = Modifier.fillMaxWidth())
+                            }
                             SettingsDivider()
                             val currentUpdateSource by updateSource.collectAsState(initial = com.illusion.app.domain.model.UpdateSource.GITHUB)
-                            ListItem(
-                                headlineContent = { Text(stringResource(R.string.settings_update_source)) },
-                                supportingContent = { Text(stringResource(R.string.settings_update_source_hint)) },
-                                trailingContent = { UpdateSourceMenu(currentUpdateSource, onUpdateSourceChange) },
-                                colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-                                modifier = Modifier.fillMaxWidth()
-                            )
+                            SettingsActionCard(
+                                title = stringResource(R.string.settings_update_source),
+                                description = stringResource(R.string.settings_update_source_hint)
+                            ) {
+                                UpdateSourceMenu(currentUpdateSource, onUpdateSourceChange, modifier = Modifier.fillMaxWidth())
+                            }
                             if (currentUpdateSource == com.illusion.app.domain.model.UpdateSource.LOCAL) {
                                 SettingsDivider()
                                 val currentLocalUpdateSourceId by localUpdateSourceId.collectAsState(initial = null)
@@ -628,25 +633,18 @@ fun SettingsScreen(
                                         onLocalUpdateSourceIdChange(sources.first().id)
                                     }
                                 }
-                                ListItem(
-                                    headlineContent = { Text(stringResource(R.string.settings_local_update_source)) },
-                                    supportingContent = {
-                                        Text(
-                                            if (sources.isEmpty()) {
-                                                stringResource(R.string.settings_local_update_source_none)
-                                            } else {
-                                                stringResource(R.string.settings_local_update_source_path_hint)
-                                            }
-                                        )
-                                    },
-                                    trailingContent = {
-                                        if (sources.isNotEmpty()) {
-                                            LocalUpdateSourceMenu(sources, currentLocalUpdateSourceId, onLocalUpdateSourceIdChange)
-                                        }
-                                    },
-                                    colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-                                    modifier = Modifier.fillMaxWidth()
-                                )
+                                SettingsActionCard(
+                                    title = stringResource(R.string.settings_local_update_source),
+                                    description = if (sources.isEmpty()) {
+                                        stringResource(R.string.settings_local_update_source_none)
+                                    } else {
+                                        stringResource(R.string.settings_local_update_source_path_hint)
+                                    }
+                                ) {
+                                    if (sources.isNotEmpty()) {
+                                        LocalUpdateSourceMenu(sources, currentLocalUpdateSourceId, onLocalUpdateSourceIdChange, modifier = Modifier.fillMaxWidth())
+                                    }
+                                }
                             }
                             SettingsDivider()
                             val developerSource = remember { MutableInteractionSource() }
@@ -745,12 +743,9 @@ fun SettingsScreen(
 
                     "ui_mode" -> {
                         SettingsGroup {
-                            ListItem(
-                                headlineContent = { Text(stringResource(R.string.settings_theme_mode)) },
-                                trailingContent = { ThemeModeMenu(currentThemeMode, onThemeModeChange) },
-                                colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-                                modifier = Modifier.fillMaxWidth()
-                            )
+                            SettingsActionCard(title = stringResource(R.string.settings_theme_mode)) {
+                                ThemeModeMenu(currentThemeMode, onThemeModeChange, modifier = Modifier.fillMaxWidth())
+                            }
                             // Both are touch-only concepts - haptics needs a vibration motor no
                             // remote/TV box has, and predictive back is Android's edge-swipe
                             // gesture preview, which doesn't exist without a touchscreen to swipe
@@ -997,15 +992,12 @@ fun SettingsScreen(
                         // guess baked into the app.
                         if (currentUiMode == UiMode.TV) {
                             SettingsGroup {
-                                ListItem(
-                                    headlineContent = { Text(stringResource(R.string.settings_tv_overscan_margin)) },
-                                    supportingContent = { Text(stringResource(R.string.settings_tv_overscan_margin_hint)) },
-                                    trailingContent = {
-                                        TvOverscanMarginMenu(currentTvOverscanMarginPercent, onTvOverscanMarginPercentChange)
-                                    },
-                                    colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-                                    modifier = Modifier.fillMaxWidth()
-                                )
+                                SettingsActionCard(
+                                    title = stringResource(R.string.settings_tv_overscan_margin),
+                                    description = stringResource(R.string.settings_tv_overscan_margin_hint)
+                                ) {
+                                    TvOverscanMarginMenu(currentTvOverscanMarginPercent, onTvOverscanMarginPercentChange, modifier = Modifier.fillMaxWidth())
+                                }
                             }
                         }
                     }
@@ -1038,12 +1030,9 @@ fun SettingsScreen(
 
                     "library" -> {
                         SettingsGroup(modifier = Modifier.padding(bottom = 24.dp)) {
-                            ListItem(
-                                headlineContent = { Text(stringResource(R.string.settings_default_sort_order)) },
-                                trailingContent = { DefaultSortOrderMenu(currentDefaultSortOrder, onDefaultSortOrderChange) },
-                                colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-                                modifier = Modifier.fillMaxWidth()
-                            )
+                            SettingsActionCard(title = stringResource(R.string.settings_default_sort_order)) {
+                                DefaultSortOrderMenu(currentDefaultSortOrder, onDefaultSortOrderChange, modifier = Modifier.fillMaxWidth())
+                            }
                         }
                     }
 
@@ -1099,66 +1088,42 @@ fun SettingsScreen(
                             // own settings sheet (had to be tapped every single playback) - moved
                             // here as a persistent default per user feedback: choose the player
                             // once, not every time.
-                            ListItem(
-                                // Description folded into headlineContent (not a separate
-                                // supportingContent slot) specifically so the trailing chip centers
-                                // vertically - Material3's ListItem deliberately top-aligns trailing
-                                // content whenever supportingContent is present (2/3-line item
-                                // spec), which read as misaligned next to the other single-line
-                                // rows' centered chips in this same group.
-                                headlineContent = {
-                                    Column {
-                                        Text(stringResource(R.string.settings_player_mode))
-                                        Text(
-                                            stringResource(R.string.settings_player_mode_description),
-                                            style = MaterialTheme.typography.bodyMedium,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                    }
-                                },
-                                trailingContent = { PlayerModeMenu(currentPlayerMode, onPlayerModeChange) },
-                                colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-                                modifier = Modifier.fillMaxWidth()
-                            )
+                            // Card style (title/description full-width, action full-width below) -
+                            // was a ListItem(trailingContent = Menu), which broke badly in TV mode:
+                            // TvAwareOutlinedButton's TV branch centers its label via an internal
+                            // Modifier.fillMaxWidth() Row, and Material3's ListItem sizes its
+                            // trailingContent slot from that same composable's INTRINSIC width -
+                            // fillMaxWidth() reports an unbounded/maximal intrinsic width regardless
+                            // of the actual caller-side modifier, so ListItem reserved almost all
+                            // the row's width for the trailing button and left next to none for
+                            // headlineContent, which then wrapped its description one character per
+                            // line (confirmed from on-device TV photos - "буферизация, но" etc.
+                            // rendering as a vertical letter column). The card layout sidesteps this
+                            // entirely since the button's own full-width slot has no competing
+                            // sibling to starve.
+                            SettingsActionCard(
+                                title = stringResource(R.string.settings_player_mode),
+                                description = stringResource(R.string.settings_player_mode_description)
+                            ) {
+                                PlayerModeMenu(currentPlayerMode, onPlayerModeChange, modifier = Modifier.fillMaxWidth())
+                            }
                             // Only relevant once external playback can actually happen - hidden for
                             // PlayerMode.INTERNAL rather than shown-but-disabled, since it has no
                             // effect at all in that mode.
                             if (currentPlayerMode != com.illusion.app.domain.model.PlayerMode.INTERNAL) {
-                                ListItem(
-                                    headlineContent = {
-                                        Column {
-                                            Text(stringResource(R.string.settings_external_player_app))
-                                            Text(
-                                                stringResource(R.string.settings_external_player_app_description),
-                                                style = MaterialTheme.typography.bodyMedium,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                                            )
-                                        }
-                                    },
-                                    trailingContent = {
-                                        ExternalPlayerAppMenu(currentExternalPlayerPackage, onExternalPlayerPackageChange)
-                                    },
-                                    colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-                                    modifier = Modifier.fillMaxWidth()
-                                )
+                                SettingsActionCard(
+                                    title = stringResource(R.string.settings_external_player_app),
+                                    description = stringResource(R.string.settings_external_player_app_description)
+                                ) {
+                                    ExternalPlayerAppMenu(currentExternalPlayerPackage, onExternalPlayerPackageChange, modifier = Modifier.fillMaxWidth())
+                                }
                             }
-                            ListItem(
-                                headlineContent = {
-                                    Column {
-                                        Text(stringResource(R.string.settings_player_buffer_size))
-                                        Text(
-                                            stringResource(R.string.settings_player_buffer_size_description),
-                                            style = MaterialTheme.typography.bodyMedium,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                    }
-                                },
-                                trailingContent = {
-                                    PlayerBufferSizeMenu(currentPlayerBufferSize, onPlayerBufferSizeChange)
-                                },
-                                colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-                                modifier = Modifier.fillMaxWidth()
-                            )
+                            SettingsActionCard(
+                                title = stringResource(R.string.settings_player_buffer_size),
+                                description = stringResource(R.string.settings_player_buffer_size_description)
+                            ) {
+                                PlayerBufferSizeMenu(currentPlayerBufferSize, onPlayerBufferSizeChange, modifier = Modifier.fillMaxWidth())
+                            }
                         }
                     }
 
@@ -1734,12 +1699,12 @@ private fun AccentColorSwatch(
 }
 
 @Composable
-private fun DefaultSortOrderMenu(current: SortOrder, onChange: (SortOrder) -> Unit) {
+private fun DefaultSortOrderMenu(current: SortOrder, onChange: (SortOrder) -> Unit, modifier: Modifier = Modifier) {
     var expanded by remember { mutableStateOf(false) }
     val haptics = LocalHapticFeedback.current
-    Box {
+    Box(modifier = modifier) {
         val triggerSource = remember { MutableInteractionSource() }
-        TvAwareOutlinedButton(onClick = { expanded = true }) {
+        TvAwareOutlinedButton(onClick = { expanded = true }, modifier = Modifier.fillMaxWidth()) {
             Text(sortLabel(current))
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
@@ -1763,11 +1728,11 @@ private fun DefaultSortOrderMenu(current: SortOrder, onChange: (SortOrder) -> Un
 private val TV_OVERSCAN_MARGIN_OPTIONS = listOf(0, 2, 4, 6, 8, 10)
 
 @Composable
-private fun TvOverscanMarginMenu(percent: Int, onChange: (Int) -> Unit) {
+private fun TvOverscanMarginMenu(percent: Int, onChange: (Int) -> Unit, modifier: Modifier = Modifier) {
     var expanded by remember { mutableStateOf(false) }
-    Box {
+    Box(modifier = modifier) {
         val triggerSource = remember { MutableInteractionSource() }
-        TvAwareOutlinedButton(onClick = { expanded = true }) {
+        TvAwareOutlinedButton(onClick = { expanded = true }, modifier = Modifier.fillMaxWidth()) {
             Text(if (percent <= 0) stringResource(R.string.settings_tv_overscan_margin_off) else "$percent%")
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
@@ -1788,12 +1753,12 @@ private fun TvOverscanMarginMenu(percent: Int, onChange: (Int) -> Unit) {
 }
 
 @Composable
-private fun ThemeModeMenu(current: com.illusion.app.domain.model.ThemeMode, onChange: (com.illusion.app.domain.model.ThemeMode) -> Unit) {
+private fun ThemeModeMenu(current: com.illusion.app.domain.model.ThemeMode, onChange: (com.illusion.app.domain.model.ThemeMode) -> Unit, modifier: Modifier = Modifier) {
     var expanded by remember { mutableStateOf(false) }
     val haptics = LocalHapticFeedback.current
-    Box {
+    Box(modifier = modifier) {
         val triggerSource = remember { MutableInteractionSource() }
-        TvAwareOutlinedButton(onClick = { expanded = true }) {
+        TvAwareOutlinedButton(onClick = { expanded = true }, modifier = Modifier.fillMaxWidth()) {
             Text(themeModeLabel(current))
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
@@ -1823,12 +1788,12 @@ private fun themeModeLabel(mode: com.illusion.app.domain.model.ThemeMode): Strin
 }
 
 @Composable
-private fun PlayerModeMenu(current: com.illusion.app.domain.model.PlayerMode, onChange: (com.illusion.app.domain.model.PlayerMode) -> Unit) {
+private fun PlayerModeMenu(current: com.illusion.app.domain.model.PlayerMode, onChange: (com.illusion.app.domain.model.PlayerMode) -> Unit, modifier: Modifier = Modifier) {
     var expanded by remember { mutableStateOf(false) }
     val haptics = LocalHapticFeedback.current
-    Box {
+    Box(modifier = modifier) {
         val triggerSource = remember { MutableInteractionSource() }
-        TvAwareOutlinedButton(onClick = { expanded = true }) {
+        TvAwareOutlinedButton(onClick = { expanded = true }, modifier = Modifier.fillMaxWidth()) {
             Text(playerModeLabel(current))
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
@@ -1850,12 +1815,12 @@ private fun PlayerModeMenu(current: com.illusion.app.domain.model.PlayerMode, on
 }
 
 @Composable
-private fun PlayerBufferSizeMenu(current: com.illusion.app.domain.model.PlayerBufferSize, onChange: (com.illusion.app.domain.model.PlayerBufferSize) -> Unit) {
+private fun PlayerBufferSizeMenu(current: com.illusion.app.domain.model.PlayerBufferSize, onChange: (com.illusion.app.domain.model.PlayerBufferSize) -> Unit, modifier: Modifier = Modifier) {
     var expanded by remember { mutableStateOf(false) }
     val haptics = LocalHapticFeedback.current
-    Box {
+    Box(modifier = modifier) {
         val triggerSource = remember { MutableInteractionSource() }
-        TvAwareOutlinedButton(onClick = { expanded = true }) {
+        TvAwareOutlinedButton(onClick = { expanded = true }, modifier = Modifier.fillMaxWidth()) {
             Text(playerBufferSizeLabel(current))
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
@@ -1918,12 +1883,12 @@ private fun performanceModeLabel(mode: com.illusion.app.domain.model.Performance
 }
 
 @Composable
-private fun UpdateSourceMenu(current: com.illusion.app.domain.model.UpdateSource, onChange: (com.illusion.app.domain.model.UpdateSource) -> Unit) {
+private fun UpdateSourceMenu(current: com.illusion.app.domain.model.UpdateSource, onChange: (com.illusion.app.domain.model.UpdateSource) -> Unit, modifier: Modifier = Modifier) {
     var expanded by remember { mutableStateOf(false) }
     val haptics = LocalHapticFeedback.current
-    Box {
+    Box(modifier = modifier) {
         val triggerSource = remember { MutableInteractionSource() }
-        TvAwareOutlinedButton(onClick = { expanded = true }) {
+        TvAwareOutlinedButton(onClick = { expanded = true }, modifier = Modifier.fillMaxWidth()) {
             Text(updateSourceLabel(current))
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
@@ -1954,14 +1919,15 @@ private fun updateSourceLabel(source: com.illusion.app.domain.model.UpdateSource
 private fun LocalUpdateSourceMenu(
     sources: List<SmbSourceEntity>,
     currentId: Long?,
-    onChange: (Long) -> Unit
+    onChange: (Long) -> Unit,
+    modifier: Modifier = Modifier
 ) {
     var expanded by remember { mutableStateOf(false) }
     val haptics = LocalHapticFeedback.current
     val current = sources.firstOrNull { it.id == currentId }
-    Box {
+    Box(modifier = modifier) {
         val triggerSource = remember { MutableInteractionSource() }
-        TvAwareOutlinedButton(onClick = { expanded = true }) {
+        TvAwareOutlinedButton(onClick = { expanded = true }, modifier = Modifier.fillMaxWidth()) {
             Text(current?.displayName ?: stringResource(R.string.settings_local_update_source_pick))
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
@@ -1992,12 +1958,12 @@ private fun updateCheckIntervalLabel(hours: Int): String = when {
 }
 
 @Composable
-private fun UpdateCheckIntervalMenu(currentHours: Int, onChange: (Int) -> Unit) {
+private fun UpdateCheckIntervalMenu(currentHours: Int, onChange: (Int) -> Unit, modifier: Modifier = Modifier) {
     var expanded by remember { mutableStateOf(false) }
     val haptics = LocalHapticFeedback.current
-    Box {
+    Box(modifier = modifier) {
         val triggerSource = remember { MutableInteractionSource() }
-        TvAwareOutlinedButton(onClick = { expanded = true }) {
+        TvAwareOutlinedButton(onClick = { expanded = true }, modifier = Modifier.fillMaxWidth()) {
             Text(updateCheckIntervalLabel(currentHours))
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
@@ -2019,7 +1985,7 @@ private fun UpdateCheckIntervalMenu(currentHours: Int, onChange: (Int) -> Unit) 
 }
 
 @Composable
-private fun ExternalPlayerAppMenu(currentPackage: String?, onChange: (String?) -> Unit) {
+private fun ExternalPlayerAppMenu(currentPackage: String?, onChange: (String?) -> Unit, modifier: Modifier = Modifier) {
     var expanded by remember { mutableStateOf(false) }
     val haptics = LocalHapticFeedback.current
     val context = LocalContext.current
@@ -2028,9 +1994,9 @@ private fun ExternalPlayerAppMenu(currentPackage: String?, onChange: (String?) -
     val apps = remember { com.illusion.app.data.player.InstalledPlayerApps.list(context) }
     val systemLabel = stringResource(R.string.settings_external_player_app_system)
     val currentLabel = apps.find { it.packageName == currentPackage }?.label ?: systemLabel
-    Box {
+    Box(modifier = modifier) {
         val triggerSource = remember { MutableInteractionSource() }
-        TvAwareOutlinedButton(onClick = { expanded = true }) {
+        TvAwareOutlinedButton(onClick = { expanded = true }, modifier = Modifier.fillMaxWidth()) {
             Text(currentLabel)
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {

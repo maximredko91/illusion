@@ -66,6 +66,7 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavDestination.Companion.hasRoute
@@ -185,15 +186,6 @@ fun IllusionNavHost(
         ),
         label = "shimmerProgress"
     )
-    CompositionLocalProvider(
-        LocalSharedTransitionScope provides this,
-        LocalUiMode provides (uiMode ?: UiMode.PHONE),
-        LocalShimmerProgress provides shimmerProgressState,
-        LocalHapticFeedback provides gatedHapticFeedback,
-        com.illusion.app.ui.common.LocalEconomicalMode provides economicalMode,
-        com.illusion.app.ui.common.LocalGlassEffectEnabled provides glassEffectEnabled
-    ) {
-        val navController = rememberNavController()
         // Player is deliberately exempt from the overscan margin below - it's a fullscreen
         // immersive video surface with its own gesture zones/controls math built around actually
         // filling the screen, not general UI chrome. Squeezing it into an 84%-size box broke
@@ -201,8 +193,40 @@ fun IllusionNavHost(
         // верстка") rather than just looking letterboxed - video content also tolerates a sliver
         // of physical overscan cropping at the true edge far better than text/icons do, which is
         // the entire reason the margin exists for the rest of the UI in the first place.
-        val currentBackStackEntry by navController.currentBackStackEntryAsState()
-        val isPlayerScreen = currentBackStackEntry?.destination?.hasRoute<Destination.Player>() == true
+        //
+        // Computed as real WindowInsets (see TvSafeInsets.kt's own KDoc) rather than the old
+        // "wrap the whole nav graph in Modifier.padding()" approach - that shrank the entire UI
+        // (background included) into a smaller centered box instead of just nudging edge-adjacent
+        // content in from the true screen edge, confirmed as a real bug per feedback.
+        val configuration = LocalConfiguration.current
+        val density = LocalDensity.current
+        val tvMarginActive = (uiMode ?: UiMode.PHONE) == UiMode.TV && tvOverscanMarginPercent > 0
+        val tvSafeInsets = if (tvMarginActive) {
+            com.illusion.app.ui.common.tvOverscanWindowInsets(
+                tvOverscanMarginPercent,
+                configuration.screenWidthDp.dp,
+                configuration.screenHeightDp.dp,
+                density
+            )
+        } else {
+            WindowInsets(0, 0, 0, 0)
+        }
+        val tvSafeMarginDp = if (tvMarginActive) {
+            (minOf(configuration.screenWidthDp, configuration.screenHeightDp) * tvOverscanMarginPercent / 100f).dp
+        } else {
+            0.dp
+        }
+    CompositionLocalProvider(
+        LocalSharedTransitionScope provides this,
+        LocalUiMode provides (uiMode ?: UiMode.PHONE),
+        LocalShimmerProgress provides shimmerProgressState,
+        LocalHapticFeedback provides gatedHapticFeedback,
+        com.illusion.app.ui.common.LocalEconomicalMode provides economicalMode,
+        com.illusion.app.ui.common.LocalGlassEffectEnabled provides glassEffectEnabled,
+        com.illusion.app.ui.common.LocalTvSafeMarginInsets provides tvSafeInsets,
+        com.illusion.app.ui.common.LocalTvSafeMarginDp provides tvSafeMarginDp
+    ) {
+        val navController = rememberNavController()
         // Destinations with no Scaffold of their own (Details, Person, ...) render straight onto
         // whatever is behind them and rely on LocalContentColor for their default (unspecified)
         // Text colors - previously an outer Scaffold (removed when tab-switching moved off
@@ -215,31 +239,10 @@ fun IllusionNavHost(
             modifier = Modifier.fillMaxSize(),
             color = MaterialTheme.colorScheme.background
         ) {
-            // TV-mode-only overscan-safe margin - some real Android TV boxes crop a slice off
-            // every edge of the picture without compensating the reported display resolution for
-            // it, so nothing this app draws in that strip is actually visible there. How much (if
-            // any) varies by device: a fixed 5%, then 8%, guess each turned out wrong for a
-            // *different* real box - one still clipped icons at 5%, another showed "огромные
-            // черные отступы" (huge black bars) at 8% despite barely cropping at all. Rather than
-            // re-guessing a single global constant forever, this is now Settings-adjustable
-            // (default 0 - no margin, matching "интерфейс... на всю доступную площадь" for a
-            // device that doesn't crop at all) and only a user who actually sees clipping needs to
-            // raise it for their own box. A phone/tablet never hits this branch, so nothing
-            // changes there.
-            if ((uiMode ?: UiMode.PHONE) == UiMode.TV && !isPlayerScreen && tvOverscanMarginPercent > 0) {
-                val marginFraction = tvOverscanMarginPercent / 100f
-                androidx.compose.foundation.layout.BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-                    IllusionNavGraph(
-                        app,
-                        navController,
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(horizontal = maxWidth * marginFraction, vertical = maxHeight * marginFraction)
-                    )
-                }
-            } else {
-                IllusionNavGraph(app, navController, modifier = Modifier.fillMaxSize())
-            }
+            // Overscan-safe margin (if any) is now threaded through as real WindowInsets (see
+            // LocalTvSafeMarginInsets/tvSafeInsets above) - always fillMaxSize here, no outer
+            // padding shrinking the whole graph/background into a smaller box.
+            IllusionNavGraph(app, navController, modifier = Modifier.fillMaxSize())
         }
     }
 }
@@ -914,15 +917,24 @@ private fun TabsHost(
     // a bottom bar wastes too much of the little vertical room landscape already has) - side
     // instead of bottom also matches the phone's own wider-than-tall shape in that orientation.
     if (uiMode == UiMode.TV || isPhoneLandscape) {
+        // Real safe-area margin now (see TvSafeInsets.kt) - the rail only gets pushed off the
+        // TRUE outer screen edge it actually sits against (plus top/bottom), not both horizontal
+        // sides, since its inner edge already borders real content rather than a cropped edge.
+        // Tab content (Home/Library/...) is NOT wrapped in outer padding here - each of those
+        // screens has its own Scaffold with its own background, and wrapping THAT in outer
+        // padding would shrink its background into a smaller box, the exact bug this rework was
+        // for. They pick up the same margin themselves via tvSafeContentWindowInsets() on their
+        // own Scaffold's contentWindowInsets instead - see HomeScreen.kt/LibraryScreen.kt.
+        val tvSafeMarginDp = com.illusion.app.ui.common.LocalTvSafeMarginDp.current
         Row(modifier = Modifier.fillMaxSize()) {
             if (railOnLeft) {
-                NavigationRail(content = railItems)
+                NavigationRail(content = railItems, modifier = Modifier.padding(start = tvSafeMarginDp, top = tvSafeMarginDp, bottom = tvSafeMarginDp))
             }
             Box(modifier = Modifier.weight(1f)) {
                 content(PaddingValues())
             }
             if (!railOnLeft) {
-                NavigationRail(content = railItems)
+                NavigationRail(content = railItems, modifier = Modifier.padding(end = tvSafeMarginDp, top = tvSafeMarginDp, bottom = tvSafeMarginDp))
             }
         }
     } else {

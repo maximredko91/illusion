@@ -1,5 +1,6 @@
 package com.illusion.app.ui.smbsource
 
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -37,6 +38,7 @@ fun AddSmbSourceScreen(
 
     Scaffold(
         modifier = modifier,
+        contentWindowInsets = com.illusion.app.ui.common.tvSafeContentWindowInsets(androidx.compose.foundation.layout.WindowInsets.safeDrawing),
         topBar = { TopAppBar(title = { Text(stringResource(R.string.add_source_title)) }) }
     ) { innerPadding ->
         Column(modifier = Modifier.fillMaxSize().padding(innerPadding)) {

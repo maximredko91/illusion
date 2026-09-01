@@ -285,7 +285,7 @@ fun LibraryScreen(
         // content's local padding value, not the ambient insets every descendant Scaffold reads
         // fresh), so this screen's grid stopped scrolling short of the visible nav bar, leaving a
         // dead unpainted gap between the last row and the real bar underneath it.
-        contentWindowInsets = WindowInsets(0, 0, 0, 0),
+        contentWindowInsets = com.illusion.app.ui.common.tvSafeContentWindowInsets(),
         floatingActionButton = {
             AnimatedVisibility(
                 visible = showScrollToTop,

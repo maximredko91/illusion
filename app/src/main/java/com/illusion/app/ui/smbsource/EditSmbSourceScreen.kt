@@ -1,6 +1,7 @@
 package com.illusion.app.ui.smbsource
 
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -50,6 +51,7 @@ fun EditSmbSourceScreen(
 
     Scaffold(
         modifier = modifier,
+        contentWindowInsets = com.illusion.app.ui.common.tvSafeContentWindowInsets(androidx.compose.foundation.layout.WindowInsets.safeDrawing),
         topBar = {
             TopAppBar(
                 title = { Text(stringResource(R.string.edit_source_title)) },

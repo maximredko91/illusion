@@ -2,6 +2,7 @@ package com.illusion.app.ui.favorites
 
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
@@ -49,6 +50,7 @@ fun FavoritesScreen(
 
     Scaffold(
         modifier = modifier,
+        contentWindowInsets = com.illusion.app.ui.common.tvSafeContentWindowInsets(androidx.compose.foundation.layout.WindowInsets.safeDrawing),
         topBar = {
             TopAppBar(
                 windowInsets = com.illusion.app.ui.common.rememberLatchedStatusBarsInsets(),

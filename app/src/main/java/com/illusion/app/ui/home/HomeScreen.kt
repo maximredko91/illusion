@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import com.illusion.app.domain.model.UiMode
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -75,7 +76,7 @@ fun HomeScreen(
         // already reserves for its real NavigationBar (same fix as LibraryScreen - see its own
         // comment on this line for the full explanation), leaving a dead gap between this
         // screen's scrollable content and the visible nav bar underneath it.
-        contentWindowInsets = androidx.compose.foundation.layout.WindowInsets(0, 0, 0, 0),
+        contentWindowInsets = com.illusion.app.ui.common.tvSafeContentWindowInsets(),
         topBar = {
             TopAppBar(
                 windowInsets = com.illusion.app.ui.common.rememberLatchedStatusBarsInsets(),
@@ -84,9 +85,16 @@ fun HomeScreen(
                     // wordmark (MainActivity.kt's AppSplashOverlay) and the launcher mark itself -
                     // width(IntrinsicSize.Min) makes the Column (and so the strips inside it, which
                     // fillMaxWidth) measure to the text's own width rather than the whole app bar.
+                    // TV-only: NOT applied there - it forces the Column to always claim its full
+                    // intrinsic width regardless of what TopAppBar actually has left to give it,
+                    // which is fine on phone (title slot is always wide enough) but on TV the
+                    // left NavigationRail eats real width first, so the title's forced full-size
+                    // measurement silently overflowed INTO the 5 action icons instead of shrinking
+                    // - confirmed on-device (the search icon overlapping the app name letters).
+                    val isTv = com.illusion.app.ui.common.LocalUiMode.current == UiMode.TV
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
-                        modifier = Modifier.width(IntrinsicSize.Min)
+                        modifier = if (isTv) Modifier else Modifier.width(IntrinsicSize.Min)
                     ) {
                         PerforationStrip(
                             holeColor = MaterialTheme.colorScheme.surface,
@@ -106,7 +114,8 @@ fun HomeScreen(
                             fontWeight = androidx.compose.ui.text.font.FontWeight.Medium,
                             fontSize = 14.sp,
                             letterSpacing = 0.12.em,
-                            maxLines = 1
+                            maxLines = 1,
+                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                         )
                         PerforationStrip(
                             holeColor = MaterialTheme.colorScheme.surface,
@@ -115,11 +124,19 @@ fun HomeScreen(
                     }
                 },
                 actions = {
-                    com.illusion.app.ui.common.TooltipIconButton(stringResource(R.string.nav_search), Icons.Default.Search, onOpenSearch)
-                    com.illusion.app.ui.common.TooltipIconButton(stringResource(R.string.favorites_title), Icons.Default.Favorite, onOpenFavorites)
-                    com.illusion.app.ui.common.TooltipIconButton(stringResource(R.string.history_title), Icons.Default.History, onOpenHistory)
-                    com.illusion.app.ui.common.TooltipIconButton(stringResource(R.string.downloads_title), Icons.Default.Download, onOpenDownloads)
-                    com.illusion.app.ui.common.TooltipIconButton(stringResource(R.string.settings_title), Icons.Default.Settings, onOpenSettings)
+                    // Explicit spacing (TopAppBar's own actions slot has none by default) - on TV
+                    // mode specifically the 5 icons rendered edge-to-edge, touching the app name
+                    // text next to them (confirmed on-device from photos) - tv-material's
+                    // IconButton sizing/focus-scale reads as noticeably tighter than plain
+                    // Material3 IconButton, which had enough of its own built-in padding to look
+                    // fine on phone without this.
+                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        com.illusion.app.ui.common.TooltipIconButton(stringResource(R.string.nav_search), Icons.Default.Search, onOpenSearch)
+                        com.illusion.app.ui.common.TooltipIconButton(stringResource(R.string.favorites_title), Icons.Default.Favorite, onOpenFavorites)
+                        com.illusion.app.ui.common.TooltipIconButton(stringResource(R.string.history_title), Icons.Default.History, onOpenHistory)
+                        com.illusion.app.ui.common.TooltipIconButton(stringResource(R.string.downloads_title), Icons.Default.Download, onOpenDownloads)
+                        com.illusion.app.ui.common.TooltipIconButton(stringResource(R.string.settings_title), Icons.Default.Settings, onOpenSettings)
+                    }
                 }
             )
         }

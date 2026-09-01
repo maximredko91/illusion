@@ -129,6 +129,15 @@ fun IllusionTheme(
     // the user's chosen accent color/theme. Always provided (not gated on UiMode) since it's inert
     // for phone-mode composables, which never read it - simpler than threading UiMode through here
     // just to skip an otherwise-harmless CompositionLocal provide.
+    //
+    // border/borderVariant were left unset here originally - tv-material's ColorScheme has its own
+    // dedicated border/borderVariant roles (confirmed via javap on the real tv-material-1.1.0
+    // ColorScheme class - a genuinely separate pair of roles, not aliased to any of the ones above),
+    // which CardDefaults' default focused-card border reads from. Leaving them unset meant every
+    // TV card's D-pad focus ring rendered in tv-material's own baked-in design-token color,
+    // completely unrelated to the app's chosen accent/theme - confirmed on-device as "the focused
+    // item just goes all white, can't see anything in it". Now explicitly tied to the same accent
+    // primary focusHighlight() already uses on phone, so D-pad focus reads consistently everywhere.
     val tvColorScheme = if (darkTheme) {
         androidx.tv.material3.darkColorScheme(
             primary = colorScheme.primary,
@@ -140,7 +149,9 @@ fun IllusionTheme(
             background = colorScheme.background,
             onBackground = colorScheme.onBackground,
             surface = colorScheme.surface,
-            onSurface = colorScheme.onSurface
+            onSurface = colorScheme.onSurface,
+            border = colorScheme.primary,
+            borderVariant = colorScheme.outline
         )
     } else {
         androidx.tv.material3.lightColorScheme(
@@ -153,7 +164,9 @@ fun IllusionTheme(
             background = colorScheme.background,
             onBackground = colorScheme.onBackground,
             surface = colorScheme.surface,
-            onSurface = colorScheme.onSurface
+            onSurface = colorScheme.onSurface,
+            border = colorScheme.primary,
+            borderVariant = colorScheme.outline
         )
     }
 

@@ -11,6 +11,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -117,7 +118,10 @@ fun ScanProgressScreen(
         newlyAddedItems = ids.mapNotNull { libraryRepository.getById(it) }
     }
 
-    Scaffold(modifier = modifier) { innerPadding ->
+    Scaffold(
+        modifier = modifier,
+        contentWindowInsets = com.illusion.app.ui.common.tvSafeContentWindowInsets(androidx.compose.foundation.layout.WindowInsets.safeDrawing)
+    ) { innerPadding ->
         Box(modifier = Modifier.fillMaxSize()) {
             // Purely decorative - a plain flat background made the previous version of this screen
             // read as empty/placeholder-like during a long scan, per feedback asking for "some
