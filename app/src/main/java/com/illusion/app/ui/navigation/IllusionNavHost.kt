@@ -904,7 +904,14 @@ private fun TabsHost(
     val cutoutInsets = WindowInsets.displayCutout
     val density = LocalDensity.current
     val layoutDirection = LocalLayoutDirection.current
-    val railOnLeft = cutoutInsets.getLeft(density, layoutDirection) <= cutoutInsets.getRight(density, layoutDirection)
+    // TV-only: always left, ignoring the cutout reading entirely - a real TV Box has no physical
+    // camera to dodge, and a real Xiaomi TV Box confirmed reporting a large nonzero displayCutout
+    // inset anyway (an OEM quirk, not a real notch), which flipped the rail to the right AND (via
+    // LibraryScreen's own cutout-avoidance padding) pushed the whole grid away from the true left
+    // edge, leaving a big dead gap between content and the rail ("сериалы уехали от края экрана").
+    // Phone landscape keeps the real cutout-based side detection - that one's a genuine notch.
+    val railOnLeft = uiMode == UiMode.TV ||
+        cutoutInsets.getLeft(density, layoutDirection) <= cutoutInsets.getRight(density, layoutDirection)
 
     // The TV Box target has no touchscreen, so the bottom NavigationBar used on phones in
     // portrait is a D-pad dead end: it lives in a separate Scaffold slot below the scrollable

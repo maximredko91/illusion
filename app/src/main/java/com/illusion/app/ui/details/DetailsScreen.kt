@@ -336,7 +336,6 @@ private fun DetailsContent(
     contentFocusRequester: androidx.compose.ui.focus.FocusRequester? = null
 ) {
     var zoomedImage by remember { mutableStateOf<Any?>(null) }
-    var zoomedImageIsFanart by remember { mutableStateOf(false) }
     val fanartImageLoader = (androidx.compose.ui.platform.LocalContext.current.applicationContext as com.illusion.app.IllusionApplication).fanartImageLoader
 
     // Landscape on this device has a real display-cutout inset on one side only (front camera) -
@@ -405,12 +404,6 @@ private fun DetailsContent(
         val isTv = LocalUiMode.current == UiMode.TV
         Box {
             val fanart = item.fanartModel
-            val fanartSource = remember { MutableInteractionSource() }
-            // Matches the floating back/home buttons' own footprint (IconButton's default touch
-            // target) - they float on top of this fanart now rather than living inside it (see
-            // DetailsScreen's own overlay), but the dead zone here still needs to line up with
-            // where a near-miss on one of them actually lands.
-            val cornerButtonSize = 48.dp
             val fanartHeight = if (isTv) 460.dp else 220.dp
             Box(
                 modifier = Modifier
@@ -517,21 +510,6 @@ private fun DetailsContent(
                         )
                     }
                 }
-                if (fanart != null) {
-                    // Zoom only triggers from this inset center region, not the full fanart - a
-                    // full-bleed clickable here meant a near-miss on the back/home/favorite buttons
-                    // (all anchored to this box's own corners) fell straight through to opening the
-                    // zoomed viewer instead, since a tap just outside a button's actual touch target
-                    // still landed on this Box underneath it. Purely a hit-test layer, no visuals.
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(cornerButtonSize)
-                            .let { if (contentFocusRequester != null) it.focusRequester(contentFocusRequester) else it }
-                            .focusHighlight(fanartSource)
-                            .clickable(interactionSource = fanartSource, indication = LocalIndication.current) { zoomedImage = fanart; zoomedImageIsFanart = true }
-                    )
-                }
             }
         }
 
@@ -584,8 +562,9 @@ private fun DetailsContent(
                         modifier = Modifier
                             .fillMaxWidth()
                             .aspectRatio(2f / 3f)
+                            .let { if (contentFocusRequester != null) it.focusRequester(contentFocusRequester) else it }
                             .focusHighlight(posterSource)
-                            .clickable(interactionSource = posterSource, indication = LocalIndication.current) { zoomedImage = poster; zoomedImageIsFanart = false }
+                            .clickable(interactionSource = posterSource, indication = LocalIndication.current) { zoomedImage = poster }
                     ) {
                         var posterLoading by remember { mutableStateOf(true) }
                         AsyncImage(
@@ -709,24 +688,35 @@ private fun DetailsContent(
                         style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold)
                     )
                     if (originalTitle != null) {
-                        // Capped at 2 lines by default so a long original title can't tower past the
-                        // poster's own height and leave a lot of blank space under it - but capping
-                        // it outright would make the full title unreachable for someone who actually
-                        // wants to read it (e.g. to search for it), so a tap expands it in place.
-                        var originalTitleExpanded by remember(item.stableId) { mutableStateOf(false) }
-                        val originalTitleSource = remember { MutableInteractionSource() }
-                        Text(
-                            "($originalTitle)",
-                            style = MaterialTheme.typography.headlineSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = if (originalTitleExpanded) Int.MAX_VALUE else 2,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier
-                                .focusHighlight(originalTitleSource)
-                                .clickable(interactionSource = originalTitleSource, indication = LocalIndication.current) {
-                                    originalTitleExpanded = !originalTitleExpanded
-                                }
-                        )
+                        // Capped at 2 lines on phone so a long original title can't tower past the
+                        // poster's own height and leave a lot of blank space under it - a tap
+                        // expands it in place there (touch-only affordance, so it's worth the
+                        // extra interactivity). The TV layout's poster/metadata column is taller
+                        // (200dp poster vs 132dp) so it just shows the full text unconditionally
+                        // instead - no tap target, no focus/selection highlight (that's what was
+                        // actually reported as broken on TV: a stray D-pad focus box landing on
+                        // plain informational text with nothing to do there).
+                        if (isTv) {
+                            Text(
+                                "($originalTitle)",
+                                style = MaterialTheme.typography.headlineSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        } else {
+                            var originalTitleExpanded by remember(item.stableId) { mutableStateOf(false) }
+                            val originalTitleSource = remember { MutableInteractionSource() }
+                            Text(
+                                "($originalTitle)",
+                                style = MaterialTheme.typography.headlineSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = if (originalTitleExpanded) Int.MAX_VALUE else 2,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.clickable(
+                                    interactionSource = originalTitleSource,
+                                    indication = LocalIndication.current
+                                ) { originalTitleExpanded = !originalTitleExpanded }
+                            )
+                        }
                     }
                 }
                 Text(
@@ -1025,8 +1015,7 @@ private fun DetailsContent(
         ZoomableImageViewer(
             model = model,
             contentDescription = displayTitle,
-            onDismiss = { zoomedImage = null },
-            imageLoader = if (zoomedImageIsFanart) fanartImageLoader else null
+            onDismiss = { zoomedImage = null }
         )
     }
 }

@@ -190,7 +190,7 @@ fun CacheScreen(
                         stringResource(R.string.settings_cache_size_unknown)
                     }
                 ) {
-                    com.illusion.app.ui.common.TvAwareOutlinedButton(
+                    com.illusion.app.ui.common.TvAwareButton(
                         onClick = { showClearCacheConfirm = true },
                         modifier = Modifier.fillMaxWidth()
                     ) {
@@ -218,7 +218,7 @@ fun CacheScreen(
                         else -> stringResource(R.string.settings_poster_cache_description)
                     }
                 ) {
-                    com.illusion.app.ui.common.TvAwareOutlinedButton(
+                    com.illusion.app.ui.common.TvAwareButton(
                         onClick = { showClearPosterCacheConfirm = true },
                         modifier = Modifier.fillMaxWidth()
                     ) {
@@ -234,7 +234,7 @@ fun CacheScreen(
                     },
                     description = stringResource(R.string.settings_fanart_cache_description)
                 ) {
-                    com.illusion.app.ui.common.TvAwareOutlinedButton(
+                    com.illusion.app.ui.common.TvAwareButton(
                         onClick = { showClearFanartCacheConfirm = true },
                         modifier = Modifier.fillMaxWidth()
                     ) {
@@ -259,7 +259,7 @@ private fun ImageCacheLimitMenu(currentMb: Int, onChange: (Int) -> Unit) {
     val options = listOf(256, 512, 1024, 2048)
     androidx.compose.foundation.layout.Box(modifier = Modifier.fillMaxWidth()) {
         val triggerSource = remember { MutableInteractionSource() }
-        com.illusion.app.ui.common.TvAwareOutlinedButton(
+        com.illusion.app.ui.common.TvAwareButton(
             onClick = { expanded = true },
             modifier = Modifier.fillMaxWidth()
         ) {

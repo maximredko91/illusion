@@ -148,16 +148,17 @@ fun LibraryScreen(
         }
     }
 
-    val isLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
+    val isTv = com.illusion.app.ui.common.LocalUiMode.current == com.illusion.app.domain.model.UiMode.TV
+    val isLandscape = !isTv && LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
     // Same SortMenu/FilterMenu row, just rendered in two different places depending on
     // orientation (see below) - landscape has much less vertical room than portrait, so this row
     // moves into the top bar itself (next to the title) instead of taking a whole separate row
-    // underneath it.
+    // underneath it. TV is always landscape but never takes this inline path (isLandscape is
+    // forced false above) - a remote can't swipe a horizontally-scrolling row, and every TV
+    // screen has plenty of width anyway, so it instead wraps onto as many lines as it needs via
+    // FlowRow (no scroll container at all) same as Details' genre chips.
     val sortFilterRow: @Composable () -> Unit = {
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            modifier = Modifier.horizontalScroll(rememberScrollState())
-        ) {
+        val menus: @Composable () -> Unit = {
             SortMenu(
                 sortOrder,
                 onSortOrderChange = { scrollToTop(); onSortOrderChange(it) },
@@ -189,6 +190,17 @@ fun LibraryScreen(
                 )
             }
         }
+        if (isTv) {
+            androidx.compose.foundation.layout.FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) { menus() }
+        } else {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.horizontalScroll(rememberScrollState())
+            ) { menus() }
+        }
     }
 
     // No longer read by a TopAppBar's `windowInsets` param (there's no TopAppBar here anymore) -
@@ -202,7 +214,12 @@ fun LibraryScreen(
     // past the header, cards could sit directly behind the hole - there was always room to shift
     // them clear of it (this device's TV-mode NavigationRail already claims the true left edge,
     // leaving slack between it and the cutout), the grid just never accounted for it.
-    val cutoutPadding = WindowInsets.displayCutout.asPaddingValues()
+    //
+    // TV-only: skip it entirely - a real TV Box has no physical camera to cut a hole for, and a
+    // real Xiaomi TV Box confirmed reporting a large nonzero displayCutout inset anyway (an OEM
+    // quirk, not a real notch) - trusting it there pushed the whole grid away from the true screen
+    // edge, leaving a big dead gap before the NavigationRail ("сериалы уехали от края экрана").
+    val cutoutPadding = if (isTv) PaddingValues(0.dp) else WindowInsets.displayCutout.asPaddingValues()
     val layoutDirection = LocalLayoutDirection.current
     val gridStartPadding = 8.dp + cutoutPadding.calculateStartPadding(layoutDirection)
     val gridEndPadding = 8.dp + cutoutPadding.calculateEndPadding(layoutDirection)

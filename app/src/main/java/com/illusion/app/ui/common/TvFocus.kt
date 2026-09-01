@@ -42,11 +42,17 @@ import com.illusion.app.domain.model.UiMode
 fun Modifier.focusHighlight(
     interactionSource: InteractionSource,
     shape: Shape = RoundedCornerShape(8.dp),
-    color: Color = MaterialTheme.colorScheme.primary
+    color: Color = MaterialTheme.colorScheme.primary,
+    // Off for elements sitting flush against a Row/screen edge (the top-bar action icons) -
+    // scaling grows the element from its own center, so the outer half of that growth pushes
+    // past the edge of whatever it's flush against, reading as "the icon runs off the screen"
+    // for whichever one happens to be last in the row. Border-only avoids that entirely; every
+    // other caller (poster cards, buttons with room to grow) keeps the scale.
+    scaleOnFocus: Boolean = true
 ): Modifier {
     if (LocalUiMode.current != UiMode.TV) return this
     val isFocused by interactionSource.collectIsFocusedAsState()
-    val scale by animateFloatAsState(if (isFocused) 1.08f else 1f, label = "tvFocusScale")
+    val scale by animateFloatAsState(if (isFocused && scaleOnFocus) 1.08f else 1f, label = "tvFocusScale")
     return this
         .scale(scale)
         .then(

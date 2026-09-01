@@ -97,6 +97,7 @@ import com.illusion.app.R
 import com.illusion.app.data.backup.BackupSource
 import com.illusion.app.data.download.DownloadStorage
 import com.illusion.app.data.local.entity.SmbSourceEntity
+import com.illusion.app.ui.common.TvAwareButton
 import com.illusion.app.ui.common.TvAwareOutlinedButton
 import com.illusion.app.ui.common.TvAwareSwitch
 import com.illusion.app.ui.common.focusHighlight
@@ -380,13 +381,6 @@ fun SettingsScreen(
                         )
                         SettingsDivider()
                         CategoryRow(
-                            title = stringResource(R.string.settings_scan_section),
-                            description = stringResource(R.string.settings_category_scan_description),
-                            icon = Icons.Default.Sync,
-                            onClick = { selectedCategory = "scan" }
-                        )
-                        SettingsDivider()
-                        CategoryRow(
                             title = stringResource(R.string.settings_player_section),
                             description = stringResource(R.string.settings_category_player_description),
                             icon = Icons.Default.PlayCircle,
@@ -420,6 +414,10 @@ fun SettingsScreen(
                             icon = Icons.Default.Backup,
                             onClick = { selectedCategory = "backup" }
                         )
+                        // Developer-only flow (TMDB scrape + SMB upload) built phone-first - its own
+                        // screen isn't wired for D-pad focus at all (see CLAUDE.md), so on a TV Box
+                        // this row would open an unusable dead end rather than a real feature.
+                        if (currentUiMode != UiMode.TV) {
                         SettingsDivider()
                         CategoryRow(
                             title = stringResource(R.string.settings_add_media),
@@ -427,6 +425,7 @@ fun SettingsScreen(
                             icon = Icons.Default.LibraryAdd,
                             onClick = { selectedCategory = "add_media" }
                         )
+                        }
                         SettingsDivider()
                         CategoryRow(
                             title = stringResource(R.string.settings_feedback),
@@ -600,7 +599,7 @@ fun SettingsScreen(
                                         )
                                     }
                                 }
-                                TvAwareOutlinedButton(onClick = onCheckForUpdates, modifier = Modifier.fillMaxWidth().padding(top = 12.dp)) {
+                                TvAwareButton(onClick = onCheckForUpdates, modifier = Modifier.fillMaxWidth().padding(top = 12.dp)) {
                                     Text(stringResource(R.string.action_check))
                                 }
                             }
@@ -1033,11 +1032,10 @@ fun SettingsScreen(
                             SettingsActionCard(title = stringResource(R.string.settings_default_sort_order)) {
                                 DefaultSortOrderMenu(currentDefaultSortOrder, onDefaultSortOrderChange, modifier = Modifier.fillMaxWidth())
                             }
-                        }
-                    }
-
-                    "scan" -> {
-                        SettingsGroup {
+                            // Scanning used to be its own top-level category - merged in here per
+                            // user feedback, since it's really just another aspect of managing the
+                            // library, not a separate concern of its own.
+                            SettingsDivider()
                             if (isScanRunning) {
                                 // A scan already running underneath, silently - tapping "Сканировать"
                                 // again here would just REPLACE it with an identical fresh run (no
@@ -1048,7 +1046,7 @@ fun SettingsScreen(
                                     title = stringResource(R.string.settings_scan_running),
                                     description = stringResource(R.string.settings_scan_running_description)
                                 ) {
-                                    TvAwareOutlinedButton(onClick = onOpenRunningScan, modifier = Modifier.fillMaxWidth()) {
+                                    TvAwareButton(onClick = onOpenRunningScan, modifier = Modifier.fillMaxWidth()) {
                                         Text(stringResource(R.string.settings_scan_running_open))
                                     }
                                 }
@@ -1057,7 +1055,7 @@ fun SettingsScreen(
                                     title = stringResource(R.string.settings_rescan_now),
                                     description = stringResource(R.string.settings_rescan_now_description)
                                 ) {
-                                    TvAwareOutlinedButton(
+                                    TvAwareButton(
                                         onClick = onRescanNow,
                                         enabled = sources.isNotEmpty(),
                                         modifier = Modifier.fillMaxWidth()
@@ -1070,7 +1068,7 @@ fun SettingsScreen(
                                     title = stringResource(R.string.settings_rescan_force_now),
                                     description = stringResource(R.string.settings_rescan_force_now_description)
                                 ) {
-                                    TvAwareOutlinedButton(
+                                    TvAwareButton(
                                         onClick = onRescanForceNow,
                                         enabled = sources.isNotEmpty(),
                                         modifier = Modifier.fillMaxWidth()
@@ -1134,7 +1132,7 @@ fun SettingsScreen(
                                 description = DownloadStorage.folderDisplayName(context, downloadsFolder)
                             ) {
                                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                                    TvAwareOutlinedButton(
+                                    TvAwareButton(
                                         onClick = {
                                             val intent = DownloadStorage.openFolderIntent(context, downloadsFolder)
                                             if (intent != null) {
@@ -1152,7 +1150,7 @@ fun SettingsScreen(
                                         Icon(Icons.Default.Folder, contentDescription = null, modifier = Modifier.padding(end = 6.dp))
                                         Text(stringResource(R.string.settings_downloads_open_folder))
                                     }
-                                    TvAwareOutlinedButton(
+                                    TvAwareButton(
                                         onClick = { folderPicker.launch(DownloadStorage.pickerInitialUri()) },
                                         modifier = Modifier.weight(1f)
                                     ) {
@@ -1173,7 +1171,7 @@ fun SettingsScreen(
                                     stringResource(R.string.settings_cache_size_unknown)
                                 }
                             ) {
-                                TvAwareOutlinedButton(onClick = onClearDownloads, modifier = Modifier.fillMaxWidth()) {
+                                TvAwareButton(onClick = onClearDownloads, modifier = Modifier.fillMaxWidth()) {
                                     Text(stringResource(R.string.settings_downloads_clear))
                                 }
                             }
@@ -1187,7 +1185,7 @@ fun SettingsScreen(
                                 title = stringResource(R.string.settings_downloads_recover_action),
                                 description = stringResource(R.string.settings_downloads_recover_description)
                             ) {
-                                TvAwareOutlinedButton(
+                                TvAwareButton(
                                     onClick = { recoverFolderPicker.launch(DownloadStorage.pickerInitialUri()) },
                                     modifier = Modifier.fillMaxWidth()
                                 ) {
@@ -1220,13 +1218,13 @@ fun SettingsScreen(
                                 description = stringResource(R.string.settings_backup_description)
                             ) {
                                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                                    TvAwareOutlinedButton(
+                                    TvAwareButton(
                                         onClick = { exportLauncher.launch("illusion-backup.json") },
                                         modifier = Modifier.weight(1f)
                                     ) {
                                         Text(stringResource(R.string.settings_backup_export))
                                     }
-                                    TvAwareOutlinedButton(
+                                    TvAwareButton(
                                         onClick = { importLauncher.launch(arrayOf("application/json")) },
                                         modifier = Modifier.weight(1f)
                                     ) {
@@ -1245,11 +1243,11 @@ fun SettingsScreen(
                             ) {
                                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                                     if (isDevAccessRemembered()) {
-                                        TvAwareOutlinedButton(onClick = onForgetDevAccess, modifier = Modifier.weight(1f)) {
+                                        TvAwareButton(onClick = onForgetDevAccess, modifier = Modifier.weight(1f)) {
                                             Text(stringResource(R.string.settings_dev_access_forget))
                                         }
                                     }
-                                    TvAwareOutlinedButton(
+                                    TvAwareButton(
                                         onClick = {
                                             when {
                                                 isDevAccessRemembered() -> onDevAccessGranted()
@@ -1272,7 +1270,7 @@ fun SettingsScreen(
                                 title = stringResource(R.string.settings_feedback),
                                 description = stringResource(R.string.settings_feedback_description)
                             ) {
-                                TvAwareOutlinedButton(
+                                TvAwareButton(
                                     onClick = { context.startActivity(android.content.Intent.createChooser(com.illusion.app.data.crash.CrashReporter.feedbackIntent(), null)) },
                                     modifier = Modifier.fillMaxWidth()
                                 ) {
@@ -1288,7 +1286,7 @@ fun SettingsScreen(
                                 title = stringResource(R.string.settings_reset_to_defaults),
                                 description = stringResource(R.string.settings_reset_to_defaults_description)
                             ) {
-                                TvAwareOutlinedButton(onClick = { showResetConfirm = true }, modifier = Modifier.fillMaxWidth()) {
+                                TvAwareButton(onClick = { showResetConfirm = true }, modifier = Modifier.fillMaxWidth()) {
                                     Text(stringResource(R.string.settings_reset_to_defaults_action))
                                 }
                             }
@@ -1450,7 +1448,6 @@ private fun categoryTitle(key: String): String = when (key) {
     "screen_mode" -> stringResource(R.string.settings_screen_mode_section)
     "performance" -> stringResource(R.string.settings_performance_section)
     "library" -> stringResource(R.string.settings_library_section)
-    "scan" -> stringResource(R.string.settings_scan_section)
     "player" -> stringResource(R.string.settings_player_section)
     "downloads" -> stringResource(R.string.settings_downloads)
     "backup" -> stringResource(R.string.settings_backup)
