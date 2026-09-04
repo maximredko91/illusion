@@ -84,6 +84,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -92,6 +93,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.illusion.app.R
@@ -288,14 +291,96 @@ fun BottomGradientBar(
     hasNextEpisode: Boolean,
     isLocked: Boolean,
     onSeekTo: (Long) -> Unit,
+    onSeekDragging: () -> Unit = {},
     onNextEpisode: () -> Unit,
     onToggleLock: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val focusManager = LocalFocusManager.current
+
+    // NOT remember(currentPositionMs) - the position ticker keeps advancing currentPositionMs
+    // every 500ms during playback even while the user is actively dragging (the real seek only
+    // happens on release, in onValueChangeFinished), so keying remember on it re-synced
+    // sliderPosition back to the still-playing position mid-drag, fighting the drag gesture's
+    // own onValueChange updates. The thumb/track visibly snapped between the two positions each
+    // tick - reported as the seek bar "doubling" while scrubbing. Only sync from the real
+    // playback position when the user isn't actively holding the slider.
+    var sliderPosition by remember { mutableFloatStateOf(currentPositionMs.toFloat()) }
+    var isDragging by remember { mutableStateOf(false) }
+    LaunchedEffect(currentPositionMs, isDragging) {
+        if (!isDragging) sliderPosition = currentPositionMs.toFloat()
+    }
+
+    // The scrub thumbnail/time preview used to be an ordinary child laid out ABOVE the time/
+    // slider row, inside the same Column as the rest of this bar - appearing and disappearing
+    // with isDragging changed this Column's own measured height. PlayerScreen sizes the buffering
+    // spinner / play-pause button's container against this bar's real height (a sibling Box with
+    // `weight(1f)`), so every time a drag started or ended, that Box's available space - and so
+    // its centered content - shifted. Most noticeable right at release: the preview disappears
+    // and a buffering spinner appears in the same instant, so the spinner visibly "jumps" to a
+    // new position (reported as "спиннер скачет при перемотке"). Rendered here as an absolutely
+    // positioned overlay ABOVE the bar instead, flush with its top edge (via the measured
+    // [barHeightPx]) - this bar's own measured height no longer changes at all while dragging, so
+    // nothing sized off it moves either.
+    var barHeightPx by remember { mutableIntStateOf(0) }
+
+    Box(modifier = modifier.fillMaxWidth()) {
+        if (isDragging) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .fillMaxWidth()
+                    // A plain .offset{} here still leaves this Box's OWN measured size (its
+                    // natural content height - up to ~90dp taller when a thumbnail image is
+                    // showing, vs. just a time label) contributing to the parent Box's own size
+                    // calculation, since offset only changes where a child is drawn, not what
+                    // size it reports upward - Box sizes itself from the max of every child's
+                    // MEASURED size regardless of any offset applied to it. Whenever the preview
+                    // was taller than the bar itself (any time a real thumbnail image was
+                    // available, i.e. most previously-watched content), the parent Box - and so
+                    // PlayerScreen's own onSizeChanged-measured bottomBarHeightPx that the
+                    // spinner/play-button container is sized against - grew right along with it,
+                    // reintroducing the very same jump this whole restructure exists to remove
+                    // (see this composable's own top-level comment). This custom layout reports a
+                    // (0, 0) size to the parent no matter how tall the actual preview content is -
+                    // fully decoupling this bar's own reported size from whether the preview is
+                    // showing at all, or what it's showing.
+                    .layout { measurable, constraints ->
+                        val placeable = measurable.measure(constraints)
+                        layout(0, 0) {
+                            placeable.place(0, -(barHeightPx + placeable.height))
+                        }
+                    },
+                contentAlignment = Alignment.Center
+            ) {
+                val frame = thumbnailFrames?.let { tf ->
+                    val index = (sliderPosition.toLong() / tf.intervalMs.coerceAtLeast(1))
+                        .toInt()
+                        .coerceIn(0, tf.frames.size - 1)
+                    tf.frames.getOrNull(index)
+                }
+                if (frame != null) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Image(
+                            bitmap = frame,
+                            contentDescription = null,
+                            modifier = Modifier
+                                .width(160.dp)
+                                .height(90.dp)
+                                .border(1.dp, Color.White)
+                        )
+                        Text(formatTime(sliderPosition.toLong()), color = Color.White)
+                    }
+                } else {
+                    Text(formatTime(sliderPosition.toLong()), color = Color.White)
+                }
+            }
+        }
+
     Column(
-        modifier = modifier
+        modifier = Modifier
             .fillMaxWidth()
+            .onSizeChanged { barHeightPx = it.height }
             .background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.75f))))
             .padding(horizontal = 12.dp, vertical = 8.dp)
     ) {
@@ -333,35 +418,6 @@ fun BottomGradientBar(
                 }
             }
         }
-        var sliderPosition by remember(currentPositionMs) { mutableFloatStateOf(currentPositionMs.toFloat()) }
-        var isDragging by remember { mutableStateOf(false) }
-
-        if (isDragging) {
-            Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                val frame = thumbnailFrames?.let { tf ->
-                    val index = (sliderPosition.toLong() / tf.intervalMs.coerceAtLeast(1))
-                        .toInt()
-                        .coerceIn(0, tf.frames.size - 1)
-                    tf.frames.getOrNull(index)
-                }
-                if (frame != null) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Image(
-                            bitmap = frame,
-                            contentDescription = null,
-                            modifier = Modifier
-                                .width(160.dp)
-                                .height(90.dp)
-                                .border(1.dp, Color.White)
-                        )
-                        Text(formatTime(sliderPosition.toLong()), color = Color.White)
-                    }
-                } else {
-                    Text(formatTime(sliderPosition.toLong()), color = Color.White)
-                }
-            }
-            Spacer(Modifier.height(4.dp))
-        }
 
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
@@ -375,12 +431,12 @@ fun BottomGradientBar(
             // Releasing a held scrub (or even a single tap-adjust) sometimes sent D-pad focus
             // flying off to the top-right icon row instead of staying on the seek bar - confirmed
             // on-device, most reliably reproduced by holding Left/Right rather than a quick press.
-            // The likely trigger is the thumbnail-preview Box above the slider (isDragging - see
-            // below) appearing/disappearing, which shifts this whole row's on-screen position at
-            // the exact moment focus state is most fragile (mid key-repeat). Rather than chase the
-            // exact mechanism blind, explicitly re-claiming focus back onto the slider itself the
-            // moment dragging ends makes the actual symptom impossible regardless of what
-            // triggered it.
+            // The likely trigger was the thumbnail-preview box appearing/disappearing with
+            // isDragging, which used to shift this whole row's on-screen position at the exact
+            // moment focus state is most fragile (mid key-repeat) - the preview is now an absolute
+            // overlay above the bar instead (see this composable's own top-level comment), so this
+            // row no longer moves at all, but the explicit re-claim stays as a harmless safety net
+            // rather than trusting that removing the original trigger fully closes the door on it.
             val sliderFocusRequester = remember { FocusRequester() }
             // Only reacts to an actual true->false transition (a real drag just ending) - a plain
             // "if (!isDragging)" would also fire on this composable's very first entry into
@@ -394,7 +450,7 @@ fun BottomGradientBar(
             }
             Slider(
                 value = sliderPosition,
-                onValueChange = { sliderPosition = it; isDragging = true },
+                onValueChange = { sliderPosition = it; isDragging = true; onSeekDragging() },
                 onValueChangeFinished = { isDragging = false; onSeekTo(sliderPosition.toLong()) },
                 valueRange = 0f..(durationMs.coerceAtLeast(1).toFloat()),
                 colors = SliderDefaults.colors(
@@ -430,6 +486,7 @@ fun BottomGradientBar(
                 modifier = Modifier.width(64.dp)
             )
         }
+    }
     }
 }
 

@@ -118,6 +118,10 @@ class IllusionApplication : Application(), Configuration.Provider, SingletonImag
         applicationScope.launch {
             settingsRepository.posterCachingEnabled.collect { PosterCacheSettings.cachingEnabled = it }
         }
+        // Backs PlayerViewModel.createPlayer()'s synchronous LoadControl read - see
+        // SettingsRepository.playerBufferSizeSnapshot's own KDoc for why this needs to run early
+        // and keep running for the whole process lifetime, not just once.
+        settingsRepository.startPlayerBufferSizeCache(applicationScope)
         // One-time cleanup: downloads used to live in this app-private dir before moving to public
         // Downloads/Illusion (content Uris) - those old files are now orphaned dead weight.
         java.io.File(filesDir, "downloads").let { if (it.exists()) it.deleteRecursively() }
@@ -151,6 +155,21 @@ class IllusionApplication : Application(), Configuration.Provider, SingletonImag
         applicationScope.launch {
             if (thumbnailRepository.getForItem(item.stableId) != null) return@launch
             runCatching { thumbnailGenerator.generate(item) }.getOrNull()?.let { thumbnailRepository.save(it) }
+        }
+    }
+
+    /**
+     * Called by [com.illusion.app.ui.player.PlayerViewModel.onCleared] to save the final watch
+     * position without blocking. Needs [applicationScope], not the ViewModel's own scope - by the
+     * time `onCleared()` runs, `viewModelScope` has already been cancelled (`ViewModel.clear()`
+     * closes every registered `Closeable`, the coroutine scope included, *before* calling
+     * `onCleared()`), so a `viewModelScope.launch{}` there would never actually run. This used to
+     * be worked around with a `runBlocking{}` call instead - correct, but `onCleared()` runs on
+     * the Main thread, so leaving the player screen synchronously blocked the UI on a Room write.
+     */
+    fun persistFinalWatchProgress(stableId: String, positionMs: Long, durationMs: Long, watched: Boolean, updatedAtMs: Long) {
+        applicationScope.launch {
+            watchProgressRepository.updateProgress(stableId, positionMs, durationMs, watched, updatedAtMs)
         }
     }
 

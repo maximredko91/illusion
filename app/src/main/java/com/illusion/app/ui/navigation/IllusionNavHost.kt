@@ -525,6 +525,7 @@ private fun IllusionNavGraph(app: IllusionApplication, navController: NavHostCon
                     watchProgressRepository = app.watchProgressRepository,
                     thumbnailRepository = app.thumbnailRepository,
                     generateThumbnailIfMissing = app::generateThumbnailIfMissing,
+                    persistFinalWatchProgress = app::persistFinalWatchProgress,
                     settingsRepository = app.settingsRepository,
                     smbDataSourceFactory = app.smbDataSourceFactory,
                     downloadRepository = app.downloadRepository,

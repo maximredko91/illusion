@@ -52,6 +52,7 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -134,6 +135,7 @@ fun PlayerScreen(
     watchProgressRepository: WatchProgressRepository,
     thumbnailRepository: ThumbnailRepository,
     generateThumbnailIfMissing: (com.illusion.app.data.local.entity.MediaItemEntity) -> Unit,
+    persistFinalWatchProgress: (stableId: String, positionMs: Long, durationMs: Long, watched: Boolean, updatedAtMs: Long) -> Unit,
     settingsRepository: com.illusion.app.data.settings.SettingsRepository,
     smbDataSourceFactory: SmbDataSourceFactory,
     downloadRepository: DownloadRepository,
@@ -149,6 +151,7 @@ fun PlayerScreen(
             watchProgressRepository,
             thumbnailRepository,
             generateThumbnailIfMissing,
+            persistFinalWatchProgress,
             settingsRepository,
             smbDataSourceFactory,
             downloadRepository,
@@ -597,6 +600,7 @@ fun PlayerScreen(
                         hasNextEpisode = uiState.hasNextEpisode,
                         isLocked = isLocked,
                         onSeekTo = { position -> bumpInteraction(); viewModel.seekTo(position) },
+                        onSeekDragging = { bumpInteraction() },
                         onNextEpisode = { bumpInteraction(); viewModel.playNext() },
                         onToggleLock = { bumpInteraction(); isLocked = true; lockIconVisible = true; controlsVisible = false }
                     )
@@ -817,6 +821,14 @@ private fun GestureLayer(
         context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
     }
     val scope = rememberCoroutineScope()
+    // The pointerInput block below is keyed on (activity, swipeSeekEnabled), not on every
+    // recomposition, so a plain closure over the currentPositionMs parameter would freeze it at
+    // whatever value it had when that gesture coroutine last (re)started - effectively once per
+    // player session. The actual seek this commits is a relative delta against the live player
+    // position (onSeekByCommit), so it still lands correctly - but the absolute target time shown
+    // in the drag toast drifted further from reality the longer playback ran before the swipe.
+    // rememberUpdatedState keeps the read inside the gesture block always current.
+    val latestPositionMs by rememberUpdatedState(currentPositionMs)
 
     var showVolume by remember { mutableStateOf(false) }
     var showBrightness by remember { mutableStateOf(false) }
@@ -1019,7 +1031,7 @@ private fun GestureLayer(
                             }
                             DragMode.SEEK -> {
                                 val deltaMs = (accumulatedDx / size.width * 120_000f).toLong()
-                                val targetMs = (currentPositionMs + deltaMs).coerceAtLeast(0)
+                                val targetMs = (latestPositionMs + deltaMs).coerceAtLeast(0)
                                 val sign = if (deltaMs >= 0) "+" else "-"
                                 showSeekToast(
                                     text = "${formatTime(targetMs)}  $sign${formatTime(abs(deltaMs))}",

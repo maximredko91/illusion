@@ -100,7 +100,7 @@ class SmbConnection internal constructor(
             SMB2CreateDisposition.FILE_OPEN,
             null
         )
-        return SmbRandomAccessFile(file)
+        return SmbRandomAccessFile(file) { isConnected }
     }
 
     /** Actual free space on the share's volume, in bytes - used by the developer-only media-add flow to warn before a large upload. */
@@ -206,7 +206,9 @@ class SmbConnection internal constructor(
 }
 
 class SmbRandomAccessFile internal constructor(
-    private val file: com.hierynomus.smbj.share.File
+    private val file: com.hierynomus.smbj.share.File,
+    /** Reflects the owning [SmbConnection.isConnected] at close time - see [close]'s own KDoc for why this is checked instead of just wrapping in `runCatching`. */
+    private val isConnected: () -> Boolean = { true }
 ) : java.io.Closeable {
     /**
      * Reads up to [length] bytes into [buffer] at [offset], starting at [filePosition] in the
@@ -219,9 +221,20 @@ class SmbRandomAccessFile internal constructor(
     fun read(buffer: ByteArray, filePosition: Long, offset: Int = 0, length: Int = buffer.size): Int =
         file.read(buffer, filePosition, offset, length)
 
-    // See SmbConnection.close()'s comment - same reasoning, a dead connection makes close() itself
-    // throw SMBRuntimeException, which must not propagate uncaught here.
-    override fun close() { runCatching { file.close() } }
+    /**
+     * A dead connection doesn't just make `file.close()` throw a catchable [com.hierynomus.smbj.common.SMBRuntimeException] -
+     * SmbDataSource.kt's own reconnect logic found (on-device) that closing a file handle whose
+     * DiskShare was *already torn down* aborts the whole process via a native JNI CheckJNI
+     * violation, not a normal Kotlin exception `runCatching` can stop. [isConnected] is the same
+     * connection-liveness check [SmbDataSourceFactory.connectionFor] already uses elsewhere - if
+     * the owning connection is already gone, skip the close entirely rather than risk the abort;
+     * the server released the handle on its own the moment the session died, so there's nothing
+     * left here to actually close.
+     */
+    override fun close() {
+        if (!isConnected()) return
+        runCatching { file.close() }
+    }
 }
 
 class SmbRandomAccessWriteFile internal constructor(

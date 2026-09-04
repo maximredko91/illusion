@@ -57,7 +57,6 @@ import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 
 data class TrackOption(
@@ -124,6 +123,8 @@ class PlayerViewModel(
     private val watchProgressRepository: WatchProgressRepository,
     private val thumbnailRepository: ThumbnailRepository,
     private val generateThumbnailIfMissing: (MediaItemEntity) -> Unit,
+    /** Fire-and-forget final progress save for [onCleared] - see [com.illusion.app.IllusionApplication.persistFinalWatchProgress]'s own KDoc for why this can't just be `viewModelScope.launch{}`. */
+    private val persistFinalWatchProgress: (stableId: String, positionMs: Long, durationMs: Long, watched: Boolean, updatedAtMs: Long) -> Unit,
     private val settingsRepository: SettingsRepository,
     private val dataSourceFactory: SmbDataSourceFactory,
     private val downloadRepository: DownloadRepository,
@@ -165,7 +166,7 @@ class PlayerViewModel(
             ).setDataSourceFactory(DefaultDataSource.Factory(appContext, dataSourceFactory))
         )
         .setLoadControl(
-            buildAdaptiveLoadControl(appContext, runBlocking { settingsRepository.playerBufferSize.first() })
+            buildAdaptiveLoadControl(appContext, settingsRepository.playerBufferSizeSnapshot)
         )
         .build()
         .apply { setWakeMode(C.WAKE_MODE_NETWORK) }
@@ -1156,9 +1157,7 @@ class PlayerViewModel(
             val position = player.currentPosition.coerceAtLeast(0)
             val duration = player.duration.takeIf { it != C.TIME_UNSET }?.coerceAtLeast(0) ?: 0L
             val watched = duration > 0 && position >= duration - 5000
-            runBlocking {
-                watchProgressRepository.updateProgress(item.stableId, position, duration, watched, System.currentTimeMillis())
-            }
+            persistFinalWatchProgress(item.stableId, position, duration, watched, System.currentTimeMillis())
         }
         if (playbackServiceStarted) {
             playbackService?.detachPlayer()
@@ -1177,6 +1176,7 @@ class PlayerViewModel(
             watchProgressRepository: WatchProgressRepository,
             thumbnailRepository: ThumbnailRepository,
             generateThumbnailIfMissing: (MediaItemEntity) -> Unit,
+            persistFinalWatchProgress: (stableId: String, positionMs: Long, durationMs: Long, watched: Boolean, updatedAtMs: Long) -> Unit,
             settingsRepository: SettingsRepository,
             dataSourceFactory: SmbDataSourceFactory,
             downloadRepository: DownloadRepository,
@@ -1190,6 +1190,7 @@ class PlayerViewModel(
                     watchProgressRepository,
                     thumbnailRepository,
                     generateThumbnailIfMissing,
+                    persistFinalWatchProgress,
                     settingsRepository,
                     dataSourceFactory,
                     downloadRepository,

@@ -76,9 +76,29 @@ class NfoParser {
                         "uniqueid" -> currentUniqueIdType = parser.getAttributeValue(null, "type")?.lowercase()
                         // Kodi nests the backdrop as <fanart><thumb>url</thumb></fanart> - a
                         // sibling of the top-level poster <thumb> elements, not a variant of them.
-                        "thumb" -> when {
-                            inFanart -> if (fanartUrl == null) fanartUrl = readTextSafely(parser)
-                            !inActor -> if (posterUrl == null) posterUrl = readTextSafely(parser)
+                        "thumb" -> {
+                            val consumed = when {
+                                inFanart -> { if (fanartUrl == null) fanartUrl = readTextSafely(parser); true }
+                                !inActor -> { if (posterUrl == null) posterUrl = readTextSafely(parser); true }
+                                else -> false
+                            }
+                            // readTextSafely() calls parser.next() once, moving past this <thumb>
+                            // itself. A normal <thumb>url</thumb> lands on the TEXT event, later
+                            // revisited normally by this loop's own END_TAG handling below. But a
+                            // self-closing <thumb/> (no url set for this item - common when a
+                            // scraper skips an image) has no TEXT event to land on: parser.next()
+                            // goes straight to thumb's own END_TAG, which readTextSafely has now
+                            // silently consumed without this loop ever seeing it - the depth--
+                            // below never runs for it. Left uncorrected, `depth` stays one too
+                            // high permanently, so the real root tag's own closing tag no longer
+                            // brings it back to 0 and parsing doesn't stop where it should (see
+                            // this function's own note on tinyMediaManager's duplicate-root-block
+                            // .nfo files) - it silently keeps reading into a second block.
+                            if (consumed && parser.eventType == XmlPullParser.END_TAG && parser.name == "thumb") {
+                                currentTag = null
+                                depth--
+                                if (depth == 0) break@loop
+                            }
                         }
                     }
                 }

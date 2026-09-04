@@ -336,6 +336,7 @@ private fun DetailsContent(
     contentFocusRequester: androidx.compose.ui.focus.FocusRequester? = null
 ) {
     var zoomedImage by remember { mutableStateOf<Any?>(null) }
+    var zoomedImageIsFanart by remember { mutableStateOf(false) }
     val fanartImageLoader = (androidx.compose.ui.platform.LocalContext.current.applicationContext as com.illusion.app.IllusionApplication).fanartImageLoader
 
     // Landscape on this device has a real display-cutout inset on one side only (front camera) -
@@ -404,6 +405,12 @@ private fun DetailsContent(
         val isTv = LocalUiMode.current == UiMode.TV
         Box {
             val fanart = item.fanartModel
+            val fanartSource = remember { MutableInteractionSource() }
+            // Matches the floating back/home buttons' own footprint (IconButton's default touch
+            // target) - they float on top of this fanart now rather than living inside it (see
+            // DetailsScreen's own overlay), but the dead zone here still needs to line up with
+            // where a near-miss on one of them actually lands.
+            val cornerButtonSize = 48.dp
             val fanartHeight = if (isTv) 460.dp else 220.dp
             Box(
                 modifier = Modifier
@@ -509,6 +516,27 @@ private fun DetailsContent(
                                 .padding(start = 24.dp, end = 24.dp, bottom = 20.dp)
                         )
                     }
+                    // Tap-to-zoom, phone only - TV has no pinch/pan gesture to make a zoomed
+                    // viewer useful, and a D-pad has nothing sensible to focus it with either
+                    // (matches the original-title tap-to-expand right below, which draws the same
+                    // isTv line). Zoom only triggers from this inset center region, not the full
+                    // fanart - a full-bleed clickable here meant a near-miss on the back/home/
+                    // favorite buttons (all anchored to this box's own corners) fell straight
+                    // through to opening the zoomed viewer instead, since a tap just outside a
+                    // button's actual touch target still landed on this Box underneath it. Purely
+                    // a hit-test layer, no visuals.
+                    if (!isTv && fanart != null) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(cornerButtonSize)
+                                .focusHighlight(fanartSource)
+                                .clickable(interactionSource = fanartSource, indication = LocalIndication.current) {
+                                    zoomedImage = fanart
+                                    zoomedImageIsFanart = true
+                                }
+                        )
+                    }
                 }
             }
         }
@@ -564,7 +592,7 @@ private fun DetailsContent(
                             .aspectRatio(2f / 3f)
                             .let { if (contentFocusRequester != null) it.focusRequester(contentFocusRequester) else it }
                             .focusHighlight(posterSource)
-                            .clickable(interactionSource = posterSource, indication = LocalIndication.current) { zoomedImage = poster }
+                            .clickable(interactionSource = posterSource, indication = LocalIndication.current) { zoomedImage = poster; zoomedImageIsFanart = false }
                     ) {
                         var posterLoading by remember { mutableStateOf(true) }
                         AsyncImage(
@@ -913,7 +941,7 @@ private fun DetailsContent(
                                 fontWeight = FontWeight.SemiBold,
                                 color = MaterialTheme.colorScheme.onSurface
                             )
-                            Text(it, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = 2.dp))
+                            Text(formatPremieredDate(it), style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = 2.dp))
                         }
                     }
                     seriesStatus?.let {
@@ -1015,7 +1043,8 @@ private fun DetailsContent(
         ZoomableImageViewer(
             model = model,
             contentDescription = displayTitle,
-            onDismiss = { zoomedImage = null }
+            onDismiss = { zoomedImage = null },
+            imageLoader = if (zoomedImageIsFanart) fanartImageLoader else null
         )
     }
 }
@@ -1515,7 +1544,7 @@ private fun EpisodeList(
                                 Text(label.ifBlank { episode.title }, modifier = Modifier.weight(1f))
                                 episode.premiered?.let {
                                     Text(
-                                        it,
+                                        formatPremieredDate(it),
                                         style = MaterialTheme.typography.labelSmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                                         modifier = Modifier.padding(start = 8.dp)
@@ -1604,6 +1633,17 @@ private fun ageRatingLabel(mpaa: String): String? {
         else -> null
     }
 }
+
+/**
+ * NFO `<premiered>`/`<aired>` values are Kodi/tinyMediaManager's own ISO `yyyy-MM-dd` format, but
+ * were shown completely raw here ("1999-09-01") instead of a readable localized date. Malformed or
+ * non-ISO values (a bare year, "N/A", an empty scraper placeholder, ...) are shown unchanged rather
+ * than hidden - same fallback approach [ageRatingLabel]'s caller already uses for a messy `mpaa`.
+ */
+private fun formatPremieredDate(raw: String): String =
+    runCatching { java.time.LocalDate.parse(raw) }
+        .map { it.format(java.time.format.DateTimeFormatter.ofPattern("d MMMM yyyy", java.util.Locale.forLanguageTag("ru"))) }
+        .getOrDefault(raw)
 
 @Composable
 private fun AgeRatingBadge(label: String, modifier: Modifier = Modifier) {

@@ -15,6 +15,7 @@ import com.illusion.app.domain.model.SortOrder
 import com.illusion.app.domain.model.UiMode
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.launch
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 
@@ -192,6 +193,23 @@ class SettingsRepository(private val context: Context) {
         context.dataStore.edit { it[Keys.PLAYER_BUFFER_SIZE] = size.name }
     }
 
+    /**
+     * Last-known snapshot of [playerBufferSize], kept fresh by [startPlayerBufferSizeCache].
+     * PlayerViewModel.createPlayer() builds an ExoPlayer's LoadControl from this on every player
+     * screen open and every sharpen-toggle reload - previously it read [playerBufferSize] via
+     * `runBlocking{}` at each of those call sites, blocking the (usually Main) calling thread on a
+     * DataStore disk read. Reading this plain field instead never blocks. Starts at the same
+     * INCREASED default the flow itself falls back to, until the cache's first real value lands.
+     */
+    @Volatile
+    var playerBufferSizeSnapshot: PlayerBufferSize = PlayerBufferSize.INCREASED
+        private set
+
+    /** Starts the background collector backing [playerBufferSizeSnapshot] - call once, on an application-scoped [scope] that outlives any single screen (see [com.illusion.app.IllusionApplication]). */
+    fun startPlayerBufferSizeCache(scope: kotlinx.coroutines.CoroutineScope) {
+        scope.launch { playerBufferSize.collect { playerBufferSizeSnapshot = it } }
+    }
+
     /** Defaults to AUTO - see [com.illusion.app.domain.model.PerformanceMode]'s own KDoc for what this drives and how AUTO resolves. */
     val performanceMode: Flow<com.illusion.app.domain.model.PerformanceMode> = context.dataStore.data.map {
         it[Keys.PERFORMANCE_MODE]?.let { name -> runCatching { com.illusion.app.domain.model.PerformanceMode.valueOf(name) }.getOrNull() }
@@ -325,9 +343,44 @@ class SettingsRepository(private val context: Context) {
         context.dataStore.edit { it.remove(Keys.RECENT_SEARCHES) }
     }
 
-    /** Clears every preference here (sort order, haptics, seek duration, sharpen, poster caching, rescan interval, charging requirement, downloads folder, UI mode, player mode, gesture toggles, technical info, subtitle style, predictive back) back to its default - does not touch SMB sources or the library index, only this DataStore. */
+    /** Resets every user-facing display/player preference (sort order, haptics, sharpen, poster caching, image cache limit, downloads folder, UI mode, accent color, theme mode, player mode/buffer size, external player package, gesture toggles, subtitle style, predictive back, TV overscan margin, performance mode, update source) back to its default.
+     *
+     * Deliberately does NOT `clear()` the whole DataStore - it used to, which also wiped internal
+     * feature state that isn't a "setting" a user would expect this button to touch: recent
+     * searches, the dismissed-update-version memory (silently un-skipping an update the user
+     * already chose to skip), the last-update-check timestamp, the local update mirror's source
+     * id, and - worst - [cuesSeekWorkaroundStableIds], the per-file memory of which `.mkv`s need
+     * the Cues-seek-hang workaround (see CLAUDE.md's MatroskaExtractor note), silently
+     * reintroducing that 30-second playback hang on a file that had already been worked around.
+     * Does not touch SMB sources or the library index either way - only this DataStore. */
     suspend fun resetToDefaults() {
-        context.dataStore.edit { it.clear() }
+        context.dataStore.edit {
+            it.remove(Keys.DEFAULT_SORT_ORDER)
+            it.remove(Keys.SHARPEN_ENABLED)
+            it.remove(Keys.SHARPEN_AMOUNT)
+            it.remove(Keys.SEEK_DURATION_SECONDS)
+            it.remove(Keys.POSTER_CACHING_ENABLED)
+            it.remove(Keys.IMAGE_CACHE_LIMIT_MB)
+            it.remove(Keys.DOWNLOADS_FOLDER_URI)
+            it.remove(Keys.UI_MODE)
+            it.remove(Keys.HAPTICS_ENABLED)
+            it.remove(Keys.GLASS_EFFECT_ENABLED)
+            it.remove(Keys.ACCENT_COLOR)
+            it.remove(Keys.THEME_MODE)
+            it.remove(Keys.PLAYER_MODE)
+            it.remove(Keys.EXTERNAL_PLAYER_PACKAGE)
+            it.remove(Keys.PREDICTIVE_BACK_ENABLED)
+            it.remove(Keys.DOUBLE_TAP_SEEK_ENABLED)
+            it.remove(Keys.SWIPE_SEEK_ENABLED)
+            it.remove(Keys.HOLD_TO_SEEK_ENABLED)
+            it.remove(Keys.SUBTITLE_TEXT_COLOR)
+            it.remove(Keys.SUBTITLE_BACKGROUND_OPACITY)
+            it.remove(Keys.SUBTITLE_TEXT_SIZE_PERCENT)
+            it.remove(Keys.TV_OVERSCAN_MARGIN_PERCENT)
+            it.remove(Keys.PLAYER_BUFFER_SIZE)
+            it.remove(Keys.PERFORMANCE_MODE)
+            it.remove(Keys.UPDATE_SOURCE)
+        }
     }
 
     /** versionCode the user explicitly chose "skip this version" for on the update dialog - null once a newer release supersedes it, so skipping v70 doesn't also silently skip v71. */

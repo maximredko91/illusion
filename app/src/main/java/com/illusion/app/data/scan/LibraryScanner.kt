@@ -187,7 +187,7 @@ class LibraryScanner(
     }
 
     /** [channel]'s connections plus the [info] that made them - [withConnection] needs [info] to reconnect a connection that died mid-scan, which a bare `Channel<SmbConnection>` had no way to carry. */
-    private class SmbPool(val channel: Channel<SmbConnection>, val info: SmbConnectionInfo)
+    private class SmbPool(val channel: Channel<SmbConnection>, val info: SmbConnectionInfo, val liveConnections: AtomicInteger)
 
     /**
      * Opens up to [CONNECTION_POOL_SIZE] connections up front and closes all of them once [block]
@@ -215,11 +215,36 @@ class LibraryScanner(
         if (connections.isEmpty()) throw lastError ?: IOException("Unable to connect to $info")
         val channel = Channel<SmbConnection>(connections.size)
         connections.forEach { channel.trySend(it) }
+        val pool = SmbPool(channel, info, AtomicInteger(connections.size))
         try {
-            return block(SmbPool(channel, info))
+            return block(pool)
         } finally {
-            connections.forEach { runCatching { it.close() } }
+            // Drains the channel itself rather than re-closing the original `connections` list -
+            // block() (the whole per-source walk) has fully joined by the time we get here, so
+            // every connection still alive is sitting in the channel unborrowed, whether it's one
+            // of the originals or a retry's replacement (see withConnection). Closing the channel
+            // first is safe - already-buffered elements are still drainable via tryReceive() after
+            // close(), only a NEW receive()/send() on an empty closed channel fails. The old code
+            // only ever closed the original list, silently leaking every replacement connection a
+            // successful retry swapped in.
+            channel.close()
+            while (true) {
+                val leftover = channel.tryReceive().getOrNull() ?: break
+                runCatching { leftover.close() }
+            }
         }
+    }
+
+    /** Marks one [SmbPool] connection slot as permanently gone (neither the original connection
+     * nor a fresh replacement survived). Closes the pool's channel once every slot has been lost
+     * this way, so any [Channel.receive] still suspended waiting for a connection - or called
+     * later by a sibling coroutine - fails fast with `ClosedReceiveChannelException` instead of
+     * suspending forever with nothing left that could ever send it one. Before this, a run of
+     * transient failures could silently drain the pool to zero and hang the entire per-source
+     * scan (and, since [scanAll] scans sources sequentially, every source queued after it too)
+     * rather than surfacing as the normal per-source scan failure [scanAll] already tolerates. */
+    private fun markConnectionSlotLost(pool: SmbPool) {
+        if (pool.liveConnections.decrementAndGet() <= 0) pool.channel.close()
     }
 
     /**
@@ -244,15 +269,25 @@ class LibraryScanner(
             return result.getOrThrow()
         }
         runCatching { connection.close() }
-        val fresh = smbClient.connect(pool.info)
-        return try {
-            val retryResult = block(fresh)
-            pool.channel.send(fresh)
-            retryResult
-        } catch (retryFailure: Throwable) {
-            runCatching { fresh.close() }
-            throw retryFailure
+
+        val fresh = try {
+            smbClient.connect(pool.info)
+        } catch (connectFailure: Exception) {
+            markConnectionSlotLost(pool)
+            throw connectFailure
         }
+        val retryResult = runCatching { block(fresh) }
+        if (retryResult.isFailure) {
+            runCatching { fresh.close() }
+            markConnectionSlotLost(pool)
+            return retryResult.getOrThrow()
+        }
+        // The retry itself succeeded - try to recycle the connection, but a concurrent sibling's
+        // own double-failure may have already closed the channel in the meantime (send() then
+        // throws). Either way the actual work succeeded, so that's not this borrow's failure to
+        // report - just close the connection instead of leaking it.
+        runCatching { pool.channel.send(fresh) }.onFailure { runCatching { fresh.close() } }
+        return retryResult.getOrThrow()
     }
 
     /** Recursively lists [path], fanning sibling sub-directories out across [pool]'s connections instead of one at a time. */

@@ -74,6 +74,7 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.illusion.app.R
@@ -149,14 +150,13 @@ fun LibraryScreen(
     }
 
     val isTv = com.illusion.app.ui.common.LocalUiMode.current == com.illusion.app.domain.model.UiMode.TV
-    val isLandscape = !isTv && LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
-    // Same SortMenu/FilterMenu row, just rendered in two different places depending on
-    // orientation (see below) - landscape has much less vertical room than portrait, so this row
-    // moves into the top bar itself (next to the title) instead of taking a whole separate row
-    // underneath it. TV is always landscape but never takes this inline path (isLandscape is
-    // forced false above) - a remote can't swipe a horizontally-scrolling row, and every TV
-    // screen has plenty of width anyway, so it instead wraps onto as many lines as it needs via
-    // FlowRow (no scroll container at all) same as Details' genre chips.
+    val isPhoneLandscape = !isTv && LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
+    // Below the title, same position on every configuration now (portrait phone always had this;
+    // landscape phone used to render this inline next to the title instead - moved to match TV's
+    // own layout per feedback). Portrait phone keeps its original horizontally-scrolling Row
+    // unchanged - only TV and landscape phone (which now shares TV's own header layout) get the
+    // wrapping FlowRow, since a scrolling row was the compromise for cramped inline space that no
+    // longer applies once this is its own full-width row underneath.
     val sortFilterRow: @Composable () -> Unit = {
         val menus: @Composable () -> Unit = {
             SortMenu(
@@ -190,7 +190,7 @@ fun LibraryScreen(
                 )
             }
         }
-        if (isTv) {
+        if (isTv || isPhoneLandscape) {
             androidx.compose.foundation.layout.FlowRow(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -252,26 +252,18 @@ fun LibraryScreen(
         Column(modifier = Modifier.fillMaxWidth().windowInsetsPadding(topBarInsets)) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.fillMaxWidth().height(64.dp).padding(start = 16.dp, end = 4.dp)
+                // Small flat start padding - just far enough off the true screen edge to not
+                // look flush against it, not tied to the poster grid's own alignment (per
+                // feedback: move the title itself closer to the edge, don't touch the cards).
+                modifier = Modifier.fillMaxWidth().height(64.dp).padding(start = 4.dp, end = 4.dp)
             ) {
-                if (isLandscape) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(16.dp),
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Text(categoryTitle(category), style = MaterialTheme.typography.titleLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        sortFilterRow()
-                    }
-                } else {
-                    Text(
-                        categoryTitle(category),
-                        style = MaterialTheme.typography.titleLarge,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f)
-                    )
-                }
+                Text(
+                    categoryTitle(category),
+                    style = MaterialTheme.typography.titleLarge,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f)
+                )
                 com.illusion.app.ui.common.TooltipIconButton(stringResource(R.string.nav_search), Icons.Default.Search, onOpenSearch)
                 com.illusion.app.ui.common.TooltipIconButton(stringResource(R.string.favorites_title), Icons.Default.Favorite, onOpenFavorites)
                 com.illusion.app.ui.common.TooltipIconButton(stringResource(R.string.history_title), Icons.Default.History, onOpenHistory)
@@ -285,10 +277,8 @@ fun LibraryScreen(
                     modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                 )
             }
-            if (!isLandscape) {
-                Box(modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)) {
-                    sortFilterRow()
-                }
+            Box(modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)) {
+                sortFilterRow()
             }
         }
     }
@@ -616,4 +606,174 @@ private fun categoryTitle(category: Category): String = when (category) {
     Category.TV_SHOWS -> stringResource(R.string.category_tv_shows)
     Category.CARTOONS -> stringResource(R.string.category_cartoons)
     Category.CARTOON_SERIES -> stringResource(R.string.category_cartoon_series)
+}
+
+// Preview-only fake data - no Room/ViewModel needed. Open this file in Android Studio's Split or
+// Design view (or Compose Preview panel) to see these render, and use Live Edit to tweak spacing/
+// padding/sizes in the composables above and watch them update without a full rebuild.
+private fun previewMediaItem(index: Int, title: String, category: Category = Category.MOVIES): MediaItemEntity =
+    MediaItemEntity(
+        stableId = "preview-$index",
+        sourceId = 1L,
+        filePath = "/preview/$index.mkv",
+        category = category,
+        title = title,
+        originalTitle = null,
+        year = 2020 + (index % 5),
+        genres = listOf("Драма", "Фантастика"),
+        rating = 6.0 + (index % 4) * 0.7,
+        country = "США",
+        runtimeMinutes = 120,
+        plot = null,
+        director = listOf("Режиссёр"),
+        actors = listOf("Актёр Один", "Актёр Два"),
+        collectionName = null,
+        posterPath = null,
+        fanartPath = null,
+        seasonNumber = null,
+        episodeNumber = null,
+        seriesStableId = null,
+        dateAdded = System.currentTimeMillis(),
+        sizeBytes = 4_000_000_000L,
+        subtitlePaths = emptyList()
+    )
+
+private val previewItems: List<MediaItemEntity> =
+    (1..18).map { previewMediaItem(it, "Пример фильма $it") }
+
+@Preview(name = "Library - Phone", showBackground = true, widthDp = 400, heightDp = 800)
+@Composable
+private fun LibraryScreenPhonePreview() {
+    com.illusion.app.ui.theme.IllusionTheme {
+        LibraryScreen(
+            category = Category.MOVIES,
+            items = previewItems,
+            isLoading = false,
+            sortOrder = SortOrder.YEAR,
+            onSortOrderChange = {},
+            sortAscending = false,
+            onSortAscendingChange = {},
+            genreFilter = null,
+            onGenreFilterChange = {},
+            availableGenres = listOf("Драма", "Фантастика", "Комедия"),
+            yearFilter = null,
+            onYearFilterChange = {},
+            availableYears = listOf(2020, 2021, 2022, 2023, 2024),
+            countryFilter = null,
+            onCountryFilterChange = {},
+            availableCountries = listOf("США", "Россия"),
+            gridState = androidx.compose.foundation.lazy.grid.rememberLazyGridState(),
+            onOpenItem = {},
+            onOpenSettings = {},
+            onOpenFavorites = {},
+            onOpenHistory = {},
+            onOpenDownloads = {},
+            onOpenSearch = {}
+        )
+    }
+}
+
+@Preview(name = "Library - Empty", showBackground = true, widthDp = 400, heightDp = 800)
+@Composable
+private fun LibraryScreenEmptyPreview() {
+    com.illusion.app.ui.theme.IllusionTheme {
+        LibraryScreen(
+            category = Category.MOVIES,
+            items = emptyList(),
+            isLoading = false,
+            sortOrder = SortOrder.YEAR,
+            onSortOrderChange = {},
+            sortAscending = false,
+            onSortAscendingChange = {},
+            genreFilter = null,
+            onGenreFilterChange = {},
+            availableGenres = emptyList(),
+            yearFilter = null,
+            onYearFilterChange = {},
+            availableYears = emptyList(),
+            countryFilter = null,
+            onCountryFilterChange = {},
+            availableCountries = emptyList(),
+            gridState = androidx.compose.foundation.lazy.grid.rememberLazyGridState(),
+            onOpenItem = {},
+            onOpenSettings = {},
+            onOpenFavorites = {},
+            onOpenHistory = {},
+            onOpenDownloads = {},
+            onOpenSearch = {}
+        )
+    }
+}
+
+@Preview(name = "Library - Loading", showBackground = true, widthDp = 400, heightDp = 800)
+@Composable
+private fun LibraryScreenLoadingPreview() {
+    com.illusion.app.ui.theme.IllusionTheme {
+        LibraryScreen(
+            category = Category.MOVIES,
+            items = emptyList(),
+            isLoading = true,
+            sortOrder = SortOrder.YEAR,
+            onSortOrderChange = {},
+            sortAscending = false,
+            onSortAscendingChange = {},
+            genreFilter = null,
+            onGenreFilterChange = {},
+            availableGenres = emptyList(),
+            yearFilter = null,
+            onYearFilterChange = {},
+            availableYears = emptyList(),
+            countryFilter = null,
+            onCountryFilterChange = {},
+            availableCountries = emptyList(),
+            gridState = androidx.compose.foundation.lazy.grid.rememberLazyGridState(),
+            onOpenItem = {},
+            onOpenSettings = {},
+            onOpenFavorites = {},
+            onOpenHistory = {},
+            onOpenDownloads = {},
+            onOpenSearch = {}
+        )
+    }
+}
+
+@Preview(
+    name = "Library - TV",
+    showBackground = true,
+    widthDp = 960,
+    heightDp = 540
+)
+@Composable
+private fun LibraryScreenTvPreview() {
+    com.illusion.app.ui.theme.IllusionTheme {
+        androidx.compose.runtime.CompositionLocalProvider(
+            com.illusion.app.ui.common.LocalUiMode provides com.illusion.app.domain.model.UiMode.TV
+        ) {
+            LibraryScreen(
+                category = Category.TV_SHOWS,
+                items = previewItems.map { it.copy(category = Category.TV_SHOWS) },
+                isLoading = false,
+                sortOrder = SortOrder.YEAR,
+                onSortOrderChange = {},
+                sortAscending = false,
+                onSortAscendingChange = {},
+                genreFilter = null,
+                onGenreFilterChange = {},
+                availableGenres = listOf("Драма", "Фантастика", "Комедия"),
+                yearFilter = null,
+                onYearFilterChange = {},
+                availableYears = listOf(2020, 2021, 2022, 2023, 2024),
+                countryFilter = null,
+                onCountryFilterChange = {},
+                availableCountries = listOf("США", "Россия"),
+                gridState = androidx.compose.foundation.lazy.grid.rememberLazyGridState(),
+                onOpenItem = {},
+                onOpenSettings = {},
+                onOpenFavorites = {},
+                onOpenHistory = {},
+                onOpenDownloads = {},
+                onOpenSearch = {}
+            )
+        }
+    }
 }

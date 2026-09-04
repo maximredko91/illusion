@@ -99,7 +99,7 @@ fun HistoryScreen(
                 modifier = Modifier.fillMaxSize().padding(innerPadding),
                 contentPadding = PaddingValues(8.dp)
             ) {
-                items(entries, key = { it.item.stableId + it.progress.updatedAt }) { entry ->
+                items(entries, key = { it.item.stableId + "_" + it.progress.updatedAt }) { entry ->
                     val rowSource = remember { MutableInteractionSource() }
                     Row(
                         modifier = Modifier
