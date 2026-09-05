@@ -2,6 +2,7 @@ package com.illusion.app.data.repository
 
 import com.illusion.app.data.local.dao.SmbSourceDao
 import com.illusion.app.data.local.entity.SmbSourceEntity
+import com.illusion.app.data.smb.MissingSmbCredentialException
 import com.illusion.app.data.smb.SmbClient
 import com.illusion.app.data.smb.SmbConnectionInfo
 import com.illusion.app.data.smb.SmbCredentialStore
@@ -48,8 +49,12 @@ class SmbSourceRepository(
         return connectionInfo(source)
     }
 
+    /** Whether [source] has a saved password entry at all - not whether it's correct. False here means [connectionInfo] will throw [MissingSmbCredentialException] rather than attempt a connection. */
+    fun hasStoredPassword(sourceId: Long): Boolean = credentialStore.getPassword(sourceId) != null
+
     suspend fun connectionInfo(source: SmbSourceEntity): SmbConnectionInfo? {
-        val password = credentialStore.getPassword(source.id) ?: return null
+        val password = credentialStore.getPassword(source.id)
+            ?: throw MissingSmbCredentialException(source.displayName)
         return SmbConnectionInfo(
             host = source.host,
             share = source.share,

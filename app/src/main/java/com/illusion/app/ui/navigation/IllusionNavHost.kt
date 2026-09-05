@@ -540,6 +540,7 @@ private fun IllusionNavGraph(app: IllusionApplication, navController: NavHostCon
                     factory = SettingsViewModel.factory(app.smbSourceRepository, app.settingsRepository, app.thumbnailRepository, app.downloadRepository, app.backupManager, app.devAccessStore, app.libraryRepository, app.watchProgressRepository)
                 )
                 val sources by settingsViewModel.sources.collectAsState()
+                val sourcesMissingPassword by settingsViewModel.sourcesMissingPassword.collectAsState()
                 val cacheSizeBytes by settingsViewModel.cacheSizeBytes.collectAsState()
                 val downloadsSizeBytes by settingsViewModel.downloadsSizeBytes.collectAsState()
                 val recoveredDownloadsCount by settingsViewModel.recoveredDownloadsCount.collectAsState()
@@ -559,6 +560,7 @@ private fun IllusionNavGraph(app: IllusionApplication, navController: NavHostCon
                 val upToDateMessage by updateViewModel.upToDateMessage.collectAsState()
                 SettingsScreen(
                     sources = sources,
+                    sourcesMissingPassword = sourcesMissingPassword,
                     playerMode = settingsViewModel.playerMode,
                     onPlayerModeChange = settingsViewModel::setPlayerMode,
                     externalPlayerPackage = settingsViewModel.externalPlayerPackage,
@@ -743,7 +745,7 @@ private fun TabsHost(
     val exitSnackbarHostState = remember { SnackbarHostState() }
     val backScope = rememberCoroutineScope()
     var awaitingExitConfirmation by remember { mutableStateOf(false) }
-    val activity = LocalContext.current as? android.app.Activity
+    val activity = androidx.activity.compose.LocalActivity.current
     BackHandler(enabled = true) {
         if (awaitingExitConfirmation) {
             activity?.finish()

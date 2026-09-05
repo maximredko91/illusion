@@ -1,13 +1,9 @@
-<?xml version="1.0" encoding="utf-8"?><!--
-   Sample backup rules file; uncomment and customize as necessary.
-   See https://developer.android.com/guide/topics/data/autobackup
-   for details.
-   Note: This file is ignored for devices older than API 31
-   See https://developer.android.com/about/versions/12/backup-restore
--->
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Keystore keys cannot be restored with encrypted preferences. -->
 <full-backup-content>
-    <!--
-   <include domain="sharedpref" path="."/>
-   <exclude domain="sharedpref" path="device.xml"/>
--->
+        <exclude domain="sharedpref" path="smb_credentials.xml" />
+        <exclude domain="sharedpref" path="smb_credentials_recovered.xml" />
+        <exclude domain="sharedpref" path="dev_access.xml" />
+        <exclude domain="sharedpref" path="dev_access_recovered.xml" />
+        <exclude domain="sharedpref" path="credential_recovery.xml" />
 </full-backup-content>

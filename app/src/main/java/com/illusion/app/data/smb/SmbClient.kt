@@ -108,6 +108,14 @@ class SmbConnection internal constructor(
 
     fun fileExists(path: String): Boolean = diskShare.fileExists(path)
 
+    /** Size in bytes of an existing file at [path], or null if it doesn't exist - lets
+     * [com.illusion.app.work.UploadWorker] resume a previous partial upload from where it actually
+     * left off on the NAS instead of restarting from zero on every retry. */
+    fun fileSizeOrNull(path: String): Long? {
+        if (!diskShare.fileExists(path)) return null
+        return diskShare.getFileInformation(path).standardInformation.endOfFile
+    }
+
     fun folderExists(path: String): Boolean = diskShare.folderExists(path)
 
     /** Creates every missing segment of [path] in order - used by the developer-only media-add flow, never by scanning/playback. */
@@ -144,7 +152,7 @@ class SmbConnection internal constructor(
      * used for the one big/slow copy in the developer-only media-add flow (the video file itself)
      * so a dropped connection mid-upload can reconnect and resume from the last written offset
      * instead of restarting, the same way [readEdgeSamples]'s caller (the download path) does for
-     * reads. [createNew] truncates/creates the file - only the very first open of a given upload
+     * reads. [createNew] exclusively creates the file (never overwrites an existing destination) - only the very first open of a given upload
      * attempt should pass true; a reconnect mid-copy must pass false to keep what's already there.
      */
     fun openRandomAccessFileForWrite(path: String, createNew: Boolean): SmbRandomAccessWriteFile {
@@ -153,7 +161,7 @@ class SmbConnection internal constructor(
             EnumSet.of(AccessMask.GENERIC_WRITE),
             null,
             SMB2ShareAccess.ALL,
-            if (createNew) SMB2CreateDisposition.FILE_OVERWRITE_IF else SMB2CreateDisposition.FILE_OPEN,
+            if (createNew) SMB2CreateDisposition.FILE_CREATE else SMB2CreateDisposition.FILE_OPEN,
             null
         )
         return SmbRandomAccessWriteFile(file)
@@ -296,8 +304,24 @@ class SmbClient {
     }
 }
 
+/**
+ * Thrown by [com.illusion.app.data.repository.SmbSourceRepository.connectionInfo] when a source
+ * is configured but [com.illusion.app.data.smb.SmbCredentialStore.getPassword] has nothing for it -
+ * every save path (`addSource`/`updateSource`) always writes a password entry, even an empty one
+ * for guest access, so a missing entry is never a legitimate "no password needed" state. It means
+ * the encrypted store itself was reset out from under the app (observed after the Keystore-key
+ * invalidation [com.illusion.app.data.security.openEncryptedPreferences] recovers from - that
+ * recovery stops the crash but starts a brand new, empty credential file). Distinguishing this
+ * from an ordinary connection failure turns a confusing "Unknown or unconfigured SMB source 5" or
+ * silent zero-item scan into a message that actually tells the user what to do.
+ */
+class MissingSmbCredentialException(sourceName: String) : Exception(
+    "Не сохранён пароль для источника \"$sourceName\" - откройте его настройки и введите пароль заново"
+)
+
 /** Shared by [SmbClient.testConnection]'s error dialog and [com.illusion.app.data.scan.LibraryScanner]'s per-source scan-failure reporting - one place classifying the same handful of SMB failure shapes into a Russian message the user can act on. */
 fun classifySmbError(e: Throwable): String = when (e) {
+    is MissingSmbCredentialException -> e.message!!
     is TimeoutCancellationException, is SocketTimeoutException ->
         "Не удалось подключиться: сервер не отвечает (проверьте адрес и что телефон в той же сети)"
     is java.net.UnknownHostException ->

@@ -1,3 +1,5 @@
+@file:androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
+
 package com.illusion.app.data.player
 
 import android.net.Uri
@@ -8,6 +10,7 @@ import androidx.media3.datasource.DataSource
 import androidx.media3.datasource.DataSpec
 import com.hierynomus.smbj.common.SMBRuntimeException
 import com.illusion.app.data.repository.SmbSourceRepository
+import com.illusion.app.data.smb.MissingSmbCredentialException
 import com.illusion.app.data.smb.SmbClient
 import com.illusion.app.data.smb.SmbConnection
 import com.illusion.app.data.smb.SmbRandomAccessFile
@@ -56,8 +59,14 @@ class SmbDataSourceFactory(
         }
         return connections.getOrPut(sourceId) {
             runBlocking {
-                val info = sourceRepository.connectionInfoById(sourceId)
-                    ?: throw IOException("Unknown SMB source or missing credentials: $sourceId")
+                // DataSource.open()'s contract (and ExoPlayer's loader thread) expects an
+                // IOException on failure, not an arbitrary exception - MissingSmbCredentialException
+                // is neither, so it has to be wrapped here rather than left to propagate raw.
+                val info = try {
+                    sourceRepository.connectionInfoById(sourceId)
+                } catch (e: MissingSmbCredentialException) {
+                    throw IOException(e.message, e)
+                } ?: throw IOException("Unknown SMB source or missing credentials: $sourceId")
                 smbClient.connect(info)
             }
         }

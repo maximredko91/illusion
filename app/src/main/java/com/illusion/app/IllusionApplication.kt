@@ -73,7 +73,7 @@ class IllusionApplication : Application(), Configuration.Provider, SingletonImag
         ThumbnailGenerator(smbSourceRepository, smbClient, this)
     }
     val downloadRepository: DownloadRepository by lazy { DownloadRepository(this, database.downloadDao()) }
-    val backupManager: BackupManager by lazy { BackupManager(smbSourceRepository, watchProgressRepository) }
+    val backupManager: BackupManager by lazy { BackupManager(this, smbSourceRepository, watchProgressRepository, libraryRepository) }
     val audioTrackRepository: AudioTrackRepository by lazy { AudioTrackRepository(database.audioTrackDao()) }
     val audioTrackProber: AudioTrackProber by lazy { AudioTrackProber(smbDataSourceFactory) }
 

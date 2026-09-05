@@ -65,6 +65,7 @@ data class AddMediaUiState(
     val prepareError: String? = null,
     val uploadWorkId: UUID? = null,
     val uploadedBytes: Long = 0L,
+    val verifyingUpload: Boolean = false,
     val uploadTotalBytes: Long = 0L,
     val uploadError: String? = null
 )
@@ -384,9 +385,10 @@ class AddMediaViewModel(
 
                     val videoPath = "$folderPath\\${current.destinationFileName}"
                     val nfoPath = videoPath.substringBeforeLast('.') + ".nfo"
+                    val existingVideo = connection.fileExists(videoPath)
 
                     if (current.kind == MediaKind.MOVIE) {
-                        connection.openOutputStream(nfoPath).use { out ->
+                        if (!existingVideo || !connection.fileExists(nfoPath)) connection.openOutputStream(nfoPath).use { out ->
                             nfoWriter.writeMovie(out, fetched.toMovieNfo())
                         }
                         writeImageIfAbsent(connection, folderPath, "poster.jpg", fetched.posterPath)
@@ -394,7 +396,7 @@ class AddMediaViewModel(
                     } else {
                         val season = current.seasonNumber.toIntOrNull() ?: 1
                         val episode = current.episodeNumber.toIntOrNull() ?: 1
-                        connection.openOutputStream(nfoPath).use { out ->
+                        if (!existingVideo || !connection.fileExists(nfoPath)) connection.openOutputStream(nfoPath).use { out ->
                             nfoWriter.writeEpisode(out, fetched.toEpisodeNfo(season, episode))
                         }
                         fetched.episodeStillPath?.let { still ->
@@ -419,7 +421,7 @@ class AddMediaViewModel(
                     current.pickedSubtitleUri?.let { subtitleUri ->
                         val extension = current.pickedSubtitleName?.substringAfterLast('.', "srt")?.takeIf { it.isNotBlank() } ?: "srt"
                         val subtitlePath = "${videoPath.substringBeforeLast('.')}.$extension"
-                        context.contentResolver.openInputStream(subtitleUri)?.use { input ->
+                        if (!existingVideo || !connection.fileExists(subtitlePath)) context.contentResolver.openInputStream(subtitleUri)?.use { input ->
                             connection.openOutputStream(subtitlePath).use { out -> input.copyTo(out) }
                         }
                     }
@@ -452,11 +454,11 @@ class AddMediaViewModel(
         }
     }
 
-    fun onUploadProgress(uploaded: Long, total: Long) =
-        _state.update { it.copy(uploadedBytes = uploaded, uploadTotalBytes = total) }
+    fun onUploadProgress(uploaded: Long, total: Long, verifying: Boolean = false) =
+        _state.update { it.copy(uploadedBytes = uploaded, uploadTotalBytes = total, verifyingUpload = verifying) }
 
     fun onUploadFinished(success: Boolean, error: String?) {
-        _state.update { it.copy(step = if (success) AddMediaStep.DONE else it.step, uploadError = error) }
+        _state.update { it.copy(step = if (success) AddMediaStep.DONE else it.step, uploadError = error, verifyingUpload = false) }
         if (success) _state.value.selectedSourceId?.let(::refreshFreeSpace)
     }
 

@@ -99,7 +99,7 @@ fun AddMediaScreen(
             if (info == null) return@collect
             val uploaded = info.progress.getLong(UploadWorker.KEY_UPLOADED, -1L)
             val total = info.progress.getLong(UploadWorker.KEY_TOTAL, -1L)
-            if (uploaded >= 0) viewModel.onUploadProgress(uploaded, total)
+            if (uploaded >= 0) viewModel.onUploadProgress(uploaded, total, info.progress.getBoolean(UploadWorker.KEY_VERIFYING, false))
             when (info.state) {
                 WorkInfo.State.SUCCEEDED -> viewModel.onUploadFinished(true, null)
                 WorkInfo.State.FAILED -> viewModel.onUploadFinished(false, info.outputData.getString(UploadWorker.KEY_ERROR))
@@ -485,9 +485,10 @@ private fun UploadingStep(state: AddMediaUiState, modifier: Modifier = Modifier)
         verticalArrangement = Arrangement.spacedBy(12.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Text(stringResource(R.string.addmedia_uploading))
+        Text(stringResource(if (state.verifyingUpload) R.string.addmedia_verifying else R.string.addmedia_uploading))
         val fraction = if (state.uploadTotalBytes > 0) (state.uploadedBytes.toFloat() / state.uploadTotalBytes).coerceIn(0f, 1f) else 0f
-        LinearProgressIndicator(progress = { fraction }, modifier = Modifier.fillMaxWidth())
+        if (state.verifyingUpload) LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+        else LinearProgressIndicator(progress = { fraction }, modifier = Modifier.fillMaxWidth())
         Text("${state.uploadedBytes / 1_000_000} / ${state.uploadTotalBytes / 1_000_000} МБ")
         state.uploadError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
     }

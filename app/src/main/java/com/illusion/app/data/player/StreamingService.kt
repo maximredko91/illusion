@@ -81,7 +81,11 @@ class StreamingService : Service() {
             stopSelf()
             return START_NOT_STICKY
         }
-        startForeground(NOTIFICATION_ID, buildNotification(), ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK)
+        if (Build.VERSION.SDK_INT >= 29) {
+            startForeground(NOTIFICATION_ID, buildNotification(), ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK)
+        } else {
+            startForeground(NOTIFICATION_ID, buildNotification())
+        }
         // Don't blindly (re)start the countdown here - a second playback request arriving while
         // the first is still actively streaming would otherwise schedule a shutdown that has
         // nothing to do with that first, still-open connection.

@@ -2,20 +2,10 @@ package com.illusion.app.data.smb
 
 import android.content.Context
 import androidx.security.crypto.EncryptedSharedPreferences
-import androidx.security.crypto.MasterKey
 
 class SmbCredentialStore(context: Context) {
-    private val masterKey = MasterKey.Builder(context)
-        .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
-        .build()
+    private val prefs = com.illusion.app.data.security.openEncryptedPreferences(context, "smb_credentials")
 
-    private val prefs = EncryptedSharedPreferences.create(
-        context,
-        "smb_credentials",
-        masterKey,
-        EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-        EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
-    )
 
     fun getPassword(sourceId: Long): String? = prefs.getString(key(sourceId), null)
 

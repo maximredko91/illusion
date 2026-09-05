@@ -128,7 +128,7 @@
     <string name="settings_backup_import">Импорт</string>
     <string name="settings_backup_export_success">Резервная копия сохранена</string>
     <string name="settings_backup_export_error">Не удалось сохранить резервную копию</string>
-    <string name="settings_backup_import_success">Восстановлено источников: %1$d, избранного: %2$d, истории: %3$d</string>
+    <string name="settings_backup_import_success">Импортировано источников: %1$d, записей избранного: %2$d, истории: %3$d. Для отсутствующих в библиотеке файлов выполните пересканирование.</string>
     <string name="settings_backup_import_error">Не удалось прочитать файл резервной копии</string>
     <string name="settings_backup_import_password_title">Пароль для «%1$s»</string>
     <string name="settings_backup_import_password_hint">Пароль (пусто — гостевой доступ)</string>
@@ -358,6 +358,7 @@
 
     <string name="settings_add_source">Добавить источник</string>
     <string name="settings_no_sources">Источники не добавлены</string>
+    <string name="settings_source_missing_password">Нет сохранённого пароля - откройте и введите заново</string>
     <string name="settings_delete_source">Удалить</string>
     <string name="settings_delete_source_confirm_title">Удалить источник?</string>
     <string name="settings_delete_source_confirm_message">«%1$s» будет удалён. Всё, что было отсканировано из этого источника, пропадёт из библиотеки.</string>
@@ -524,4 +525,5 @@
     <string name="addmedia_tmdb_key_save">Сохранить</string>
     <string name="addmedia_tmdb_key_change">Изменить TMDB-ключ</string>
     <string name="addmedia_back">Назад</string>
+    <string name="addmedia_verifying">Проверка уже загруженной части…</string>
 </resources>

@@ -48,8 +48,10 @@ import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import com.illusion.app.data.crash.CrashReporter
+import com.illusion.app.data.smb.LocalNetworkPermission
 import com.illusion.app.ui.common.PerforationStrip
 import com.illusion.app.ui.navigation.IllusionNavHost
 import com.illusion.app.ui.player.PipController
@@ -80,6 +82,7 @@ class MainActivity : ComponentActivity() {
                     )
                     CrashReportPrompt()
                     NotificationPermissionRequest()
+                    LocalNetworkPermissionStartupRequest(app)
                     AppSplashOverlay()
                     val updateViewModel: UpdateViewModel = viewModel(
                         viewModelStoreOwner = this@MainActivity,
@@ -213,6 +216,29 @@ private fun NotificationPermissionRequest() {
     }
 }
 
+/**
+ * Onboarding and the SMB add/edit forms only ever request [LocalNetworkPermission] as a side
+ * effect of the developer tapping "test connection"/"save" on those specific screens - a source
+ * added before this permission existed, or restored from backup, or with the permission later
+ * revoked in system Settings, has no other prompt anywhere: Home's poster loading and the
+ * background LibraryScanWorker can only check-and-fail (a Worker has no Activity to show a
+ * permission dialog from at all), so without this the user would just see silent SMB timeouts
+ * with no way to know why. One-shot per process start, and only when there's an actual source to
+ * use the permission for - an empty library goes through onboarding's own request instead.
+ */
+@Composable
+private fun LocalNetworkPermissionStartupRequest(app: IllusionApplication) {
+    val context = LocalContext.current
+    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {}
+    LaunchedEffect(Unit) {
+        if (!LocalNetworkPermission.isGranted(context) &&
+            app.smbSourceRepository.observeSources().first().isNotEmpty()
+        ) {
+            launcher.launch(LocalNetworkPermission.PERMISSION)
+        }
+    }
+}
+
 /** Offers to share the previous run's crash log, if any - checked once per process start, not a recurring nag once dismissed or sent. */
 @Composable
 private fun CrashReportPrompt() {
@@ -221,18 +247,18 @@ private fun CrashReportPrompt() {
     val file = pendingFile ?: return
 
     AlertDialog(
-        onDismissRequest = { CrashReporter.clear(file); pendingFile = null },
+        onDismissRequest = { CrashReporter.clearAll(context); pendingFile = null },
         title = { Text(stringResource(R.string.crash_report_title)) },
         text = { Text(stringResource(R.string.crash_report_message)) },
         confirmButton = {
             TextButton(onClick = {
                 context.startActivity(android.content.Intent.createChooser(CrashReporter.shareIntent(file), null))
-                CrashReporter.clear(file)
+                CrashReporter.clearAll(context)
                 pendingFile = null
             }) { Text(stringResource(R.string.crash_report_send)) }
         },
         dismissButton = {
-            TextButton(onClick = { CrashReporter.clear(file); pendingFile = null }) {
+            TextButton(onClick = { CrashReporter.clearAll(context); pendingFile = null }) {
                 Text(stringResource(R.string.action_cancel))
             }
         }

@@ -32,6 +32,7 @@ class LibraryScanWorker(
             setProgress(progress.toData())
             setForeground(ScanNotifications.progressForegroundInfo(applicationContext, progress.toNotificationText(applicationContext)))
         }
+        (applicationContext as com.illusion.app.IllusionApplication).backupManager.applyPendingRestore()
         // A source erroring out doesn't fail the whole scan (the others may have indexed fine),
         // except when EVERY source did - nothing got indexed and there's nothing useful to show,
         // so that's reported as an actual failure with the first source's classified reason

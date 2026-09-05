@@ -16,6 +16,7 @@ import com.illusion.app.data.repository.DownloadRepository
 import com.illusion.app.data.repository.LibraryRepository
 import com.illusion.app.data.repository.SmbSourceRepository
 import com.illusion.app.data.settings.SettingsRepository
+import com.illusion.app.data.smb.MissingSmbCredentialException
 import com.illusion.app.data.smb.SmbClient
 import com.illusion.app.data.smb.SmbConnectionInfo
 import kotlinx.coroutines.delay
@@ -54,8 +55,11 @@ class DownloadWorker(
         // needs this (Android's background-execution time limit otherwise silently kills the
         // worker partway through, which read as "download speed drops to 0 and never resumes").
         setForeground(getForegroundInfo())
-        val info = sourceRepository.connectionInfoById(item.sourceId)
-            ?: return failWith(stableId, null, item.sizeBytes, "Источник SMB недоступен")
+        val info = try {
+            sourceRepository.connectionInfoById(item.sourceId)
+        } catch (e: MissingSmbCredentialException) {
+            return failWith(stableId, null, item.sizeBytes, e.message!!)
+        } ?: return failWith(stableId, null, item.sizeBytes, "Источник SMB недоступен")
 
         val treeUri = settingsRepository.downloadsFolderUri.first()
         val existing = downloadRepository.getForItem(stableId)

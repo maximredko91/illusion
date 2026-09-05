@@ -112,6 +112,7 @@ import kotlinx.coroutines.flow.Flow
 @Composable
 fun SettingsScreen(
     sources: List<SmbSourceEntity>,
+    sourcesMissingPassword: Set<Long> = emptySet(),
     playerMode: Flow<com.illusion.app.domain.model.PlayerMode>,
     onPlayerModeChange: (com.illusion.app.domain.model.PlayerMode) -> Unit,
     externalPlayerPackage: Flow<String?>,
@@ -500,6 +501,7 @@ fun SettingsScreen(
                             var buildNumberTapCount by remember { mutableStateOf(0) }
                             var lastBuildNumberTapAt by remember { mutableStateOf(0L) }
                             val eggContext = LocalContext.current
+                            val eggResources = androidx.compose.ui.platform.LocalResources.current
                             // A fresh Toast.makeText().show() per tap QUEUES on Android instead of
                             // replacing the previous one - confirmed on-device: tapping through the
                             // 4/5/6 countdown fired 3 separate ~2s toasts back to back, so the real
@@ -532,7 +534,7 @@ fun SettingsScreen(
                                                 activeEggToast?.cancel()
                                                 activeEggToast = android.widget.Toast.makeText(
                                                     eggContext,
-                                                    eggContext.getString(R.string.settings_easter_egg_countdown, 7 - buildNumberTapCount),
+                                                    eggResources.getString(R.string.settings_easter_egg_countdown, 7 - buildNumberTapCount),
                                                     android.widget.Toast.LENGTH_SHORT
                                                 ).also { it.show() }
                                             }
@@ -698,7 +700,17 @@ fun SettingsScreen(
                                     val rowSource = remember { MutableInteractionSource() }
                                     ListItem(
                                         headlineContent = { Text(source.displayName) },
-                                        supportingContent = { Text("\\\\${source.host}\\${source.share}") },
+                                        supportingContent = {
+                                            Column {
+                                                Text("\\\\${source.host}\\${source.share}")
+                                                if (source.id in sourcesMissingPassword) {
+                                                    Text(
+                                                        stringResource(R.string.settings_source_missing_password),
+                                                        color = MaterialTheme.colorScheme.error
+                                                    )
+                                                }
+                                            }
+                                        },
                                         trailingContent = {
                                             Row(verticalAlignment = Alignment.CenterVertically) {
                                                 // Only shown once there's more than one source to choose between - a

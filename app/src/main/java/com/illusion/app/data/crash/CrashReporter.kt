@@ -57,12 +57,18 @@ object CrashReporter {
         process.inputStream.bufferedReader().readText().also { process.waitFor() }
     }.getOrElse { "(не удалось прочитать лог: ${it.message})" }
 
-    /** The most recent unreported crash, if any - null once [clear] has been called for it. */
+    /** The most recent unreported crash, if any - null once [clearAll] has been called. */
     fun pendingReport(context: Context): File? =
         File(context.filesDir, DIR_NAME).listFiles()?.maxByOrNull { it.lastModified() }
 
-    fun clear(file: File) {
-        file.delete()
+    /**
+     * Clears every crash log, not just the one currently shown. A run that crashed repeatedly
+     * (e.g. on every launch, before a fix landed) leaves several files behind - deleting only the
+     * displayed one meant [pendingReport] immediately surfaced the next-oldest leftover, so the
+     * dialog kept reappearing once per file instead of once per actual crash the user acted on.
+     */
+    fun clearAll(context: Context) {
+        File(context.filesDir, DIR_NAME).listFiles()?.forEach { it.delete() }
     }
 
     /** A plain-text share sheet (email, Telegram, notes, ...) prefilled with the crash log - no FileProvider/manifest wiring needed for text this small. */

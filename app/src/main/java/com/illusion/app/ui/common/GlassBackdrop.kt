@@ -133,6 +133,7 @@ fun Modifier.glassSurface(
         }
 }
 
+@androidx.annotation.RequiresApi(31)
 private fun buildGlassRenderEffect(
     widthPx: Float,
     heightPx: Float,

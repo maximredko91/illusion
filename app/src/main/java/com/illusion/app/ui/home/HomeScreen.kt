@@ -4,16 +4,22 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.calculateEndPadding
+import androidx.compose.foundation.layout.calculateStartPadding
+import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.ui.platform.LocalLayoutDirection
 import com.illusion.app.domain.model.UiMode
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -69,6 +75,19 @@ fun HomeScreen(
     onDismissNewContentBanner: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
+    // In landscape a punch-hole camera cutout sits on a side edge, not the top - the TopAppBar
+    // below already dodges it via its own `windowInsets` param, but every carousel's title Row and
+    // LazyRow contentPadding used a flat 16dp with no idea the cutout existed, so cards could sit
+    // right behind (or under) it while the "иллюзион" title above correctly avoided it - reported
+    // on-device as the poster cards starting noticeably further left than the title bar, cutout
+    // visibly overlapping the leftmost card. TV-only: skip it entirely, same reasoning as
+    // LibraryScreen's own identical cutoutPadding - a real TV Box has no physical camera and a real
+    // Xiaomi TV Box confirmed reporting a large nonzero displayCutout inset anyway (an OEM quirk).
+    val isTv = com.illusion.app.ui.common.LocalUiMode.current == UiMode.TV
+    val cutoutPadding = if (isTv) PaddingValues(0.dp) else WindowInsets.displayCutout.asPaddingValues()
+    val layoutDirection = LocalLayoutDirection.current
+    val contentStartPadding = 16.dp + cutoutPadding.calculateStartPadding(layoutDirection)
+    val contentEndPadding = 16.dp + cutoutPadding.calculateEndPadding(layoutDirection)
     Scaffold(
         modifier = modifier,
         // Scaffold's own default (WindowInsets.systemBars) would otherwise reserve bottom
@@ -146,14 +165,13 @@ fun HomeScreen(
                 .fillMaxSize()
                 .padding(innerPadding)
                 .verticalScroll(rememberScrollState())
-                .padding(vertical = 16.dp),
+                .padding(start = contentStartPadding, top = 16.dp, end = contentEndPadding, bottom = 16.dp),
             verticalArrangement = Arrangement.spacedBy(24.dp)
         ) {
             if (hasNewContent) {
                 NewContentBanner(
                     onRescanNow = onRescanNow,
-                    onDismiss = onDismissNewContentBanner,
-                    modifier = Modifier.padding(horizontal = 16.dp)
+                    onDismiss = onDismissNewContentBanner
                 )
             }
             if (continueWatching.isNotEmpty()) {
@@ -229,11 +247,10 @@ private fun CollectionCarousel(
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(
             stringResource(R.string.home_collections),
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
+            modifier = Modifier.fillMaxWidth()
         )
         LazyRow(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
-            contentPadding = PaddingValues(horizontal = 16.dp),
             modifier = Modifier.focusGroup()
         ) {
             items(collections, key = { it.name }) { collection ->
@@ -285,7 +302,7 @@ private fun MediaCarousel(
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(
             verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
+            modifier = Modifier.fillMaxWidth()
         ) {
             Text(title, modifier = Modifier.weight(1f))
             if (onRefresh != null) {
@@ -310,7 +327,6 @@ private fun MediaCarousel(
         LazyRow(
             state = listState,
             horizontalArrangement = Arrangement.spacedBy(8.dp),
-            contentPadding = PaddingValues(horizontal = 16.dp),
             modifier = Modifier.focusGroup()
         ) {
             items(items, key = { it.stableId }) { item ->

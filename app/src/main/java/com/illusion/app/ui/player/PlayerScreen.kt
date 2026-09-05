@@ -1,3 +1,5 @@
+@file:androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
+
 package com.illusion.app.ui.player
 
 import android.app.Activity
@@ -11,7 +13,9 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.detectDragGestures
@@ -183,6 +187,22 @@ fun PlayerScreen(
     KeepImmersiveFullscreen()
     KeepScreenOn()
 
+    // GestureLayer's own drag-seek toast ("1:15:34  +0:13") and this screen's buffering spinner
+    // both render centered at the exact same point (see centerToastOffsetPx's own KDoc at the
+    // GestureLayer call site) but are otherwise two fully independent composables with no
+    // awareness of each other - swiping to seek again before the PREVIOUS committed seek's
+    // buffering has finished (or a swipe overlapping a hold-to-seek tick) showed both stacked on
+    // top of each other: the spinner's bare arc and "Буферизация" text bleeding through the seek
+    // toast's own rounded background, reported by the user with screenshots of exactly this.
+    // Threaded up from GestureLayer via onCenterToastVisibleChange so the spinner can yield to it.
+    var centerSeekToastVisible by remember { mutableStateOf(false) }
+
+    // The scrub thumbnail/time preview shown while dragging the actual seek bar (not GestureLayer's
+    // swipe-anywhere toast above) is rendered here at the screen level, not inside BottomGradientBar
+    // itself - see BottomGradientBar's own KDoc on onSeekDragPositionChange for the two separate
+    // real bugs that came from trying to keep it self-contained inside that bar's own layout.
+    var seekDragPositionMs by remember { mutableStateOf<Long?>(null) }
+
     var controlsVisible by remember { mutableStateOf(true) }
     // TV D-pad had no way to bring the controls back once they auto-hid: everything here
     // (GestureLayer's onSingleTap toggle included) was wired purely for touch, so on a real
@@ -243,6 +263,14 @@ fun PlayerScreen(
     // report: the dark seek-time backdrop sat visibly above the play/pause icon it should line up
     // with). Measuring both bars' real heights lets GestureLayer apply the same offset
     // CenterTransportControls effectively already gets "for free" from being nested between them.
+    // Latched (only ever grows, like rememberLatchedStatusBarsInsets elsewhere in this app) rather
+    // than a plain assignment - controls default to visible=true the moment playback becomes ready,
+    // so GestureLayer is already interactive for the FIRST frame or two before either bar's own
+    // onSizeChanged callback has fired even once. A swipe-seek landing in that narrow window read
+    // centerToastOffsetPx as (0-0)/2=0 - true screen center, not the play button's real center -
+    // showing the toast noticeably below it (reported: "отображается прямо под значком паузы").
+    // Once a real measurement lands moments later these can only be right, so never regressing to
+    // a smaller/zero value closes that whole window rather than just narrowing it.
     var topBarHeightPx by remember { mutableIntStateOf(0) }
     var bottomBarHeightPx by remember { mutableIntStateOf(0) }
 
@@ -477,6 +505,7 @@ fun PlayerScreen(
                 // pause icon to line up with, and GestureLayer's own true-screen-center is already
                 // correct then.
                 centerToastOffsetPx = if (controlsVisible) (topBarHeightPx - bottomBarHeightPx) / 2 else 0,
+                onCenterToastVisibleChange = { centerSeekToastVisible = it },
                 modifier = Modifier.fillMaxSize()
             )
         }
@@ -500,7 +529,7 @@ fun PlayerScreen(
         // but very noticeable in landscape, where the bars eat a much bigger share of the
         // available height. Only falls back to true screen center when there's no play button
         // shown to line up with.
-        if (uiState.isLoading && uiState.error == null && (isInPip || !controlsVisible || isLocked)) {
+        if (uiState.isLoading && uiState.error == null && (isInPip || !controlsVisible || isLocked) && !centerSeekToastVisible) {
             BufferingIndicator(
                 bufferedPositionMs = uiState.bufferedPositionMs,
                 currentPositionMs = uiState.currentPositionMs,
@@ -544,12 +573,13 @@ fun PlayerScreen(
                 enter = fadeIn(tween(com.illusion.app.ui.common.economicalDurationMs(300))),
                 exit = fadeOut(tween(com.illusion.app.ui.common.economicalDurationMs(300)))
             ) {
+                Box(modifier = Modifier.fillMaxSize()) {
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
                         .windowInsetsPadding(WindowInsets.safeDrawing)
                 ) {
-                    Box(modifier = Modifier.onSizeChanged { topBarHeightPx = it.height }) {
+                    Box(modifier = Modifier.onSizeChanged { topBarHeightPx = maxOf(topBarHeightPx, it.height) }) {
                     TopGradientBar(
                         title = uiState.title,
                         episodeLabel = uiState.episodeLabel,
@@ -571,13 +601,25 @@ fun PlayerScreen(
                     )
                     }
                     Box(modifier = Modifier.fillMaxSize().weight(1f), contentAlignment = Alignment.Center) {
-                        // Both used to render unconditionally, stacked on the exact same center
-                        // point - a bare spinner is thin enough that the overlap with the play
-                        // button underneath wasn't obviously broken, but adding buffering% text
-                        // right below it made the collision plainly visible on-device (play
+                        // All three used to render unconditionally, stacked on the exact same
+                        // center point - a bare spinner was thin enough that the overlap with the
+                        // play button underneath wasn't obviously broken, but adding buffering%
+                        // text right below it made the collision plainly visible on-device (play
                         // triangle and "39%" mashed together). Mutually exclusive now - only one
-                        // thing ever occupies this center spot at a time.
-                        if (uiState.isLoading && uiState.error == null && !isLocked) {
+                        // thing ever occupies this center spot at a time. GestureLayer's own
+                        // drag-seek toast ("1:15:34  +0:13") shares this exact same center point too
+                        // (see centerToastOffsetPx) but lives in a completely separate composable.
+                        // centerSeekToastVisible below closes that same gap for BOTH the spinner
+                        // (swiping again before a prior committed seek's buffering finished showed
+                        // the spinner's bare arc/"Буферизация" bleeding through the toast's own
+                        // background) AND the play/pause button itself (reported separately, with a
+                        // screenshot of the play triangle showing straight through the toast's own
+                        // time text - suppressing only the spinner branch left this button branch,
+                        // the `else` case below, still rendering unconditionally underneath it).
+                        if (centerSeekToastVisible) {
+                            // Nothing - the toast itself is the only thing that should show here
+                            // for as long as it's up.
+                        } else if (uiState.isLoading && uiState.error == null && !isLocked) {
                             BufferingIndicator(
                                 bufferedPositionMs = uiState.bufferedPositionMs,
                                 currentPositionMs = uiState.currentPositionMs,
@@ -591,7 +633,7 @@ fun PlayerScreen(
                             )
                         }
                     }
-                    Box(modifier = Modifier.onSizeChanged { bottomBarHeightPx = it.height }) {
+                    Box(modifier = Modifier.onSizeChanged { bottomBarHeightPx = maxOf(bottomBarHeightPx, it.height) }) {
                     BottomGradientBar(
                         currentPositionMs = uiState.currentPositionMs,
                         durationMs = uiState.durationMs,
@@ -601,10 +643,49 @@ fun PlayerScreen(
                         isLocked = isLocked,
                         onSeekTo = { position -> bumpInteraction(); viewModel.seekTo(position) },
                         onSeekDragging = { bumpInteraction() },
+                        onSeekDragPositionChange = { seekDragPositionMs = it },
                         onNextEpisode = { bumpInteraction(); viewModel.playNext() },
                         onToggleLock = { bumpInteraction(); isLocked = true; lockIconVisible = true; controlsVisible = false }
                     )
                     }
+                }
+                // Positioned off bottomBarHeightPx (already measured above, independently of
+                // BottomGradientBar's own internals) in a Box that ISN'T nested inside that bar's
+                // own layout at all - whatever this preview measures as can never feed back into
+                // bottomBarHeightPx, unlike the two previous attempts at keeping this self-contained
+                // inside BottomGradientBar (see its own KDoc on onSeekDragPositionChange).
+                seekDragPositionMs?.let { previewPositionMs ->
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .windowInsetsPadding(WindowInsets.safeDrawing)
+                            .offset { IntOffset(0, -bottomBarHeightPx) }
+                            .fillMaxWidth(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        val frame = uiState.thumbnailFrames?.let { tf ->
+                            val index = (previewPositionMs / tf.intervalMs.coerceAtLeast(1))
+                                .toInt()
+                                .coerceIn(0, tf.frames.size - 1)
+                            tf.frames.getOrNull(index)
+                        }
+                        if (frame != null) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Image(
+                                    bitmap = frame,
+                                    contentDescription = null,
+                                    modifier = Modifier
+                                        .width(160.dp)
+                                        .height(90.dp)
+                                        .border(1.dp, Color.White)
+                                )
+                                Text(formatTime(previewPositionMs), color = Color.White)
+                            }
+                        } else {
+                            Text(formatTime(previewPositionMs), color = Color.White)
+                        }
+                    }
+                }
                 }
             }
 
@@ -808,9 +889,20 @@ private fun GestureLayer(
     onDoubleTapSeek: (Long) -> Unit,
     onSeekByCommit: (Long) -> Unit,
     centerToastOffsetPx: Int = 0,
+    // Lets PlayerScreen suppress its own buffering spinner while the drag-seek toast below is
+    // showing at Center alignment - both render at the exact same on-screen point (see
+    // centerToastOffsetPx's own KDoc) but are otherwise unaware of each other, so without this a
+    // seek committed just before another swipe starts could show the spinner's bare arc and
+    // "Буферизация" bleeding through the toast's own rounded background underneath it.
+    onCenterToastVisibleChange: (Boolean) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     if (!enabled) {
+        // Reset rather than leave stale - if this composable is ever disabled (e.g. the screen
+        // gets locked) while a center toast happened to be showing, the early return below skips
+        // the LaunchedEffect further down that would otherwise clear it, permanently stuck
+        // suppressing the spinner from then on.
+        onCenterToastVisibleChange(false)
         Box(modifier = modifier)
         return
     }
@@ -863,6 +955,9 @@ private fun GestureLayer(
     var seekToastText by remember { mutableStateOf<String?>(null) }
     var seekToastAlignment by remember { mutableStateOf(Alignment.Center) }
     var seekToastHideJob: Job? by remember { mutableStateOf<Job?>(null) }
+    LaunchedEffect(seekToastText, seekToastAlignment) {
+        onCenterToastVisibleChange(seekToastText != null && seekToastAlignment == Alignment.Center)
+    }
 
     // Landscape on some devices has a real display-cutout (front camera) on one side - the same
     // mirror-both-sides approach DetailsScreen already uses for its own safe-area padding, so the
@@ -1059,11 +1154,15 @@ private fun GestureLayer(
         // as the last instant show/hide left in the player. Attached to the OUTER box (not the
         // edge-inset gesture box above) so they stay aligned to the real screen edges regardless of
         // EDGE_DEAD_ZONE.
+        // Shown on the OPPOSITE edge from the swipe that drives it (brightness is a left-edge drag
+        // but shows on the right, volume is a right-edge drag but shows on the left) - per user
+        // feedback, showing it under the same thumb that's dragging it just hid the indicator
+        // behind your own hand while you were adjusting it.
         AnimatedVisibility(
             visible = showBrightness,
             enter = fadeIn(),
             exit = fadeOut(),
-            modifier = Modifier.align(Alignment.CenterStart).padding(start = gestureIndicatorEdgePadding)
+            modifier = Modifier.align(Alignment.CenterEnd).padding(end = gestureIndicatorEdgePadding)
         ) {
             GestureIndicator(label = "Яркость", fraction = brightnessFraction)
         }
@@ -1071,7 +1170,7 @@ private fun GestureLayer(
             visible = showVolume,
             enter = fadeIn(),
             exit = fadeOut(),
-            modifier = Modifier.align(Alignment.CenterEnd).padding(end = gestureIndicatorEdgePadding)
+            modifier = Modifier.align(Alignment.CenterStart).padding(start = gestureIndicatorEdgePadding)
         ) {
             GestureIndicator(label = "Громкость", fraction = volumeFraction)
         }

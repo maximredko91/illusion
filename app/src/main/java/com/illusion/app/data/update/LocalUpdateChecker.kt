@@ -2,6 +2,7 @@ package com.illusion.app.data.update
 
 import android.os.Build
 import com.illusion.app.data.repository.SmbSourceRepository
+import com.illusion.app.data.smb.MissingSmbCredentialException
 import com.illusion.app.data.smb.SmbClient
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -23,8 +24,11 @@ class LocalUpdateChecker(
     private val json = Json { ignoreUnknownKeys = true }
 
     suspend fun checkForUpdate(sourceId: Long, currentVersionCode: Int): UpdateCheckResult = withContext(Dispatchers.IO) {
-        val info = smbSourceRepository.connectionInfoById(sourceId)
-            ?: return@withContext UpdateCheckResult.Failed("Источник обновлений не найден")
+        val info = try {
+            smbSourceRepository.connectionInfoById(sourceId)
+        } catch (e: MissingSmbCredentialException) {
+            return@withContext UpdateCheckResult.Failed(e.message!!)
+        } ?: return@withContext UpdateCheckResult.Failed("Источник обновлений не найден")
         val connection = runCatching { smbClient.connect(info) }.getOrElse {
             return@withContext UpdateCheckResult.Failed(it.message ?: "Не удалось подключиться к NAS")
         }

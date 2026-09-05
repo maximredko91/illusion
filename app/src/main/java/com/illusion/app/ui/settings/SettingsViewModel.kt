@@ -28,6 +28,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -51,6 +52,11 @@ class SettingsViewModel(
     fun forgetDevAccess() { devAccessStore.isRemembered = false }
     val sources: StateFlow<List<SmbSourceEntity>> = smbSourceRepository.observeSources()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    /** Source IDs with no saved password at all - see [MissingSmbCredentialException]'s KDoc for how this can happen despite the user never having removed it themselves. Lets the source list flag it before a scan/playback attempt has to fail first to reveal it. */
+    val sourcesMissingPassword: StateFlow<Set<Long>> = smbSourceRepository.observeSources()
+        .map { list -> list.filterNot { smbSourceRepository.hasStoredPassword(it.id) }.map { it.id }.toSet() }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptySet())
 
     val imageCacheLimitMb: Flow<Int> = settingsRepository.imageCacheLimitMb
 
@@ -131,6 +137,7 @@ class SettingsViewModel(
     fun factoryReset(context: Context) {
         viewModelScope.launch {
             downloadRepository.removeAll()
+            backupManager.clearPendingRestore()
             libraryRepository.clearAll()
             watchProgressRepository.clearHistory()
             watchProgressRepository.clearFavorites()
@@ -274,7 +281,10 @@ class SettingsViewModel(
                     ),
                     password
                 )
-            }.onSuccess { importedSourcesCount++ }
+            }.onSuccess { importedSourcesCount++ }.onFailure {
+                _backupMessage.value = context.getString(R.string.settings_backup_import_error)
+                return@launch
+            }
             advanceImportQueue(context)
         }
     }
@@ -283,12 +293,13 @@ class SettingsViewModel(
         viewModelScope.launch { advanceImportQueue(context) }
     }
 
-    private fun advanceImportQueue(context: Context) {
+    private suspend fun advanceImportQueue(context: Context) {
         _pendingImportSources.update { it.drop(1) }
         if (_pendingImportSources.value.isEmpty()) announceImportDone(context)
     }
 
-    private fun announceImportDone(context: Context) {
+    private suspend fun announceImportDone(context: Context) {
+        backupManager.applyPendingRestore()
         _backupMessage.value = context.getString(
             R.string.settings_backup_import_success,
             importedSourcesCount,

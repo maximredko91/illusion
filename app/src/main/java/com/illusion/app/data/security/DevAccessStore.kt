@@ -2,7 +2,6 @@ package com.illusion.app.data.security
 
 import android.content.Context
 import androidx.security.crypto.EncryptedSharedPreferences
-import androidx.security.crypto.MasterKey
 import java.security.MessageDigest
 import kotlin.random.Random
 
@@ -22,17 +21,8 @@ import kotlin.random.Random
  * raise the real bar against a decompiled APK - see the KDoc above.
  */
 class DevAccessStore(context: Context, private val buildTimePassword: String? = null) {
-    private val masterKey = MasterKey.Builder(context)
-        .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
-        .build()
+    private val prefs = com.illusion.app.data.security.openEncryptedPreferences(context, "dev_access")
 
-    private val prefs = EncryptedSharedPreferences.create(
-        context,
-        "dev_access",
-        masterKey,
-        EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-        EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
-    )
 
     val hasPassword: Boolean get() = prefs.contains(KEY_HASH) || !buildTimePassword.isNullOrBlank()
 

@@ -1,6 +1,5 @@
 package com.illusion.app.ui.library
 
-import android.content.res.Configuration
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.fadeIn
@@ -70,7 +69,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
-import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.stringResource
@@ -150,13 +149,7 @@ fun LibraryScreen(
     }
 
     val isTv = com.illusion.app.ui.common.LocalUiMode.current == com.illusion.app.domain.model.UiMode.TV
-    val isPhoneLandscape = !isTv && LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
-    // Below the title, same position on every configuration now (portrait phone always had this;
-    // landscape phone used to render this inline next to the title instead - moved to match TV's
-    // own layout per feedback). Portrait phone keeps its original horizontally-scrolling Row
-    // unchanged - only TV and landscape phone (which now shares TV's own header layout) get the
-    // wrapping FlowRow, since a scrolling row was the compromise for cramped inline space that no
-    // longer applies once this is its own full-width row underneath.
+    // Wrap controls so every filter remains visible on narrow screens and at large font sizes.
     val sortFilterRow: @Composable () -> Unit = {
         val menus: @Composable () -> Unit = {
             SortMenu(
@@ -190,17 +183,10 @@ fun LibraryScreen(
                 )
             }
         }
-        if (isTv || isPhoneLandscape) {
-            androidx.compose.foundation.layout.FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) { menus() }
-        } else {
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.horizontalScroll(rememberScrollState())
-            ) { menus() }
-        }
+        androidx.compose.foundation.layout.FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) { menus() }
     }
 
     // No longer read by a TopAppBar's `windowInsets` param (there's no TopAppBar here anymore) -
@@ -248,13 +234,35 @@ fun LibraryScreen(
     // ordinary scrolling content, not a separately nested-scroll-driven component. Also reused
     // (called directly, not as a grid item) above the loading spinner/empty state below, so it's
     // still visible - just non-scrolling, same as before - while there's no grid to be part of.
+    // Top-inset only (status bar), NOT topBarInsets directly - that also unions in the RAW
+    // WindowInsets.displayCutout regardless of TV mode, unlike cutoutPadding above (which the grid
+    // already correctly zeroes out on TV - see that fix's own KDoc on the real Xiaomi TV Box that
+    // falsely reports a nonzero cutout). Using topBarInsets' own horizontal contribution here meant
+    // the header could get pushed away from the true edge by a fake TV cutout while the grid right
+    // below it, on the SAME side, correctly didn't move at all - confirmed on-device as the header
+    // and the first poster card only lining up in ONE of the two rail-left/rail-right rotations
+    // (whichever one happened to put the fake cutout on the rail's own side instead of the
+    // content's). Every horizontal padding below now shares cutoutPadding with the grid instead of
+    // reading the cutout a second, TV-unaware way.
+    val topOnlyInsets = WindowInsets(top = topBarInsets.getTop(LocalDensity.current))
     val header: @Composable () -> Unit = {
-        Column(modifier = Modifier.fillMaxWidth().windowInsetsPadding(topBarInsets)) {
+        // Flat padding only below - NOT cutout-aware, unlike a first glance at "the header should
+        // dodge the cutout too" would suggest. header() is composed as this grid's own first item
+        // (see the `item(span = ...) { header() }` below), so the grid's shared `contentPadding`
+        // (gridStartPadding/gridEndPadding, which IS cutout-aware) already shifts the header over
+        // by the correct amount, exactly like it does for every PosterCard item - PosterCard's own
+        // modifier is a plain `Modifier.padding(4.dp)` with no cutout term of its own for the same
+        // reason. Two earlier versions of this both added a SECOND cutout-based padding here (first
+        // via windowInsetsPadding(topBarInsets)'s own horizontal contribution, then via an explicit
+        // gridStartPadding/gridEndPadding copy meant to "match" the grid) - both double-counted the
+        // cutout on top of what contentPadding already applied, pushing the title/sort row further
+        // from the edge than the cards below them (confirmed on-device with screenshots in both
+        // landscape rotations - the gap was smaller but still present in one, bigger in the other,
+        // never zero, exactly what doubling a smaller-vs-larger real cutout value in each rotation
+        // would produce).
+        Column(modifier = Modifier.fillMaxWidth().windowInsetsPadding(topOnlyInsets)) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                // Small flat start padding - just far enough off the true screen edge to not
-                // look flush against it, not tied to the poster grid's own alignment (per
-                // feedback: move the title itself closer to the edge, don't touch the cards).
                 modifier = Modifier.fillMaxWidth().height(64.dp).padding(start = 4.dp, end = 4.dp)
             ) {
                 Text(

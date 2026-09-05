@@ -181,6 +181,7 @@ fun DetailsScreen(
     val downloads by viewModel.downloads.collectAsState()
     val watchProgress by viewModel.watchProgress.collectAsState()
     val context = LocalContext.current
+    val offlineWarning = stringResource(R.string.details_offline_warning)
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     // See TvFocus.bridgeFocusDown's own KDoc - back/home float outside the scrollable content
@@ -222,7 +223,7 @@ fun DetailsScreen(
                     if (download?.status == DownloadStatus.COMPLETED || com.illusion.app.ui.common.isOnLocalNetwork(context)) {
                         onPlay(item.stableId)
                     } else {
-                        scope.launch { snackbarHostState.showSnackbar(context.getString(R.string.details_offline_warning)) }
+                        scope.launch { snackbarHostState.showSnackbar(offlineWarning) }
                     }
                 },
                 onPlayTrailer = {
@@ -231,7 +232,7 @@ fun DetailsScreen(
                     if (com.illusion.app.ui.common.isOnLocalNetwork(context)) {
                         onPlayTrailer(item.stableId)
                     } else {
-                        scope.launch { snackbarHostState.showSnackbar(context.getString(R.string.details_offline_warning)) }
+                        scope.launch { snackbarHostState.showSnackbar(offlineWarning) }
                     }
                 },
                 onOpenPerson = onOpenPerson,
@@ -543,7 +544,7 @@ private fun DetailsContent(
 
         // getString (not stringResource) since the hint text is picked inside an onClick lambda,
         // not composed directly - stringResource can't be called from a non-composable callback.
-        val hintContext = androidx.compose.ui.platform.LocalContext.current
+        val hintContext = androidx.compose.ui.platform.LocalResources.current
         // ONE shared hint, not one per icon - two independent bubbles could both be visible at
         // once (tapping both icons in quick succession) and, sitting right next to each other in
         // a narrow column, their text visibly overlapped. Both icon buttons below update this
@@ -727,7 +728,7 @@ private fun DetailsContent(
                         if (isTv) {
                             Text(
                                 "($originalTitle)",
-                                style = MaterialTheme.typography.headlineSmall,
+                                style = MaterialTheme.typography.titleMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         } else {
@@ -735,7 +736,7 @@ private fun DetailsContent(
                             val originalTitleSource = remember { MutableInteractionSource() }
                             Text(
                                 "($originalTitle)",
-                                style = MaterialTheme.typography.headlineSmall,
+                                style = MaterialTheme.typography.titleMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 maxLines = if (originalTitleExpanded) Int.MAX_VALUE else 2,
                                 overflow = TextOverflow.Ellipsis,
@@ -803,6 +804,18 @@ private fun DetailsContent(
         // read as a deliberate part of the design. Grouped together in their own lightly-tinted
         // card here instead, both get the room to breathe a plain inline `Text` next to a poster
         // never had.
+        ActionButtonsRow(
+            hasStartedWatching = hasStartedWatching,
+            hasTrailer = item.trailerPath != null,
+            download = download,
+            itemTitle = displayTitle,
+            onPlay = { onPlay(item.stableId) },
+            onPlayTrailer = { onPlayTrailer(item.stableId) },
+            onStartDownload = onStartDownload,
+            onRemoveDownload = onRemoveDownload,
+            onDownloadError = onDownloadError
+        )
+
         val tagline = item.tagline?.takeIf { it.isNotBlank() }
         val studio = item.studio?.takeIf { it.isNotBlank() }
         val mpaa = item.mpaa?.takeIf { it.isNotBlank() }
@@ -974,18 +987,6 @@ private fun DetailsContent(
                 }
             }
         }
-
-        ActionButtonsRow(
-            hasStartedWatching = hasStartedWatching,
-            hasTrailer = item.trailerPath != null,
-            download = download,
-            itemTitle = displayTitle,
-            onPlay = { onPlay(item.stableId) },
-            onPlayTrailer = { onPlayTrailer(item.stableId) },
-            onStartDownload = onStartDownload,
-            onRemoveDownload = onRemoveDownload,
-            onDownloadError = onDownloadError
-        )
 
         // Same backdrop treatment as the tagline/studio/audio/subtitles card above it (per
         // feedback) - a plain Text here previously had no visual container of its own at all.

@@ -84,7 +84,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -94,7 +93,6 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.layout.layout
-import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.illusion.app.R
@@ -292,6 +290,10 @@ fun BottomGradientBar(
     isLocked: Boolean,
     onSeekTo: (Long) -> Unit,
     onSeekDragging: () -> Unit = {},
+    // Reports the position currently being dragged to (null when not dragging) so the caller can
+    // render the scrub thumbnail/time preview itself - see this composable's own historical KDoc
+    // below on why the preview can no longer be an internal part of this bar's own layout.
+    onSeekDragPositionChange: (Long?) -> Unit = {},
     onNextEpisode: () -> Unit,
     onToggleLock: () -> Unit,
     modifier: Modifier = Modifier
@@ -311,76 +313,26 @@ fun BottomGradientBar(
         if (!isDragging) sliderPosition = currentPositionMs.toFloat()
     }
 
-    // The scrub thumbnail/time preview used to be an ordinary child laid out ABOVE the time/
-    // slider row, inside the same Column as the rest of this bar - appearing and disappearing
-    // with isDragging changed this Column's own measured height. PlayerScreen sizes the buffering
-    // spinner / play-pause button's container against this bar's real height (a sibling Box with
-    // `weight(1f)`), so every time a drag started or ended, that Box's available space - and so
-    // its centered content - shifted. Most noticeable right at release: the preview disappears
-    // and a buffering spinner appears in the same instant, so the spinner visibly "jumps" to a
-    // new position (reported as "спиннер скачет при перемотке"). Rendered here as an absolutely
-    // positioned overlay ABOVE the bar instead, flush with its top edge (via the measured
-    // [barHeightPx]) - this bar's own measured height no longer changes at all while dragging, so
-    // nothing sized off it moves either.
-    var barHeightPx by remember { mutableIntStateOf(0) }
-
-    Box(modifier = modifier.fillMaxWidth()) {
-        if (isDragging) {
-            Box(
-                modifier = Modifier
-                    .align(Alignment.BottomStart)
-                    .fillMaxWidth()
-                    // A plain .offset{} here still leaves this Box's OWN measured size (its
-                    // natural content height - up to ~90dp taller when a thumbnail image is
-                    // showing, vs. just a time label) contributing to the parent Box's own size
-                    // calculation, since offset only changes where a child is drawn, not what
-                    // size it reports upward - Box sizes itself from the max of every child's
-                    // MEASURED size regardless of any offset applied to it. Whenever the preview
-                    // was taller than the bar itself (any time a real thumbnail image was
-                    // available, i.e. most previously-watched content), the parent Box - and so
-                    // PlayerScreen's own onSizeChanged-measured bottomBarHeightPx that the
-                    // spinner/play-button container is sized against - grew right along with it,
-                    // reintroducing the very same jump this whole restructure exists to remove
-                    // (see this composable's own top-level comment). This custom layout reports a
-                    // (0, 0) size to the parent no matter how tall the actual preview content is -
-                    // fully decoupling this bar's own reported size from whether the preview is
-                    // showing at all, or what it's showing.
-                    .layout { measurable, constraints ->
-                        val placeable = measurable.measure(constraints)
-                        layout(0, 0) {
-                            placeable.place(0, -(barHeightPx + placeable.height))
-                        }
-                    },
-                contentAlignment = Alignment.Center
-            ) {
-                val frame = thumbnailFrames?.let { tf ->
-                    val index = (sliderPosition.toLong() / tf.intervalMs.coerceAtLeast(1))
-                        .toInt()
-                        .coerceIn(0, tf.frames.size - 1)
-                    tf.frames.getOrNull(index)
-                }
-                if (frame != null) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Image(
-                            bitmap = frame,
-                            contentDescription = null,
-                            modifier = Modifier
-                                .width(160.dp)
-                                .height(90.dp)
-                                .border(1.dp, Color.White)
-                        )
-                        Text(formatTime(sliderPosition.toLong()), color = Color.White)
-                    }
-                } else {
-                    Text(formatTime(sliderPosition.toLong()), color = Color.White)
-                }
-            }
-        }
+    // The scrub thumbnail/time preview used to be rendered right here (first as an ordinary child
+    // laid out above the time/slider row, later as an absolutely-positioned overlay measured
+    // against this bar's own height via a custom zero-size Modifier.layout{} trick) - both
+    // versions had real bugs: the first let the preview's appearing/disappearing change this
+    // bar's own measured height, which shifted the buffering spinner/play-pause button centered
+    // in a sibling Box sized off that height (reported as "спиннер скачет при перемотке"); the
+    // zero-size-layout fix for THAT bug then mispositioned the preview itself on-device (reported
+    // showing pinned to the right instead of centered above the bar). Rather than keep patching an
+    // increasingly clever custom layout, the preview is now rendered by the CALLER entirely -
+    // PlayerScreen already measures its own bottomBarHeightPx independently for other reasons, so
+    // positioning an overlay off that measurement, in a Box that isn't nested inside this bar's
+    // own layout at all, can't ever feed back into this bar's own size no matter what the preview
+    // itself measures as.
+    LaunchedEffect(sliderPosition, isDragging) {
+        onSeekDragPositionChange(if (isDragging) sliderPosition.toLong() else null)
+    }
 
     Column(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
-            .onSizeChanged { barHeightPx = it.height }
             .background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.75f))))
             .padding(horizontal = 12.dp, vertical = 8.dp)
     ) {
@@ -433,9 +385,10 @@ fun BottomGradientBar(
             // on-device, most reliably reproduced by holding Left/Right rather than a quick press.
             // The likely trigger was the thumbnail-preview box appearing/disappearing with
             // isDragging, which used to shift this whole row's on-screen position at the exact
-            // moment focus state is most fragile (mid key-repeat) - the preview is now an absolute
-            // overlay above the bar instead (see this composable's own top-level comment), so this
-            // row no longer moves at all, but the explicit re-claim stays as a harmless safety net
+            // moment focus state is most fragile (mid key-repeat) - the preview is now rendered
+            // entirely by the caller instead (see this composable's own top-level comment on
+            // onSeekDragPositionChange), so this row no longer moves at all, but the explicit
+            // re-claim stays as a harmless safety net
             // rather than trusting that removing the original trigger fully closes the door on it.
             val sliderFocusRequester = remember { FocusRequester() }
             // Only reacts to an actual true->false transition (a real drag just ending) - a plain
@@ -486,7 +439,6 @@ fun BottomGradientBar(
                 modifier = Modifier.width(64.dp)
             )
         }
-    }
     }
 }
 

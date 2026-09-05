@@ -26,7 +26,10 @@ data class BackupSource(
 )
 
 @Serializable
-data class BackupFavorite(val stableId: String, val addedAt: Long)
+data class BackupFavorite(val stableId: String, val addedAt: Long, val media: BackupMediaRef? = null)
+
+@Serializable
+data class BackupMediaRef(val source: BackupSource, val filePath: String, val sizeBytes: Long)
 
 @Serializable
 data class BackupWatchProgress(
@@ -34,5 +37,6 @@ data class BackupWatchProgress(
     val positionMs: Long,
     val durationMs: Long,
     val watched: Boolean,
-    val updatedAt: Long
+    val updatedAt: Long,
+    val media: BackupMediaRef? = null
 )
