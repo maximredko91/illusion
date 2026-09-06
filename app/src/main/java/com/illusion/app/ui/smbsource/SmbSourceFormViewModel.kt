@@ -116,7 +116,7 @@ class SmbSourceFormViewModel(
 
     fun reportLocalNetworkPermissionDenied() {
         _state.update {
-            it.copy(testState = TestConnectionState.Failure("Нет разрешения на доступ к локальной сети - откройте настройки приложения и разрешите его вручную"))
+            it.copy(testState = TestConnectionState.Failure("Нет разрешения на доступ к локальной сети — откройте настройки приложения и разрешите его вручную"))
         }
     }
 

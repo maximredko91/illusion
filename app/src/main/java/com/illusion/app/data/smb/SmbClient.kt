@@ -316,7 +316,7 @@ class SmbClient {
  * silent zero-item scan into a message that actually tells the user what to do.
  */
 class MissingSmbCredentialException(sourceName: String) : Exception(
-    "Не сохранён пароль для источника \"$sourceName\" - откройте его настройки и введите пароль заново"
+    "Не сохранён пароль для источника «$sourceName» — откройте его настройки и введите пароль заново"
 )
 
 /** Shared by [SmbClient.testConnection]'s error dialog and [com.illusion.app.data.scan.LibraryScanner]'s per-source scan-failure reporting - one place classifying the same handful of SMB failure shapes into a Russian message the user can act on. */
@@ -325,9 +325,9 @@ fun classifySmbError(e: Throwable): String = when (e) {
     is TimeoutCancellationException, is SocketTimeoutException ->
         "Не удалось подключиться: сервер не отвечает (проверьте адрес и что телефон в той же сети)"
     is java.net.UnknownHostException ->
-        "Не удалось найти хост \"${e.message}\" - проверьте адрес сервера"
+        "Не удалось найти хост «${e.message}» — проверьте адрес сервера"
     is java.net.ConnectException ->
-        "Соединение отклонено - проверьте адрес и порт SMB (445)"
+        "Соединение отклонено — проверьте адрес и порт SMB (445)"
     else -> {
         val message = e.message ?: e::class.simpleName ?: "неизвестная ошибка"
         when {
@@ -346,7 +346,7 @@ fun classifySmbError(e: Throwable): String = when (e) {
                 // just a generic "check your permissions" - that path is exactly what's needed to
                 // find the one folder with the wrong ACL on the router, not just that one exists
                 // somewhere in the tree.
-                "Доступ запрещён (логин и пароль верны, дело не в них - проверьте права этого пользователя на роутере): $message"
+                "Доступ запрещён (логин и пароль верны, дело не в них — проверьте права этого пользователя на роутере): $message"
             message.contains("STATUS_BAD_NETWORK_NAME", ignoreCase = true) -> "Шара с таким именем не найдена на сервере"
             else -> "Не удалось подключиться: $message"
         }

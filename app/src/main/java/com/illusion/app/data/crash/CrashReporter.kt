@@ -75,7 +75,7 @@ object CrashReporter {
     fun shareIntent(file: File): Intent =
         Intent(Intent.ACTION_SEND).apply {
             type = "text/plain"
-            putExtra(Intent.EXTRA_SUBJECT, "Illusion - отчёт о сбое")
+            putExtra(Intent.EXTRA_SUBJECT, "Illusion — отчёт о сбое")
             putExtra(Intent.EXTRA_TEXT, file.readText())
         }
 
@@ -85,7 +85,7 @@ object CrashReporter {
             "Android ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT}), ${Build.MANUFACTURER} ${Build.MODEL}\n\n"
         return Intent(Intent.ACTION_SEND).apply {
             type = "text/plain"
-            putExtra(Intent.EXTRA_SUBJECT, "Illusion - отзыв")
+            putExtra(Intent.EXTRA_SUBJECT, "Illusion — отзыв")
             putExtra(Intent.EXTRA_TEXT, header)
         }
     }

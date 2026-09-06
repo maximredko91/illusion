@@ -1,6 +1,6 @@
 <resources>
     <string name="app_name">Иллюзион</string>
-    <string name="exit_confirm_message">Нажмите ещё раз "назад" для выхода</string>
+    <string name="exit_confirm_message">Нажмите ещё раз «Назад» для выхода</string>
     <string name="player_open_external">Открыть во внешнем плеере</string>
     <string name="player_open_external_no_app">Не найдено приложение для открытия видео</string>
 
@@ -33,9 +33,9 @@
     <string name="details_collection_name_label">Коллекция:</string>
 
     <string name="settings_factory_reset">Полный сброс приложения</string>
-    <string name="settings_factory_reset_description">Удалит источники SMB, всю библиотеку, избранное, историю просмотра, загрузки, кэш и пароль добавления медиа — настройки тоже вернутся к значениям по умолчанию</string>
+    <string name="settings_factory_reset_description">Удалит источники SMB, всю библиотеку, избранное, историю просмотра, загрузки, кеш и пароль добавления медиа — настройки тоже вернутся к значениям по умолчанию</string>
     <string name="settings_factory_reset_action">Сбросить всё</string>
-    <string name="settings_factory_reset_confirm">Это необратимо удалит источники SMB, библиотеку, избранное, историю, загрузки и кэш. Продолжить?</string>
+    <string name="settings_factory_reset_confirm">Это необратимо удалит источники SMB, библиотеку, избранное, историю, загрузки и кеш. Продолжить?</string>
     <string name="settings_downloads_no_file_app">Не найдено приложение для открытия папки</string>
 
     <string name="nav_home">Главная</string>
@@ -75,11 +75,11 @@
     <string name="settings_scan_running_description">Запущено ранее и продолжается в фоне</string>
     <string name="settings_scan_running_open">Открыть</string>
     <string name="settings_player_section">Плеер</string>
-    <string name="settings_cache">Кэш</string>
+    <string name="settings_cache">Кеш</string>
     <string name="settings_cache_size">Занято: %1$s</string>
     <string name="settings_cache_size_unknown">Вычисление размера…</string>
-    <string name="settings_cache_clear">Очистить кэш</string>
-    <string name="settings_cache_clear_confirm_title">Очистить кэш?</string>
+    <string name="settings_cache_clear">Очистить кеш</string>
+    <string name="settings_cache_clear_confirm_title">Очистить кеш?</string>
     <string name="settings_cache_clear_confirm_message">Все временные файлы будут удалены. Постеры и фоны, если кеширование включено, подгрузятся заново с сервера при следующем открытии.</string>
     <string name="settings_image_cache_limit">Лимит кеша изображений</string>
     <string name="settings_image_cache_limit_description">Максимальный размер кеша постеров и фанартов на устройстве (по отдельности для каждого). Изменение применится после перезапуска приложения. Уменьшите, если места на устройстве мало</string>
@@ -112,7 +112,7 @@
     <string name="settings_downloads_recover_none">В выбранной папке не нашлось новых файлов</string>
     <string name="settings_downloads_recover_result">Восстановлено файлов: %1$d</string>
     <string name="settings_backup">Резервное копирование</string>
-    <string name="settings_backup_description">Сохраняет источники SMB (без паролей — их нужно будет ввести заново при импорте), избранное и историю просмотров в один файл. Пригодится при переустановке приложения или переходе на новое устройство. Библиотека и сама медиатека не включаются — после импорта источников нужно будет пересканировать библиотеку заново</string>
+    <string name="settings_backup_description">Сохраняет источники SMB (без паролей — их нужно будет ввести заново при импорте), избранное и историю просмотров в один файл. Пригодится при переустановке приложения или переходе на новое устройство. Сама библиотека не включается — после импорта источников нужно будет пересканировать её заново</string>
     <string name="settings_version">Версия: %1$s</string>
     <string name="settings_build_number">Номер сборки: %1$d</string>
     <string name="settings_easter_egg_countdown">Ещё %1$d, и что-то произойдёт…</string>
@@ -268,17 +268,17 @@
     <string name="settings_reset_to_defaults_action">Сбросить</string>
     <string name="settings_reset_to_defaults_confirm">Источники SMB и медиатека не тронутся — сбросятся только настройки интерфейса и плеера. Продолжить?</string>
     <string name="onboarding_smb_address">Адрес сервера (хост)</string>
-    <string name="onboarding_smb_address_help">Только IP или имя устройства в локальной сети, например 192.168.2.1 — без \\\\ и без имени папки</string>
+    <string name="onboarding_smb_address_help">Только IP или имя устройства в локальной сети, например, 192.168.2.1 — без \\\\ и без имени папки</string>
     <string name="onboarding_display_name">Название источника</string>
-    <string name="onboarding_display_name_help">Как источник будет называться в приложении, например «Диск в гостиной». На подключение не влияет</string>
+    <string name="onboarding_display_name_help">Как источник будет называться в приложении, например, «Диск в гостиной». На подключение не влияет</string>
     <string name="onboarding_share">Имя шары</string>
-    <string name="onboarding_share_help">Имя общей папки на сервере, как оно видно в проводнике: в пути \\\\192.168.2.1\\Movies это «Movies»</string>
+    <string name="onboarding_share_help">Имя общей папки на сервере, как оно видно в проводнике: в пути \\\\192.168.2.1\\Movies — это «Movies»</string>
     <string name="onboarding_advanced_show">Дополнительные поля</string>
     <string name="onboarding_advanced_hide">Скрыть дополнительные поля</string>
     <string name="onboarding_root_path">Путь внутри шары (необязательно)</string>
-    <string name="onboarding_root_path_help">Только если видео лежат не в корне шары, а во вложенной папке, например Films\\HD. Обычно можно оставить пустым</string>
+    <string name="onboarding_root_path_help">Только если видео лежат не в корне шары, а во вложенной папке, например, Films\\HD. Обычно можно оставить пустым</string>
     <string name="onboarding_domain">Домен (необязательно)</string>
-    <string name="onboarding_domain_help">Нужен редко — только если сервер требует домен Windows (например WORKGROUP). Для большинства NAS и роутеров оставьте пустым</string>
+    <string name="onboarding_domain_help">Нужен редко — только если сервер требует домен Windows (например, WORKGROUP). Для большинства NAS и роутеров оставьте пустым</string>
     <string name="onboarding_username">Логин (пусто — гостевой доступ)</string>
     <string name="onboarding_username_help">Оставьте пустым, если шара открыта без пароля (гостевой доступ). Заполните, если сервер запрашивает логин/пароль</string>
     <string name="onboarding_password">Пароль</string>
@@ -299,11 +299,11 @@
         <item>В сериалах можно один раз отметить конец заставки — плеер сам предложит пропустить её в следующих сериях</item>
         <item>Поддерживаются внешние субтитры форматов .srt, .ass и .vtt рядом с видеофайлом</item>
         <item>Есть режим для телевизора с управлением пультом — включается в Настройках</item>
-        <item>Библиотеку можно сортировать по году, рейтингу, алфавиту и дате добавления — в любом направлении</item>
+        <item>Библиотеку можно сортировать по году, рейтингу и алфавиту — в любом направлении, одним нажатием на ту же строку меню</item>
         <item>В карточке фильма показываются похожие тайтлы, подобранные по общим жанрам</item>
         <item>Избранное и история просмотра всегда под рукой — иконки на главном экране</item>
         <item>Аудиодорожки и субтитры можно переключить прямо во время просмотра, без остановки</item>
-        <item>Изображение при просмотре можно сделать чётче — в Настройках есть GPU-шейдер повышения резкости</item>
+        <item>Изображение при просмотре можно сделать чётче — шестерёнка в плеере, «Повышение резкости (GPU)»</item>
         <item>У серии можно отдельно отметить начало титров — плеер сразу предложит перейти к следующей серии</item>
         <item>В плеере есть таймер сна — сам остановит воспроизведение через заданное время</item>
         <item>В поиске можно надиктовать запрос голосом — иконка микрофона прямо в строке поиска</item>
@@ -312,6 +312,13 @@
         <item>Отметку «просмотрено» можно поставить или снять вручную, не только через сам просмотр</item>
         <item>Части фильма в папке с припиской «(Коллекция)» на NAS сами объединятся в одну карточку коллекции</item>
         <item>При нескольких подключённых источниках SMB каждый можно включить или отключить отдельно — в Настройках</item>
+        <item>У фильма может быть трейлер — если рядом с видео на NAS лежит файл вида «Название-trailer.mp4», кнопка появится в карточке</item>
+        <item>Сезон сериала можно скачать целиком одной кнопкой — в карточке рядом с номером сезона</item>
+        <item>Приложение само проверяет обновления и ставит их без похода в браузер — источником может быть GitHub или папка на NAS</item>
+        <item>Если интерфейс подтормаживает — Настройки → Производительность → «Экономичный»: разом упростит анимации и фоновые эффекты</item>
+        <item>Значок приложения на рабочем столе можно поменять под выбранный акцентный цвет — Настройки → «Значок приложения»</item>
+        <item>По тегам из .nfo можно искать отдельно — «Все теги» на экране поиска</item>
+        <item>Если постеры занимают слишком много места, лимит кеша настраивается — Настройки → Кеш</item>
     </string-array>
     <string name="scan_progress_dismiss">Смотреть, пока сканируется</string>
     <string name="scan_progress_stop">Остановить</string>
@@ -350,7 +357,7 @@
     <string name="settings_local_update_source">Источник для обновлений</string>
     <string name="settings_local_update_source_none">Сначала добавьте SMB-источник</string>
     <string name="settings_local_update_source_pick">Выбрать</string>
-    <string name="settings_local_update_source_path_hint">Манифест ожидается в папке IllusionUpdates\\manifest.json</string>
+    <string name="settings_local_update_source_path_hint">Манифест ожидается по пути IllusionUpdates\\manifest.json</string>
 
     <string name="settings_tv_overscan_margin">Отступ от края экрана</string>
     <string name="settings_tv_overscan_margin_hint">Если интерфейс обрезается краем телевизора — увеличьте. Если по краям пустые чёрные полосы — уменьшите</string>
@@ -358,7 +365,7 @@
 
     <string name="settings_add_source">Добавить источник</string>
     <string name="settings_no_sources">Источники не добавлены</string>
-    <string name="settings_source_missing_password">Нет сохранённого пароля - откройте и введите заново</string>
+    <string name="settings_source_missing_password">Нет сохранённого пароля — откройте и введите заново</string>
     <string name="settings_delete_source">Удалить</string>
     <string name="settings_delete_source_confirm_title">Удалить источник?</string>
     <string name="settings_delete_source_confirm_message">«%1$s» будет удалён. Всё, что было отсканировано из этого источника, пропадёт из библиотеки.</string>
@@ -404,7 +411,7 @@
     <string name="player_back">Назад</string>
     <string name="player_subtitles_button">Субтитры</string>
     <string name="player_audio_tracks_button">Аудиодорожка</string>
-    <string name="player_cast_unavailable">Трансляция (недоступно)</string>
+    <string name="player_cast_unavailable">Трансляция (недоступна)</string>
     <string name="player_settings">Настройки воспроизведения</string>
     <string name="player_settings_section_speed">Скорость</string>
     <string name="player_settings_section_image">Изображение</string>
@@ -426,7 +433,7 @@
     <string name="player_aspect_ratio_zoom">Заполнить экран (обрезка)</string>
     <string name="player_aspect_ratio_fill">Растянуть</string>
     <string name="player_sharpen_enable_warning_title">Включить резкость?</string>
-    <string name="player_sharpen_enable_warning_message">Из-за ограничения видеодвижка после включения резкости переключение соотношения сторон сразу перестанет работать. Чтобы вернуть его — нажмите «Перезайти в плеер» здесь же в настройках: это происходит почти незаметно, без потери позиции воспроизведения, но саму резкость придётся включить заново.</string>
+    <string name="player_sharpen_enable_warning_message">Из-за ограничения видеодвижка после включения резкости переключение соотношения сторон сразу перестанет работать. Чтобы вернуть его, нажмите «Перезайти в плеер» здесь же в настройках: это происходит почти незаметно, без потери позиции воспроизведения, но саму резкость придётся включить заново.</string>
     <string name="player_sharpen_enable_warning_confirm">Всё равно включить</string>
     <string name="player_aspect_ratio_locked">Переключение соотношения сторон недоступно, пока включена резкость — нажмите «Перезайти в плеер», это займёт мгновение</string>
     <string name="player_reload">Перезайти в плеер</string>
@@ -441,7 +448,7 @@
     <string name="details_favorite_add">Добавить в избранное</string>
     <string name="details_favorite_remove">Убрать из избранного</string>
     <string name="details_watched_add">Отметить просмотренным</string>
-    <string name="details_watched_remove">Снять отметку "просмотрено"</string>
+    <string name="details_watched_remove">Снять отметку «Просмотрено»</string>
     <string name="details_favorite_added_hint">Добавлено в избранное</string>
     <string name="details_favorite_removed_hint">Убрано из избранного</string>
     <string name="details_watched_added_hint">Отмечено просмотренным</string>
@@ -471,7 +478,7 @@
     <string name="person_title">Фильмография: %1$s</string>
 
     <string name="settings_dev_password_generated_title">Пароль для добавления медиа</string>
-    <string name="settings_dev_password_generated_message">%1$s\n\nЗапомни или сохрани его — больше он не покажется. Он понадобится при следующих входах в этот раздел.</string>
+    <string name="settings_dev_password_generated_message">%1$s\n\nЗапомните или сохраните его — больше он не покажется. Он понадобится при следующих входах в этот раздел.</string>
     <string name="settings_dev_password_saved">Сохранил</string>
     <string name="settings_dev_password_title">Пароль разработчика</string>
     <string name="settings_dev_password_label">Пароль</string>
