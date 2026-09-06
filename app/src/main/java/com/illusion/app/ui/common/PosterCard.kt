@@ -171,12 +171,18 @@ private fun PosterCardContent(
                         holeColor = Color.Black.copy(alpha = 0.55f),
                         modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(6.dp)
                     )
+                    // Подложка под самой надписью, а не только общее затемнение карточки выше: мелкий
+                    // белый текст попадал на светлый участок постера и терялся даже под затемнением.
                     Text(
                         stringResource(R.string.details_collection_current),
                         color = Color.White,
                         style = MaterialTheme.typography.labelSmall,
                         textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                        modifier = Modifier.align(Alignment.Center).padding(8.dp)
+                        modifier = Modifier
+                            .align(Alignment.Center)
+                            .padding(8.dp)
+                            .background(Color.Black.copy(alpha = 0.55f), RoundedCornerShape(50))
+                            .padding(horizontal = 8.dp, vertical = 3.dp)
                     )
                 }
                 if (progressFraction != null) {

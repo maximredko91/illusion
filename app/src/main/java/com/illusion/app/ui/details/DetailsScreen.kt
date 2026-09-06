@@ -78,6 +78,11 @@ import androidx.compose.material3.Snackbar
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.ScrollState
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.windowInsetsBottomHeight
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -91,6 +96,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -193,10 +199,14 @@ fun DetailsScreen(
     // anything else on a real Android TV.
     val contentFocusRequester = remember { androidx.compose.ui.focus.FocusRequester() }
 
+    // Поднято сюда из DetailsContent: угловые кнопки ниже - соседи скролла, а не его
+    // содержимое, и им нужно знать, ушёл ли фанарт из-под них.
+    val scrollState = rememberScrollState()
     Box(modifier = modifier.fillMaxSize()) {
         val item = state.item
         when {
             item != null -> DetailsContent(
+                scrollState = scrollState,
                 item = item,
                 displayTitle = state.seriesTitle ?: item.title,
                 audioTracks = state.audioTracks,
@@ -255,8 +265,31 @@ fun DetailsScreen(
         // while still reading as glass rather than a solid UI chrome bar, and the icon itself keeps
         // its own theme-driven tint independent of the pill's color.
         val haptics = LocalHapticFeedback.current
-        val cornerIconTint = if (MaterialTheme.colorScheme.background.luminance() > 0.5f) Color.Black else Color.White
-        val cornerPillColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.35f)
+        // Полупрозрачная пилюля читается только поверх фанарта. Когда фанарт уезжает вверх,
+        // под кнопками оказывается обычный текст, и сквозь 35% заливки он просвечивал - нечитаемыми
+        // становились и текст, и сама иконка (на скриншотах они съедали «Режиссёр» и «Коллекция:»).
+        // Кнопки по-прежнему закреплены на экране (так просили раньше), просто становятся непрозрачным
+        // элементом управления, а не полупрозрачным пятном поверх текста.
+        val overContent by remember { derivedStateOf { scrollState.value > 24 } }
+        val cornerIconTint by animateColorAsState(
+            if (overContent) MaterialTheme.colorScheme.onSurface
+            else if (MaterialTheme.colorScheme.background.luminance() > 0.5f) Color.Black else Color.White,
+            label = "cornerIconTint"
+        )
+        val cornerPillColor by animateColorAsState(
+            // Поверх фанарта кнопке нужна своя подложка, над панелью - уже нет: фон даёт сама панель.
+            if (overContent) Color.Transparent
+            else MaterialTheme.colorScheme.primary.copy(alpha = 0.35f),
+            label = "cornerPillColor"
+        )
+        // Одного непрозрачного кружка мало: кнопка всё равно садилась посреди чужого текста
+        // (на скриншоте съедала «Рей» у «Рейтинг:») и читалась как клякса. Сплошная полоса во всю
+        // ширину превращает это в обычную верхнюю панель, под которую контент уезжает осмысленно.
+        val topBarColor by animateColorAsState(
+            if (overContent) MaterialTheme.colorScheme.surfaceContainer else Color.Transparent,
+            label = "topBarColor"
+        )
+        Box(modifier = Modifier.fillMaxWidth().background(topBarColor)) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -305,6 +338,7 @@ fun DetailsScreen(
                 )
             }
         }
+        }
         SnackbarHost(snackbarHostState, modifier = Modifier.align(Alignment.BottomCenter))
     }
 }
@@ -338,7 +372,8 @@ private fun DetailsContent(
     onPlayTrailer: (String) -> Unit,
     onOpenPerson: (String) -> Unit,
     onOpenItem: (String) -> Unit,
-    contentFocusRequester: androidx.compose.ui.focus.FocusRequester? = null
+    contentFocusRequester: androidx.compose.ui.focus.FocusRequester? = null,
+    scrollState: ScrollState = rememberScrollState()
 ) {
     var zoomedImage by remember { mutableStateOf<Any?>(null) }
     var zoomedImageIsFanart by remember { mutableStateOf(false) }
@@ -398,7 +433,7 @@ private fun DetailsContent(
             // With the viewport itself inset instead, nothing can ever render there regardless of
             // scroll position.
             .padding(top = statusBarsTopDp)
-            .verticalScroll(rememberScrollState())
+            .verticalScroll(scrollState)
             .padding(horizontal = cutoutHorizontalDp)
     ) {
         val haptics = LocalHapticFeedback.current
@@ -756,15 +791,17 @@ private fun DetailsContent(
                     listOfNotNull(
                         item.year?.toString(),
                         item.country,
-                        item.runtimeMinutes?.let { "$it мин" },
-                        item.videoQualityLabel,
-                        item.editionLabel
+                        item.runtimeMinutes?.let { "$it мин" }
                     ).joinToString(" · "),
                     style = MaterialTheme.typography.bodyMedium,
                     fontWeight = FontWeight.Medium,
                     color = MaterialTheme.colorScheme.primary
                 )
-                if (item.genres.isNotEmpty()) {
+                // Технические метки (720p, «Режиссёрская версия») раньше стояли в акцентной
+                // строке под заголовком и разгоняли её до трёх строк, споря по весу с самим
+                // заголовком. Здесь они обводкой, а не заливкой - это свойства файла, а не жанр.
+                val techTags = listOfNotNull(item.videoQualityLabel, item.editionLabel)
+                if (item.genres.isNotEmpty() || techTags.isNotEmpty()) {
                     // FlowRow, not a horizontally-scrolling Row (tried first, dropped per user
                     // feedback - same reasoning as the accent-color swatches in Settings: genre
                     // chips should all be visible at once, wrapping to a second line, not scrolled
@@ -781,6 +818,16 @@ private fun DetailsContent(
                                 color = MaterialTheme.colorScheme.onSecondaryContainer,
                                 modifier = Modifier
                                     .background(MaterialTheme.colorScheme.secondaryContainer, RoundedCornerShape(50))
+                                    .padding(horizontal = 10.dp, vertical = 4.dp)
+                            )
+                        }
+                        techTags.forEach { tag ->
+                            Text(
+                                tag,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier
+                                    .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(50))
                                     .padding(horizontal = 10.dp, vertical = 4.dp)
                             )
                         }
@@ -829,168 +876,92 @@ private fun DetailsContent(
         // without needing a separate category check.
         val seriesStatus = item.statusLabel
         val collectionName = item.collectionName?.takeIf { it.isNotBlank() }
-        // Always rendered now (not gated on tagline/studio existing) - the audio/subtitle row
-        // below moved in here per feedback and has content to show regardless of whether this
-        // item even has a tagline or studio.
-        Row(
+        // Одна колонка «подпись — значение» вместо двух колонок по разным краям. Раньше левая
+        // выравнивалась влево, правая вправо, между ними была широкая канава - пара
+        // подпись→значение через неё не читалась, блок воспринимался как два несвязанных
+        // списка. Слоган остаётся отдельным блоком во всю ширину: он длинный и курсивный,
+        // в таблицу не ложится.
+        Column(
             modifier = Modifier
                 .padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 8.dp)
                 .fillMaxWidth()
                 .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f), RoundedCornerShape(12.dp))
                 .padding(12.dp),
-            horizontalArrangement = Arrangement.spacedBy(16.dp),
-            // Center, not the default Top - the right column (MPAA/premiere/collection) often has
-            // fewer rows than the left (tagline/studio/audio/subtitles), and top-aligning both left
-            // it stranded near the top with a visibly lopsided gap of dead space below it whenever
-            // the two columns' row counts didn't match.
-            verticalAlignment = Alignment.CenterVertically
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                tagline?.let {
-                    Column {
-                        Text(
-                            stringResource(R.string.details_tagline_label),
-                            style = MaterialTheme.typography.bodySmall,
-                            fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        Text(
-                            it,
-                            style = MaterialTheme.typography.titleSmall.copy(fontStyle = FontStyle.Italic),
-                            color = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.padding(top = 2.dp)
-                        )
-                    }
-                }
-                studio?.let {
-                    Column {
-                        Text(
-                            stringResource(R.string.details_studio_label),
-                            style = MaterialTheme.typography.bodySmall,
-                            fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        Text(it, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = 2.dp))
-                    }
-                }
-                // Moved in from its own row further down the card per feedback - grouped with
-                // tagline/studio as "metadata about this file" rather than sitting right under the
-                // description text with no visual relation to it. Two separate rows (not one shared
-                // Row like the original standalone version) - a long audio track description (codec/
-                // channels/bitrate) left almost no width for "Субтитры:" + icon, which then wrapped
-                // one character per line instead of overflowing sanely.
-                audioTracks?.takeIf { it.isNotEmpty() }?.let { tracks ->
+            tagline?.let {
+                Column {
                     Text(
-                        buildAnnotatedString {
-                            withStyle(SpanStyle(fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)) {
-                                append(stringResource(R.string.details_audio_tracks_label))
-                            }
-                            append(tracks.joinToString("; "))
-                        },
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        stringResource(R.string.details_subtitles_label),
+                        stringResource(R.string.details_tagline_label),
                         style = MaterialTheme.typography.bodySmall,
                         fontWeight = FontWeight.SemiBold,
                         color = MaterialTheme.colorScheme.onSurface
                     )
+                    Text(
+                        it,
+                        style = MaterialTheme.typography.titleSmall.copy(fontStyle = FontStyle.Italic),
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(top = 2.dp)
+                    )
+                }
+            }
+            studio?.let {
+                MetaRow(stringResource(R.string.details_studio_label)) {
+                    Text(it, style = MaterialTheme.typography.bodyMedium)
+                }
+            }
+            premiered?.let {
+                MetaRow(stringResource(R.string.details_premiered_label)) {
+                    Text(formatPremieredDate(it), style = MaterialTheme.typography.bodyMedium)
+                }
+            }
+            mpaa?.let {
+                MetaRow(stringResource(R.string.details_mpaa_label)) {
+                    // Сырая строка из .nfo часто нечитаема ("US:PG-13 / US:Rated PG-13") - показываем
+                    // бейдж 0+/6+/12+/16+/18+, когда узнали формат, иначе текст как есть.
+                    val ageLabel = ageRatingLabel(it)
+                    if (ageLabel != null) {
+                        AgeRatingBadge(ageLabel)
+                    } else {
+                        Text(it, style = MaterialTheme.typography.bodyMedium)
+                    }
+                }
+            }
+            seriesStatus?.let {
+                MetaRow(stringResource(R.string.details_series_status_label)) {
+                    Text(it, style = MaterialTheme.typography.bodyMedium)
+                }
+            }
+            collectionName?.let {
+                MetaRow(stringResource(R.string.details_collection_name_label)) {
+                    Text(it, style = MaterialTheme.typography.bodyMedium)
+                }
+            }
+            audioTracks?.takeIf { it.isNotEmpty() }?.let { tracks ->
+                MetaRow(stringResource(R.string.details_audio_tracks_label).trim()) {
+                    Text(
+                        tracks.joinToString("; "),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+            MetaRow(stringResource(R.string.details_subtitles_label).trim()) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
                     val hasSubtitles = item.subtitlePaths.isNotEmpty()
                     Icon(
                         if (hasSubtitles) Icons.Default.Check else Icons.Default.Close,
                         contentDescription = null,
                         tint = if (hasSubtitles) Color(0xFF4CAF50) else Color(0xFFE53935),
-                        modifier = Modifier.padding(start = 4.dp).size(16.dp)
+                        modifier = Modifier.size(16.dp)
                     )
                     if (item.hasForcedSubtitles) {
                         Text(
                             stringResource(R.string.details_forced_subtitles_suffix),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(start = 4.dp)
+                            modifier = Modifier.padding(start = 6.dp)
                         )
-                    }
-                }
-            }
-            // Right column: whatever room is left next to tagline/studio - MPAA rating, premiere
-            // date and collection name were previously nowhere on this screen at all. Only shown
-            // when at least one is present, and each field independently, since most items won't
-            // have all three. Explicitly weighted (not just "whatever's left") - an unweighted
-            // Column here sizes to its own unconstrained intrinsic width, and a long collection
-            // name (e.g. "Очень страшное кино (Коллекция)") wanted enough of that to squeeze the
-            // left column down to almost nothing, forcing the tagline to wrap one syllable per
-            // line instead of at word boundaries.
-            if (mpaa != null || premiered != null || collectionName != null || seriesStatus != null) {
-                Column(
-                    // Ширина по содержимому с потолком, а не weight(1f): жёсткие половины
-                    // спасали от длинного названия коллекции, душившего левую колонку, но в
-                    // обычном случае (справа одна «Премьера») слоган слева ломался на три
-                    // строки при пустой правой половине. Потолок сохраняет прежнюю защиту.
-                    modifier = Modifier.widthIn(max = 168.dp),
-                    horizontalAlignment = Alignment.End,
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    mpaa?.let {
-                        Column(horizontalAlignment = Alignment.End) {
-                            Text(
-                                stringResource(R.string.details_mpaa_label),
-                                style = MaterialTheme.typography.bodySmall,
-                                fontWeight = FontWeight.SemiBold,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                            // NFO mpaa content is often a messy raw certification string (e.g.
-                            // "US:PG-13 / US:Rated PG-13") rather than something fit to show
-                            // directly - shown as a plain 0+/6+/12+/16+/18+ age badge when it maps
-                            // to a recognized rating, falling back to the raw text otherwise so
-                            // nothing is silently hidden for an unrecognized format.
-                            val ageLabel = ageRatingLabel(it)
-                            if (ageLabel != null) {
-                                AgeRatingBadge(ageLabel, modifier = Modifier.padding(top = 2.dp))
-                            } else {
-                                Text(it, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = 2.dp))
-                            }
-                        }
-                    }
-                    premiered?.let {
-                        Column(horizontalAlignment = Alignment.End) {
-                            Text(
-                                stringResource(R.string.details_premiered_label),
-                                style = MaterialTheme.typography.bodySmall,
-                                fontWeight = FontWeight.SemiBold,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                            Text(formatPremieredDate(it), style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = 2.dp))
-                        }
-                    }
-                    seriesStatus?.let {
-                        Column(horizontalAlignment = Alignment.End) {
-                            Text(
-                                stringResource(R.string.details_series_status_label),
-                                style = MaterialTheme.typography.bodySmall,
-                                fontWeight = FontWeight.SemiBold,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                            Text(it, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = 2.dp))
-                        }
-                    }
-                    collectionName?.let {
-                        Column(horizontalAlignment = Alignment.End) {
-                            Text(
-                                stringResource(R.string.details_collection_name_label),
-                                style = MaterialTheme.typography.bodySmall,
-                                fontWeight = FontWeight.SemiBold,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                            Text(
-                                it,
-                                style = MaterialTheme.typography.bodyMedium,
-                                textAlign = TextAlign.End,
-                                modifier = Modifier.padding(top = 2.dp)
-                            )
-                        }
                     }
                 }
             }
@@ -1034,7 +1005,13 @@ private fun DetailsContent(
         }
 
         if (item.director.isNotEmpty()) {
-            PersonRow(stringResource(R.string.details_director), item.director, clickablePersons, onOpenPerson)
+            PersonRow(
+                stringResource(R.string.details_director),
+                item.director,
+                clickablePersons,
+                onOpenPerson,
+                inlineLabel = item.director.size <= 2
+            )
         }
         if (item.actors.isNotEmpty()) {
             PersonRow(stringResource(R.string.details_actors), item.actors, clickablePersons, onOpenPerson)
@@ -1056,6 +1033,14 @@ private fun DetailsContent(
         if (similar.isNotEmpty()) {
             MediaRow(stringResource(R.string.details_similar), similar, onOpenItem)
         }
+        // Последняя секция упиралась в жест-бар: карточки обрезались нижним краем экрана,
+        // а дальше список уже не прокручивался.
+        Spacer(
+            Modifier
+                .windowInsetsBottomHeight(WindowInsets.navigationBars)
+                .fillMaxWidth()
+        )
+        Spacer(Modifier.height(16.dp))
     }
 
     zoomedImage?.let { model ->
@@ -1175,9 +1160,10 @@ private fun DownloadButton(
     var showRemoveConfirm by remember { mutableStateOf(false) }
     when (download?.status) {
         null -> {
-            // Same filled-Button design as "Смотреть" above it, not a bare icon - per user feedback,
-            // an icon-only download affordance didn't read clearly enough next to a labeled button.
-            com.illusion.app.ui.common.TvAwareButton(
+            // Не сплошная заливка, как у «Смотреть»: одинаковый цвет плюс вся ширина строки
+            // делали второстепенную загрузку заметнее главного действия. Тональная заливка
+            // заодно уравнивает это состояние с остальными состояниями загрузки ниже - те уже тональные.
+            FilledTonalButton(
                 onClick = onStart,
                 contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
                 modifier = Modifier.fillMaxWidth()
@@ -1385,8 +1371,62 @@ private fun ActionButtonsRowFailedPreview() {
     }
 }
 
+/**
+ * Строка «подпись — значение» мета-блока. Обе части выровнены по левому краю своей колонки,
+ * подпись фиксированной ширины - тогда весь блок читается как таблица, а не как два
+ * независимых столбца, разогнанных по разным краям карточки.
+ */
 @Composable
-private fun PersonRow(label: String, names: List<String>, clickablePersons: Set<String>, onOpenPerson: (String) -> Unit) {
+private fun MetaRow(label: String, value: @Composable () -> Unit) {
+    Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
+        Text(
+            label,
+            style = MaterialTheme.typography.bodySmall,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.width(104.dp).padding(top = 2.dp)
+        )
+        Box(modifier = Modifier.weight(1f)) { value() }
+    }
+}
+
+@Composable
+private fun PersonRow(
+    label: String,
+    names: List<String>,
+    clickablePersons: Set<String>,
+    onOpenPerson: (String) -> Unit,
+    // У режиссёра почти всегда одно имя, и отдельный заголовок над единственным чипом
+    // съедал целую секцию по высоте ради одного слова. В этом режиме подпись стоит слева
+    // от самих чипов, а не над ними.
+    inlineLabel: Boolean = false
+) {
+    if (inlineLabel) {
+        Row(
+            modifier = Modifier.padding(top = 8.dp, start = 16.dp, end = 16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                label,
+                style = MaterialTheme.typography.titleSmall,
+                modifier = Modifier.padding(end = 12.dp)
+            )
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.horizontalScroll(rememberScrollState()).focusGroup()
+            ) {
+                names.forEach { name ->
+                    val clickable = name in clickablePersons
+                    com.illusion.app.ui.common.TvAwareAssistChip(
+                        onClick = { if (clickable) onOpenPerson(name) },
+                        label = { Text(name) },
+                        enabled = clickable
+                    )
+                }
+            }
+        }
+        return
+    }
     Column(modifier = Modifier.padding(top = 8.dp)) {
         Text(label, style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(horizontal = 16.dp))
         LazyRow(
@@ -1666,13 +1706,15 @@ private fun formatPremieredDate(raw: String): String =
 
 @Composable
 private fun AgeRatingBadge(label: String, modifier: Modifier = Modifier) {
+    // Был залит ярко-красным - единственное насыщенное пятно на всём экране, перетягивало
+    // внимание с кнопки воспроизведения ради справочной мелочи.
     Text(
         label,
-        color = Color.White,
+        color = MaterialTheme.colorScheme.onSecondaryContainer,
         style = MaterialTheme.typography.labelMedium,
         fontWeight = FontWeight.Bold,
         modifier = modifier
-            .background(Color(0xFFE53935), RoundedCornerShape(6.dp))
+            .background(MaterialTheme.colorScheme.secondaryContainer, RoundedCornerShape(6.dp))
             .padding(horizontal = 8.dp, vertical = 3.dp)
     )
 }
