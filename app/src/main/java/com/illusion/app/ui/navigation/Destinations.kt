@@ -47,6 +47,15 @@ sealed interface Destination {
     @Serializable
     data object Settings : Destination
 
+    /**
+     * Одна категория Настроек (ключ совпадает с ветками `when` в SettingsScreen). Раньше это было
+     * состоянием внутри самого экрана Настроек, а не отдельным пунктом навигации - из-за чего жест
+     * назад отсюда шёл мимо NavHost и анимацию предпросмотра приходилось писать вручную. Как
+     * обычный пункт навигации категория получает ту же анимацию, что и любой другой экран.
+     */
+    @Serializable
+    data class SettingsCategory(val key: String) : Destination
+
     @Serializable
     data object Cache : Destination
 

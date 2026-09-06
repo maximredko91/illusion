@@ -535,115 +535,10 @@ private fun IllusionNavGraph(app: IllusionApplication, navController: NavHostCon
                 )
             }
             composable<Destination.Settings> {
-                val context = LocalContext.current
-                val settingsViewModel: SettingsViewModel = viewModel(
-                    factory = SettingsViewModel.factory(app.smbSourceRepository, app.settingsRepository, app.thumbnailRepository, app.downloadRepository, app.backupManager, app.devAccessStore, app.libraryRepository, app.watchProgressRepository)
-                )
-                val sources by settingsViewModel.sources.collectAsState()
-                val sourcesMissingPassword by settingsViewModel.sourcesMissingPassword.collectAsState()
-                val cacheSizeBytes by settingsViewModel.cacheSizeBytes.collectAsState()
-                val downloadsSizeBytes by settingsViewModel.downloadsSizeBytes.collectAsState()
-                val recoveredDownloadsCount by settingsViewModel.recoveredDownloadsCount.collectAsState()
-                val pendingImportSources by settingsViewModel.pendingImportSources.collectAsState()
-                val backupMessage by settingsViewModel.backupMessage.collectAsState()
-                val isScanRunning by remember(context) { WorkScheduler.isOneTimeScanRunning(context) }.collectAsState(initial = false)
-                val scanCoroutineScope = rememberCoroutineScope()
-                // Explicitly scoped to the Activity (not this NavBackStackEntry) so it resolves to
-                // the exact same instance MainActivity's top-level UpdatePrompt observes - the
-                // manual "Проверить обновления" button here needs to trigger the same dialog that
-                // lives above the whole NavHost, not a second independent ViewModel/dialog nobody
-                // ever sees rendered.
-                val updateViewModel: com.illusion.app.ui.update.UpdateViewModel = viewModel(
-                    viewModelStoreOwner = context as androidx.activity.ComponentActivity,
-                    factory = com.illusion.app.ui.update.UpdateViewModel.factory(app, app.updateChecker, app.localUpdateChecker, app.settingsRepository)
-                )
-                val upToDateMessage by updateViewModel.upToDateMessage.collectAsState()
-                SettingsScreen(
-                    sources = sources,
-                    sourcesMissingPassword = sourcesMissingPassword,
-                    playerMode = settingsViewModel.playerMode,
-                    onPlayerModeChange = settingsViewModel::setPlayerMode,
-                    externalPlayerPackage = settingsViewModel.externalPlayerPackage,
-                    onExternalPlayerPackageChange = settingsViewModel::setExternalPlayerPackage,
-                    playerBufferSize = settingsViewModel.playerBufferSize,
-                    onPlayerBufferSizeChange = settingsViewModel::setPlayerBufferSize,
-                    performanceMode = settingsViewModel.performanceMode,
-                    onPerformanceModeChange = settingsViewModel::setPerformanceMode,
-                    cacheSizeBytes = cacheSizeBytes,
-                    onRefreshCacheSize = { settingsViewModel.refreshCacheSize(context) },
-                    onOpenCache = { navController.navigate(Destination.Cache) },
-                    uiMode = settingsViewModel.uiMode,
-                    onUiModeChange = { mode -> settingsViewModel.setUiMode(mode) },
-                    tvOverscanMarginPercent = settingsViewModel.tvOverscanMarginPercent,
-                    onTvOverscanMarginPercentChange = { percent -> settingsViewModel.setTvOverscanMarginPercent(percent) },
-                    defaultSortOrder = settingsViewModel.defaultSortOrder,
-                    onDefaultSortOrderChange = settingsViewModel::setDefaultSortOrder,
-                    hapticsEnabled = settingsViewModel.hapticsEnabled,
-                    onHapticsEnabledChange = settingsViewModel::setHapticsEnabled,
-                    predictiveBackEnabled = settingsViewModel.predictiveBackEnabled,
-                    onPredictiveBackEnabledChange = settingsViewModel::setPredictiveBackEnabled,
-                    glassEffectEnabled = settingsViewModel.glassEffectEnabled,
-                    onGlassEffectEnabledChange = settingsViewModel::setGlassEffectEnabled,
-                    accentColor = settingsViewModel.accentColor,
-                    onAccentColorChange = settingsViewModel::setAccentColor,
-                    themeMode = settingsViewModel.themeMode,
-                    onThemeModeChange = settingsViewModel::setThemeMode,
-                    onRescanNow = {
-                        val workId = WorkScheduler.enqueueOneTimeScan(context)
-                        navController.navigate(Destination.ScanProgress(workId.toString()))
-                    },
-                    onRescanForceNow = {
-                        val workId = WorkScheduler.enqueueOneTimeScan(context, force = true)
-                        navController.navigate(Destination.ScanProgress(workId.toString()))
-                    },
-                    isScanRunning = isScanRunning,
-                    onOpenRunningScan = {
-                        scanCoroutineScope.launch {
-                            val workId = WorkScheduler.runningOneTimeScanWorkId(context)
-                            if (workId != null) {
-                                navController.navigate(Destination.ScanProgress(workId.toString()))
-                            }
-                        }
-                    },
-                    downloadsFolderUri = settingsViewModel.downloadsFolderUri,
-                    onPickDownloadsFolder = { uri -> settingsViewModel.setDownloadsFolderUri(context, uri) },
-                    downloadsSizeBytes = downloadsSizeBytes,
-                    onRefreshDownloadsSize = { settingsViewModel.refreshDownloadsSize() },
-                    onClearDownloads = { settingsViewModel.clearAllDownloads() },
-                    onRecoverDownloads = { uri -> settingsViewModel.recoverDownloads(uri) },
-                    recoveredDownloadsCount = recoveredDownloadsCount,
-                    onDismissRecoveredDownloadsMessage = { settingsViewModel.dismissRecoveredDownloadsMessage() },
-                    onExportBackup = { uri -> settingsViewModel.exportBackup(context, uri) },
-                    onImportBackup = { uri -> settingsViewModel.importBackup(context, uri) },
-                    pendingImportSources = pendingImportSources,
-                    onConfirmImportSource = { password -> settingsViewModel.confirmImportSource(context, password) },
-                    onSkipImportSource = { settingsViewModel.skipImportSource(context) },
-                    backupMessage = backupMessage,
-                    onDismissBackupMessage = { settingsViewModel.dismissBackupMessage() },
-                    onAddSource = { navController.navigate(Destination.AddSmbSource) },
-                    onEditSource = { source -> navController.navigate(Destination.EditSmbSource(source.id)) },
-                    onDeleteSource = { source -> settingsViewModel.deleteSource(source) },
-                    onSourceEnabledChange = { source, enabled -> settingsViewModel.setSourceEnabled(source, enabled) },
-                    onResetToDefaults = { settingsViewModel.resetToDefaults() },
-                    onFactoryReset = { settingsViewModel.factoryReset(context) },
-                    hasDevPassword = settingsViewModel::hasDevPassword,
-                    onGenerateDevPassword = settingsViewModel::generateDevPassword,
-                    onVerifyDevPassword = settingsViewModel::verifyDevPassword,
-                    isDevAccessRemembered = settingsViewModel::isDevAccessRemembered,
-                    onRememberDevAccess = settingsViewModel::rememberDevAccess,
-                    onForgetDevAccess = settingsViewModel::forgetDevAccess,
-                    onDevAccessGranted = { navController.navigate(Destination.AddMedia) },
-                    onCheckForUpdates = { updateViewModel.checkForUpdate(force = true) },
-                    upToDateMessage = upToDateMessage,
-                    onDismissUpToDateMessage = { updateViewModel.dismissUpToDateMessage() },
-                    updateCheckIntervalHours = updateViewModel.updateCheckIntervalHours,
-                    onUpdateCheckIntervalChange = { hours -> updateViewModel.setUpdateCheckIntervalHours(hours) },
-                    updateSource = updateViewModel.updateSource,
-                    onUpdateSourceChange = { source -> updateViewModel.setUpdateSource(source) },
-                    localUpdateSourceId = updateViewModel.localUpdateSourceId,
-                    onLocalUpdateSourceIdChange = { sourceId -> updateViewModel.setLocalUpdateSourceId(sourceId) },
-                    onBack = { navController.popBackStack() }
-                )
+                SettingsRoute(app, navController, category = null)
+            }
+            composable<Destination.SettingsCategory> { entry ->
+                SettingsRoute(app, navController, category = entry.toRoute<Destination.SettingsCategory>().key)
             }
             composable<Destination.Cache> {
                 val context = LocalContext.current
@@ -983,3 +878,124 @@ private fun TabsHost(
         }
     }
 }
+
+@Composable
+private fun SettingsRoute(
+    app: IllusionApplication,
+    navController: NavHostController,
+    category: String?
+) {
+    val context = LocalContext.current
+    val settingsViewModel: SettingsViewModel = viewModel(
+        factory = SettingsViewModel.factory(app.smbSourceRepository, app.settingsRepository, app.thumbnailRepository, app.downloadRepository, app.backupManager, app.devAccessStore, app.libraryRepository, app.watchProgressRepository)
+    )
+    val sources by settingsViewModel.sources.collectAsState()
+    val sourcesMissingPassword by settingsViewModel.sourcesMissingPassword.collectAsState()
+    val cacheSizeBytes by settingsViewModel.cacheSizeBytes.collectAsState()
+    val downloadsSizeBytes by settingsViewModel.downloadsSizeBytes.collectAsState()
+    val recoveredDownloadsCount by settingsViewModel.recoveredDownloadsCount.collectAsState()
+    val pendingImportSources by settingsViewModel.pendingImportSources.collectAsState()
+    val backupMessage by settingsViewModel.backupMessage.collectAsState()
+    val isScanRunning by remember(context) { WorkScheduler.isOneTimeScanRunning(context) }.collectAsState(initial = false)
+    val scanCoroutineScope = rememberCoroutineScope()
+    // Explicitly scoped to the Activity (not this NavBackStackEntry) so it resolves to
+    // the exact same instance MainActivity's top-level UpdatePrompt observes - the
+    // manual "Проверить обновления" button here needs to trigger the same dialog that
+    // lives above the whole NavHost, not a second independent ViewModel/dialog nobody
+    // ever sees rendered.
+    val updateViewModel: com.illusion.app.ui.update.UpdateViewModel = viewModel(
+        viewModelStoreOwner = context as androidx.activity.ComponentActivity,
+        factory = com.illusion.app.ui.update.UpdateViewModel.factory(app, app.updateChecker, app.localUpdateChecker, app.settingsRepository)
+    )
+    val upToDateMessage by updateViewModel.upToDateMessage.collectAsState()
+    SettingsScreen(
+        category = category,
+        onOpenCategory = { key -> navController.navigate(Destination.SettingsCategory(key)) },
+        sources = sources,
+        sourcesMissingPassword = sourcesMissingPassword,
+        playerMode = settingsViewModel.playerMode,
+        onPlayerModeChange = settingsViewModel::setPlayerMode,
+        externalPlayerPackage = settingsViewModel.externalPlayerPackage,
+        onExternalPlayerPackageChange = settingsViewModel::setExternalPlayerPackage,
+        playerBufferSize = settingsViewModel.playerBufferSize,
+        onPlayerBufferSizeChange = settingsViewModel::setPlayerBufferSize,
+        performanceMode = settingsViewModel.performanceMode,
+        onPerformanceModeChange = settingsViewModel::setPerformanceMode,
+        cacheSizeBytes = cacheSizeBytes,
+        onRefreshCacheSize = { settingsViewModel.refreshCacheSize(context) },
+        onOpenCache = { navController.navigate(Destination.Cache) },
+        uiMode = settingsViewModel.uiMode,
+        onUiModeChange = { mode -> settingsViewModel.setUiMode(mode) },
+        tvOverscanMarginPercent = settingsViewModel.tvOverscanMarginPercent,
+        onTvOverscanMarginPercentChange = { percent -> settingsViewModel.setTvOverscanMarginPercent(percent) },
+        defaultSortOrder = settingsViewModel.defaultSortOrder,
+        onDefaultSortOrderChange = settingsViewModel::setDefaultSortOrder,
+        hapticsEnabled = settingsViewModel.hapticsEnabled,
+        onHapticsEnabledChange = settingsViewModel::setHapticsEnabled,
+        predictiveBackEnabled = settingsViewModel.predictiveBackEnabled,
+        onPredictiveBackEnabledChange = settingsViewModel::setPredictiveBackEnabled,
+        glassEffectEnabled = settingsViewModel.glassEffectEnabled,
+        onGlassEffectEnabledChange = settingsViewModel::setGlassEffectEnabled,
+        accentColor = settingsViewModel.accentColor,
+        onAccentColorChange = settingsViewModel::setAccentColor,
+        themeMode = settingsViewModel.themeMode,
+        onThemeModeChange = settingsViewModel::setThemeMode,
+        onRescanNow = {
+            val workId = WorkScheduler.enqueueOneTimeScan(context)
+            navController.navigate(Destination.ScanProgress(workId.toString()))
+        },
+        onRescanForceNow = {
+            val workId = WorkScheduler.enqueueOneTimeScan(context, force = true)
+            navController.navigate(Destination.ScanProgress(workId.toString()))
+        },
+        isScanRunning = isScanRunning,
+        onOpenRunningScan = {
+            scanCoroutineScope.launch {
+                val workId = WorkScheduler.runningOneTimeScanWorkId(context)
+                if (workId != null) {
+                    navController.navigate(Destination.ScanProgress(workId.toString()))
+                }
+            }
+        },
+        downloadsFolderUri = settingsViewModel.downloadsFolderUri,
+        onPickDownloadsFolder = { uri -> settingsViewModel.setDownloadsFolderUri(context, uri) },
+        downloadsSizeBytes = downloadsSizeBytes,
+        onRefreshDownloadsSize = { settingsViewModel.refreshDownloadsSize() },
+        onClearDownloads = { settingsViewModel.clearAllDownloads() },
+        onRecoverDownloads = { uri -> settingsViewModel.recoverDownloads(uri) },
+        recoveredDownloadsCount = recoveredDownloadsCount,
+        onDismissRecoveredDownloadsMessage = { settingsViewModel.dismissRecoveredDownloadsMessage() },
+        onExportBackup = { uri -> settingsViewModel.exportBackup(context, uri) },
+        onImportBackup = { uri -> settingsViewModel.importBackup(context, uri) },
+        pendingImportSources = pendingImportSources,
+        onConfirmImportSource = { password -> settingsViewModel.confirmImportSource(context, password) },
+        onSkipImportSource = { settingsViewModel.skipImportSource(context) },
+        backupMessage = backupMessage,
+        onDismissBackupMessage = { settingsViewModel.dismissBackupMessage() },
+        onAddSource = { navController.navigate(Destination.AddSmbSource) },
+        onEditSource = { source -> navController.navigate(Destination.EditSmbSource(source.id)) },
+        onDeleteSource = { source -> settingsViewModel.deleteSource(source) },
+        onSourceEnabledChange = { source, enabled -> settingsViewModel.setSourceEnabled(source, enabled) },
+        onResetToDefaults = { settingsViewModel.resetToDefaults() },
+        onFactoryReset = { settingsViewModel.factoryReset(context) },
+        hasDevPassword = settingsViewModel::hasDevPassword,
+        onGenerateDevPassword = settingsViewModel::generateDevPassword,
+        onVerifyDevPassword = settingsViewModel::verifyDevPassword,
+        isDevAccessRemembered = settingsViewModel::isDevAccessRemembered,
+        onRememberDevAccess = settingsViewModel::rememberDevAccess,
+        onForgetDevAccess = settingsViewModel::forgetDevAccess,
+        onDevAccessGranted = { navController.navigate(Destination.AddMedia) },
+        onCheckForUpdates = { updateViewModel.checkForUpdate(force = true) },
+        upToDateMessage = upToDateMessage,
+        onDismissUpToDateMessage = { updateViewModel.dismissUpToDateMessage() },
+        updateCheckIntervalHours = updateViewModel.updateCheckIntervalHours,
+        onUpdateCheckIntervalChange = { hours -> updateViewModel.setUpdateCheckIntervalHours(hours) },
+        updateSource = updateViewModel.updateSource,
+        onUpdateSourceChange = { source -> updateViewModel.setUpdateSource(source) },
+        localUpdateSourceId = updateViewModel.localUpdateSourceId,
+        onLocalUpdateSourceIdChange = { sourceId -> updateViewModel.setLocalUpdateSourceId(sourceId) },
+        onBack = { navController.popBackStack() }
+    )
+
+}
+
