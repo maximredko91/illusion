@@ -1,9 +1,12 @@
 package com.illusion.app.ui.settings
 
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.PredictiveBackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
@@ -85,6 +88,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
@@ -107,6 +111,7 @@ import com.illusion.app.ui.common.segmentTick
 import com.illusion.app.ui.common.tick
 import com.illusion.app.ui.common.toggle
 import com.illusion.app.ui.library.sortLabel
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -217,7 +222,26 @@ fun SettingsScreen(
     // so a config change (rotation, etc) doesn't silently kick the user back out to the category
     // list mid-edit.
     var selectedCategory by rememberSaveable { mutableStateOf<String?>(null) }
-    BackHandler(enabled = selectedCategory != null) { selectedCategory = null }
+    // Категория Настроек - не отдельный экран навигации, а состояние внутри этого, поэтому
+    // жест назад отсюда не проходил через NavHost и никакого предпросмотра не давал: обычный
+    // BackHandler регистрирует не-predictive коллбэк, и система просто ждёт завершения жеста.
+    // Здесь PredictiveBackHandler сам ведёт отъезд панели по прогрессу жеста (см. categoryBackProgress
+    // ниже по graphicsLayer), а отмена жеста возвращает её на место анимацией, а не рывком.
+    val categoryBackProgress = remember { Animatable(0f) }
+    if (predictiveBackOn) {
+        PredictiveBackHandler(enabled = selectedCategory != null) { events ->
+            try {
+                events.collect { event -> categoryBackProgress.snapTo(event.progress) }
+                selectedCategory = null
+                categoryBackProgress.snapTo(0f)
+            } catch (cancelled: CancellationException) {
+                categoryBackProgress.animateTo(0f, tween(200))
+            }
+        }
+    } else {
+        // Настройка «Анимация жеста назад» выключена - возвращаем мгновенный возврат без предпросмотра.
+        BackHandler(enabled = selectedCategory != null) { selectedCategory = null }
+    }
     val context = LocalContext.current
     // PackageManager's own component-enabled state (see IconVariantManager) is already the
     // persistent source of truth - no need to duplicate it into SettingsRepository/DataStore.
@@ -343,6 +367,21 @@ fun SettingsScreen(
             Column(
                 modifier = Modifier
                     .fillMaxSize()
+                    // Тот же характер движения, что у системного predictive back и у popExit в NavHost:
+                    // уезжающий экран чуть уменьшается, сдвигается по жесту и бледнеет.
+                    .then(
+                        if (category != null) {
+                            Modifier.graphicsLayer {
+                                val progress = categoryBackProgress.value
+                                translationX = progress * size.width * 0.18f
+                                scaleX = 1f - 0.08f * progress
+                                scaleY = 1f - 0.08f * progress
+                                alpha = 1f - 0.35f * progress
+                            }
+                        } else {
+                            Modifier
+                        }
+                    )
                     .verticalScroll(if (category == null) categoryListScrollState else rememberScrollState())
             ) {
                 when (category) {

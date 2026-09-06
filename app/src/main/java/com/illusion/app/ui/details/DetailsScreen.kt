@@ -268,9 +268,10 @@ fun DetailsScreen(
         // зарезервирована в DetailsContent, см. TOP_BAR_ROW_HEIGHT).
         val cornerIconTint = MaterialTheme.colorScheme.onSurface
         val cornerPillColor = Color.Transparent
-        // Нижняя грань полосы была прямым срезом во всю ширину и читалась остро. Скруглённые
-        // нижние углы плюс небольшой заход на фанарт (TOP_BAR_OVERLAP): картинка подъезжает под
-        // полосу, и в углах она из-под неё выглядывает - край получается мягким, а не рубленым.
+        // Нижняя грань полосы была прямым срезом во всю ширину и читалась остро - отсюда
+        // скруглённые нижние углы. Захода на фанарт больше нет: он был нужен, пока кадр
+        // растворялся заливкой и в углах должен был выглядывать из-под полосы. Сейчас кадр чистый
+        // и со своим скруглением, а заход просто прятал его верхние 18dp под полосой.
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -444,7 +445,7 @@ private fun DetailsContent(
             // down (description, cast, ...) ends up passing behind the status bar during a scroll.
             // With the viewport itself inset instead, nothing can ever render there regardless of
             // scroll position.
-            .padding(top = statusBarsTopDp + TOP_BAR_ROW_HEIGHT - TOP_BAR_OVERLAP)
+            .padding(top = statusBarsTopDp + TOP_BAR_ROW_HEIGHT)
             .verticalScroll(rememberScrollState())
             .padding(horizontal = cutoutHorizontalDp)
     ) {
