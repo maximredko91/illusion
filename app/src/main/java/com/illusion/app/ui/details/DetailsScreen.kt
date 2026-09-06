@@ -272,7 +272,7 @@ fun DetailsScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .windowInsetsPadding(com.illusion.app.ui.common.rememberLatchedStatusBarsInsets())
-                .padding(4.dp),
+                .padding(horizontal = 4.dp),
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             val backSource = remember { MutableInteractionSource() }
@@ -283,6 +283,7 @@ fun DetailsScreen(
                 },
                 interactionSource = backSource,
                 modifier = Modifier
+                    .size(TOP_BAR_ROW_HEIGHT)
                     .background(cornerPillColor, CircleShape)
                     .focusHighlight(backSource, color = cornerIconTint)
                     .bridgeFocusDown(contentFocusRequester)
@@ -305,6 +306,7 @@ fun DetailsScreen(
                 },
                 interactionSource = homeSource,
                 modifier = Modifier
+                    .size(TOP_BAR_ROW_HEIGHT)
                     .background(cornerPillColor, CircleShape)
                     .focusHighlight(homeSource, color = cornerIconTint)
                     .bridgeFocusDown(contentFocusRequester)
@@ -321,8 +323,18 @@ fun DetailsScreen(
     }
 }
 
-/** Высота верхней полосы без статус-бара: IconButton ровно 48dp по умолчанию плюс по 4dp отступа сверху и снизу у самой строки. Фиксированное число, а не замер onSizeChanged - замер зависел бы от тех же инсетов, гонку с которыми здесь уже приходится обходить вручную (см. statusBarsTopDp ниже). */
-private val TOP_BAR_ROW_HEIGHT = 56.dp
+/**
+ * Высота верхней полосы без статус-бара. Она же задаёт размер обеих кнопок - полоса ровно в их
+ * рост, лишнего воздуха сверху и снизу нет. Шла от 56dp (48dp IconButton по умолчанию плюс по 4dp
+ * отступа у строки) к 48, теперь 40: полоса обжимает иконку в 24dp с 8dp полями.
+ *
+ * 40dp - нижняя разумная граница. Рекомендация Material - 48dp на цель нажатия, и высоту здесь
+ * задаёт именно кнопка, так что дальше ужимать полосу можно только за счёт удобства попадания.
+ *
+ * Фиксированное число, а не замер onSizeChanged - замер зависел бы от тех же инсетов, гонку с
+ * которыми здесь уже приходится обходить вручную (см. statusBarsTopDp ниже).
+ */
+private val TOP_BAR_ROW_HEIGHT = 40.dp
 
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
@@ -498,6 +510,10 @@ private fun DetailsContent(
                     // заметным (0.28) и вдобавок в цвет background, а полоса над ним - в surface: два
                     // разных цвета встык. Теперь градиент начинается ровно с цвета полосы и непрозрачным,
                     // так что шов растворяется, а не просто чуть притемняется.
+                    //
+                    // Держим цвет полосы непрозрачным первые 6% высоты и растворяем только к 32%:
+                    // при мгновенном спаде (0 -> 0.18) нижняя граница полосы всё равно читалась
+                    // отчётливой линией, особенно когда верх кадра сам по себе тёмный.
                     val topBarColor = MaterialTheme.colorScheme.surface
                     Box(
                         modifier = Modifier
@@ -506,14 +522,16 @@ private fun DetailsContent(
                                 if (isLightBackground) {
                                     Brush.verticalGradient(
                                         0f to topBarColor,
-                                        0.18f to Color.Transparent,
+                                        0.06f to topBarColor,
+                                        0.32f to Color.Transparent,
                                         0.87f to Color.Transparent,
                                         1f to backgroundColor
                                     )
                                 } else {
                                     Brush.verticalGradient(
                                         0f to topBarColor,
-                                        0.18f to Color.Transparent,
+                                        0.06f to topBarColor,
+                                        0.32f to Color.Transparent,
                                         0.62f to Color.Transparent,
                                         1f to backgroundColor
                                     )
