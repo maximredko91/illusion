@@ -1,11 +1,15 @@
 package com.illusion.app.ui.settings
 
+import androidx.activity.BackEventCompat
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.PredictiveBackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.LocalIndication
@@ -88,6 +92,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -112,7 +117,11 @@ import com.illusion.app.ui.common.tick
 import com.illusion.app.ui.common.toggle
 import com.illusion.app.ui.library.sortLabel
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
+
+/** Длительность перехода между списком категорий и содержимым категории. Обработчик жеста назад ждёт ровно столько же, прежде чем сбросить прогресс - иначе панель выщёлкивает обратно посреди затухания. */
+private const val SETTINGS_CATEGORY_FADE_MS = 260
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -228,15 +237,33 @@ fun SettingsScreen(
     // Здесь PredictiveBackHandler сам ведёт отъезд панели по прогрессу жеста (см. categoryBackProgress
     // ниже по graphicsLayer), а отмена жеста возвращает её на место анимацией, а не рывком.
     val categoryBackProgress = remember { Animatable(0f) }
+    // С какого края тянут: экран должен уезжать от пальца, а не всегда в одну сторону.
+    var backFromLeftEdge by remember { mutableStateOf(true) }
     if (predictiveBackOn) {
         PredictiveBackHandler(enabled = selectedCategory != null) { events ->
             try {
-                events.collect { event -> categoryBackProgress.snapTo(event.progress) }
+                events.collect { event ->
+                    backFromLeftEdge = event.swipeEdge == BackEventCompat.EDGE_LEFT
+                    categoryBackProgress.snapTo(event.progress)
+                }
+                // Жест доведён. Сначала доводим отъезд до конца и только потом меняем состояние.
+                // Если сбросить прогресс сразу (как было), панель выщёлкивает обратно в полный
+                // размер посреди затухания Crossfade - именно это читалось как сломанная анимация.
+                categoryBackProgress.animateTo(1f, tween(180, easing = FastOutSlowInEasing))
                 selectedCategory = null
+                delay(SETTINGS_CATEGORY_FADE_MS.toLong())
                 categoryBackProgress.snapTo(0f)
             } catch (cancelled: CancellationException) {
-                categoryBackProgress.animateTo(0f, tween(200))
+                // Отмена - пружиной обратно, как это делает сам Android, а не линейным tween.
+                categoryBackProgress.animateTo(
+                    0f,
+                    spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessMediumLow)
+                )
             }
+        }
+        // Если категорию успели открыть снова раньше, чем отработала задержка выше.
+        LaunchedEffect(selectedCategory) {
+            if (selectedCategory != null && categoryBackProgress.value != 0f) categoryBackProgress.snapTo(0f)
         }
     } else {
         // Настройка «Анимация жеста назад» выключена - возвращаем мгновенный возврат без предпросмотра.
@@ -363,20 +390,32 @@ fun SettingsScreen(
         // scroll state remembered inside the content lambda got recreated at 0 on every return
         // trip instead of restoring where the user had scrolled to.
         val categoryListScrollState = rememberScrollState()
-        Crossfade(targetState = selectedCategory, modifier = Modifier.fillMaxSize().padding(innerPadding), label = "settings_category") { category ->
+        Crossfade(
+            targetState = selectedCategory,
+            animationSpec = tween(SETTINGS_CATEGORY_FADE_MS),
+            modifier = Modifier.fillMaxSize().padding(innerPadding),
+            label = "settings_category"
+        ) { category ->
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    // Тот же характер движения, что у системного predictive back и у popExit в NavHost:
-                    // уезжающий экран чуть уменьшается, сдвигается по жесту и бледнеет.
+                    // Тот же язык движения, что у системного predictive back: панель уменьшается,
+                    // отъезжает от пальца и скругляет углы. Прогресс пропущен через еасинг — сырой
+                    // линейный прогресс жеста даёт резкий старт и такую же резкую остановку.
                     .then(
                         if (category != null) {
                             Modifier.graphicsLayer {
-                                val progress = categoryBackProgress.value
-                                translationX = progress * size.width * 0.18f
-                                scaleX = 1f - 0.08f * progress
-                                scaleY = 1f - 0.08f * progress
-                                alpha = 1f - 0.35f * progress
+                                val eased = FastOutSlowInEasing.transform(categoryBackProgress.value)
+                                val direction = if (backFromLeftEdge) 1f else -1f
+                                translationX = direction * eased * size.width * 0.16f
+                                scaleX = 1f - 0.12f * eased
+                                scaleY = 1f - 0.12f * eased
+                                alpha = 1f - 0.25f * eased
+                                // Пивот у того края, от которого тянет палец: панель отходит от
+                                // него, а не сжимается равномерно к центру.
+                                transformOrigin = TransformOrigin(if (backFromLeftEdge) 1f else 0f, 0.5f)
+                                shape = RoundedCornerShape(28.dp * eased)
+                                clip = eased > 0f
                             }
                         } else {
                             Modifier
