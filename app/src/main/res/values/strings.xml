@@ -26,10 +26,13 @@
 
     <string name="details_tagline_label">Слоган:</string>
     <string name="details_studio_label">Студия:</string>
-    <string name="details_mpaa_label">Рейтинг:</string>
+    <string name="details_mpaa_label">Возраст:</string>
+    <string name="details_yes">Есть</string>
+    <string name="details_no">Нет</string>
     <string name="details_premiered_label">Премьера:</string>
     <string name="details_series_status_label">Статус:</string>
     <string name="details_collection_name_label">Коллекция:</string>
+    <string name="details_video_quality_label">Качество:</string>
 
     <string name="settings_factory_reset">Полный сброс приложения</string>
     <string name="settings_factory_reset_description">Удалит источники SMB, всю библиотеку, избранное, историю просмотра, загрузки, кеш и пароль добавления медиа — настройки тоже вернутся к значениям по умолчанию</string>
@@ -439,8 +442,10 @@
     <string name="details_image_viewer_close">Закрыть просмотр изображения</string>
     <string name="details_favorite_add">Добавить в избранное</string>
     <string name="details_favorite_remove">Убрать из избранного</string>
+    <string name="details_favorite_short">Избранное</string>
     <string name="details_watched_add">Отметить просмотренным</string>
     <string name="details_watched_remove">Снять отметку «Просмотрено»</string>
+    <string name="details_watched_short">Просмотрено</string>
     <string name="details_favorite_added_hint">Добавлено в избранное</string>
     <string name="details_favorite_removed_hint">Убрано из избранного</string>
     <string name="details_watched_added_hint">Отмечено просмотренным</string>
@@ -453,6 +458,8 @@
     <string name="details_similar">Похожие</string>
     <string name="details_not_found">Не удалось найти этот элемент библиотеки</string>
     <string name="details_no_description">Без описания</string>
+    <string name="details_description_expand">Показать полностью</string>
+    <string name="details_description_collapse">Свернуть</string>
     <string name="details_description_label">Описание</string>
     <string name="details_audio_tracks_label">"Озвучка: "</string>
     <string name="details_subtitles_label">Субтитры: </string>

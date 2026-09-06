@@ -1,24 +1,17 @@
 package com.illusion.app.ui.details
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.Crossfade
 import androidx.compose.animation.ExperimentalSharedTransitionApi
-import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusGroup
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -33,9 +26,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.windowInsetsPadding
-import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
@@ -84,6 +75,8 @@ import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.windowInsetsBottomHeight
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
@@ -463,7 +456,7 @@ private fun DetailsContent(
             // DetailsScreen's own overlay), but the dead zone here still needs to line up with
             // where a near-miss on one of them actually lands.
             val cornerButtonSize = 48.dp
-            val fanartHeight = if (isTv) 460.dp else 220.dp
+            val fanartHeight = if (isTv) 400.dp else 188.dp
             // Кадр ничем не заливается, только скруглён снизу - в обеих темах одинаково.
             //
             // Раньше верх и низ растворялись в цвет фона градиентом. В тёмной теме это читалось
@@ -562,31 +555,7 @@ private fun DetailsContent(
             }
         }
 
-        // getString (not stringResource) since the hint text is picked inside an onClick lambda,
-        // not composed directly - stringResource can't be called from a non-composable callback.
-        val hintContext = androidx.compose.ui.platform.LocalResources.current
-        // ONE shared hint, not one per icon - two independent bubbles could both be visible at
-        // once (tapping both icons in quick succession) and, sitting right next to each other in
-        // a narrow column, their text visibly overlapped. Both icon buttons below update this
-        // single state instead of their own.
-        var hintGeneration by remember { mutableStateOf(0) }
-        var hintVisible by remember { mutableStateOf(false) }
-        var hintText by remember { mutableStateOf("") }
-        LaunchedEffect(hintGeneration) {
-            if (hintGeneration == 0) return@LaunchedEffect
-            hintVisible = true
-            kotlinx.coroutines.delay(1500)
-            hintVisible = false
-        }
-        // The bubble itself is rendered as this Box's LAST child, below - Compose draws a Box's
-        // children in declaration order, so being last guarantees it paints on top of *both* the
-        // poster column (which owns the icon buttons that trigger it) and the metadata column
-        // next to it. It used to live inside the poster column's own local Box instead - that
-        // subtree draws before the metadata column's (declared right after it in the outer Row),
-        // so wherever the bubble grew far enough right to visually reach the genre chips, those
-        // chips (painted later) rendered on top of it instead of the other way around.
-        Box(modifier = Modifier.padding(horizontal = 16.dp)) {
-        Row {
+        Row(modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 10.dp)) {
             val poster = item.posterModel
             if (poster != null) {
                 // Shared-element bounds-morph from the grid poster removed (per user feedback -
@@ -595,7 +564,8 @@ private fun DetailsContent(
                 // (a "hero card" look) - dropped per user feedback: the fanart's own height here
                 // is a fixed 220dp regardless of screen size, so that overlap had no situation
                 // where it was actually needed for space, it just permanently covered part of the
-                // fanart image. The poster now sits flush against the fanart's bottom edge.
+                // fanart image. A small fixed gap now separates the rounded fanart edge from the
+                // poster, so the two images don't visually merge.
                 //
                 // Stretching the poster to match the metadata column's height (via
                 // Modifier.height(IntrinsicSize.Min) on the Row + fillMaxHeight here) was tried to
@@ -605,110 +575,27 @@ private fun DetailsContent(
                 // lines, which grows the column taller still. The title itself is now capped at 4
                 // lines below instead, which keeps the column from running away in the first place.
                 val posterSource = remember { MutableInteractionSource() }
-                val posterWidth = if (isTv) 200.dp else 132.dp
-                Column(modifier = Modifier.width(posterWidth)) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .aspectRatio(2f / 3f)
-                            .let { if (contentFocusRequester != null) it.focusRequester(contentFocusRequester) else it }
-                            .focusHighlight(posterSource)
-                            .clickable(interactionSource = posterSource, indication = LocalIndication.current) { zoomedImage = poster; zoomedImageIsFanart = false }
-                    ) {
-                        var posterLoading by remember { mutableStateOf(true) }
-                        AsyncImage(
-                            model = poster,
-                            contentDescription = item.title,
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier.fillMaxSize(),
-                            onLoading = { posterLoading = true },
-                            onSuccess = { posterLoading = false },
-                            onError = { posterLoading = false }
-                        )
-                        if (posterLoading) {
-                            Box(modifier = Modifier.fillMaxSize().shimmer())
-                        }
-                    }
-                    // Moved down here from two floating corner buttons on the fanart (per user
-                    // feedback) - no more translucent circle backdrop (that was only ever needed to
-                    // stay legible over an arbitrary photo; sitting under the poster, both buttons
-                    // are on the screen's own themed background instead) and both tints now come
-                    // from the color scheme so they read correctly in either light or dark theme,
-                    // instead of a fixed white that would have washed out on a light background.
-                    Row(
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        modifier = Modifier.fillMaxWidth().padding(top = 4.dp)
-                    ) {
-                        val favoriteScale = remember { Animatable(1f) }
-                        val favoriteScope = rememberCoroutineScope()
-                        val favoriteTint by animateColorAsState(
-                            targetValue = if (isFavorite) Color(0xFFE53935) else MaterialTheme.colorScheme.onSurfaceVariant,
-                            label = "favoriteTint"
-                        )
-                        // Fixed size (matches IconButton's own default touch target) rather than
-                        // wrapping content - an implicitly-sized Box here would grow/shrink this
-                        // whole Box (a direct child of the SpaceBetween Row above) as its content
-                        // changed, shifting the Row's layout.
-                        Box(modifier = Modifier.size(48.dp)) {
-                            com.illusion.app.ui.common.TvAwareIconButton(
-                                onClick = {
-                                    haptics.toggle(!isFavorite)
-                                    onToggleFavorite()
-                                    hintText = hintContext.getString(
-                                        if (!isFavorite) R.string.details_favorite_added_hint else R.string.details_favorite_removed_hint
-                                    )
-                                    hintGeneration++
-                                    favoriteScope.launch {
-                                        favoriteScale.snapTo(0.7f)
-                                        favoriteScale.animateTo(1f, animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow))
-                                    }
-                                }
-                            ) {
-                                Crossfade(targetState = isFavorite, label = "favoriteIcon") { favorite ->
-                                    Icon(
-                                        imageVector = if (favorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                                        contentDescription = stringResource(
-                                            if (favorite) R.string.details_favorite_remove else R.string.details_favorite_add
-                                        ),
-                                        tint = favoriteTint,
-                                        modifier = Modifier.scale(favoriteScale.value)
-                                    )
-                                }
-                            }
-                        }
-                        val watchedScale = remember { Animatable(1f) }
-                        val watchedScope = rememberCoroutineScope()
-                        val watchedTint by animateColorAsState(
-                            targetValue = if (isWatched) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                            label = "watchedTint"
-                        )
-                        Box(modifier = Modifier.size(48.dp)) {
-                            com.illusion.app.ui.common.TvAwareIconButton(
-                                onClick = {
-                                    haptics.toggle(!isWatched)
-                                    onToggleWatched()
-                                    hintText = hintContext.getString(
-                                        if (!isWatched) R.string.details_watched_added_hint else R.string.details_watched_removed_hint
-                                    )
-                                    hintGeneration++
-                                    watchedScope.launch {
-                                        watchedScale.snapTo(0.7f)
-                                        watchedScale.animateTo(1f, animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow))
-                                    }
-                                }
-                            ) {
-                                Crossfade(targetState = isWatched, label = "watchedIcon") { watched ->
-                                    Icon(
-                                        imageVector = if (watched) Icons.Default.Visibility else Icons.Default.VisibilityOff,
-                                        contentDescription = stringResource(
-                                            if (watched) R.string.details_watched_remove else R.string.details_watched_add
-                                        ),
-                                        tint = watchedTint,
-                                        modifier = Modifier.scale(watchedScale.value)
-                                    )
-                                }
-                            }
-                        }
+                val posterWidth = if (isTv) 184.dp else 120.dp
+                Box(
+                    modifier = Modifier
+                        .width(posterWidth)
+                        .aspectRatio(2f / 3f)
+                        .let { if (contentFocusRequester != null) it.focusRequester(contentFocusRequester) else it }
+                        .focusHighlight(posterSource)
+                        .clickable(interactionSource = posterSource, indication = LocalIndication.current) { zoomedImage = poster; zoomedImageIsFanart = false }
+                ) {
+                    var posterLoading by remember { mutableStateOf(true) }
+                    AsyncImage(
+                        model = poster,
+                        contentDescription = item.title,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize(),
+                        onLoading = { posterLoading = true },
+                        onSuccess = { posterLoading = false },
+                        onError = { posterLoading = false }
+                    )
+                    if (posterLoading) {
+                        Box(modifier = Modifier.fillMaxSize().shimmer())
                     }
                 }
             }
@@ -731,14 +618,18 @@ private fun DetailsContent(
                     // needed trimming.
                     Text(
                         displayTitle,
-                        style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold)
+                        style = (if (!isTv && displayTitle.length > 24) {
+                            MaterialTheme.typography.titleLarge
+                        } else {
+                            MaterialTheme.typography.headlineSmall
+                        }).copy(fontWeight = FontWeight.Bold)
                     )
                     if (originalTitle != null) {
                         // Capped at 2 lines on phone so a long original title can't tower past the
                         // poster's own height and leave a lot of blank space under it - a tap
                         // expands it in place there (touch-only affordance, so it's worth the
                         // extra interactivity). The TV layout's poster/metadata column is taller
-                        // (200dp poster vs 132dp) so it just shows the full text unconditionally
+                        // (184dp poster vs 120dp) so it just shows the full text unconditionally
                         // instead - no tap target, no focus/selection highlight (that's what was
                         // actually reported as broken on TV: a stray D-pad focus box landing on
                         // plain informational text with nothing to do there).
@@ -807,7 +698,7 @@ private fun DetailsContent(
                 // Технические метки (720p, «Режиссёрская версия») раньше стояли в акцентной
                 // строке под заголовком и разгоняли её до трёх строк, споря по весу с самим
                 // заголовком. Здесь они обводкой, а не заливкой - это свойства файла, а не жанр.
-                val techTags = listOfNotNull(item.videoQualityLabel, item.editionLabel)
+                val techTags = listOfNotNull(item.editionLabel)
                 if (item.genres.isNotEmpty() || techTags.isNotEmpty()) {
                     // FlowRow, not a horizontally-scrolling Row (tried first, dropped per user
                     // feedback - same reasoning as the accent-color swatches in Settings: genre
@@ -822,9 +713,9 @@ private fun DetailsContent(
                             Text(
                                 genreDisplayName(genre),
                                 style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier
-                                    .background(MaterialTheme.colorScheme.secondaryContainer, RoundedCornerShape(50))
+                                    .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(50))
                                     .padding(horizontal = 10.dp, vertical = 4.dp)
                             )
                         }
@@ -842,18 +733,49 @@ private fun DetailsContent(
                 }
             }
         }
-        // Anchored to this Box's own top-start (which now carries the 16dp horizontal padding
-        // that used to live on the Row directly above, so this shares the same coordinate frame
-        // as the icon row rather than landing 16dp off from it) - the vertical offset is derived,
-        // not eyeballed: poster width is a fixed 132dp at a fixed 2:3 aspect ratio, so its image
-        // is exactly 198dp tall; the icon row sits right below it with 4dp of its own top padding,
-        // putting the icon row's own top edge at 202dp. 28dp above that (174dp) lands the bubble
-        // just above the icons, same visual gap the old per-icon placement used.
-        ActionHintBubble(
-            text = hintText,
-            visible = hintVisible,
-            modifier = Modifier.wrapContentWidth(Alignment.Start, unbounded = true).align(Alignment.TopStart).offset(y = 174.dp)
-        )
+
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 4.dp)
+        ) {
+            val favoriteSource = remember { MutableInteractionSource() }
+            FilterChip(
+                selected = isFavorite,
+                onClick = {
+                    haptics.toggle(!isFavorite)
+                    onToggleFavorite()
+                },
+                label = { Text(stringResource(R.string.details_favorite_short), maxLines = 1) },
+                leadingIcon = {
+                    Icon(
+                        if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                        contentDescription = null,
+                        tint = if (isFavorite) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(FilterChipDefaults.IconSize)
+                    )
+                },
+                interactionSource = favoriteSource,
+                modifier = Modifier.weight(1f).focusHighlight(favoriteSource)
+            )
+            val watchedSource = remember { MutableInteractionSource() }
+            FilterChip(
+                selected = isWatched,
+                onClick = {
+                    haptics.toggle(!isWatched)
+                    onToggleWatched()
+                },
+                label = { Text(stringResource(R.string.details_watched_short), maxLines = 1) },
+                leadingIcon = {
+                    Icon(
+                        if (isWatched) Icons.Default.Visibility else Icons.Default.VisibilityOff,
+                        contentDescription = null,
+                        tint = if (isWatched) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(FilterChipDefaults.IconSize)
+                    )
+                },
+                interactionSource = watchedSource,
+                modifier = Modifier.weight(1f).focusHighlight(watchedSource)
+            )
         }
 
         // Tagline and studio moved out of the narrow column next to the poster (where studio used
@@ -885,6 +807,53 @@ private fun DetailsContent(
         // without needing a separate category check.
         val seriesStatus = item.statusLabel
         val collectionName = item.collectionName?.takeIf { it.isNotBlank() }
+        tagline?.let {
+            Text(
+                it,
+                style = MaterialTheme.typography.titleSmall.copy(fontStyle = FontStyle.Italic),
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 2.dp)
+            )
+        }
+
+        val plot = item.plot?.takeIf { it.isNotBlank() } ?: stringResource(R.string.details_no_description)
+        var plotExpanded by remember(item.stableId) { mutableStateOf(false) }
+        var plotHasOverflow by remember(item.stableId) { mutableStateOf(false) }
+        Column(
+            modifier = Modifier
+                .padding(start = 16.dp, end = 16.dp, top = 2.dp, bottom = 8.dp)
+                .fillMaxWidth()
+        ) {
+            Text(
+                stringResource(R.string.details_description_label),
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(bottom = 6.dp)
+            )
+            Text(
+                plot,
+                style = MaterialTheme.typography.bodyMedium.copy(
+                    hyphens = Hyphens.Auto,
+                    lineBreak = LineBreak.Paragraph
+                ),
+                textAlign = TextAlign.Justify,
+                maxLines = if (plotExpanded) Int.MAX_VALUE else 6,
+                overflow = TextOverflow.Ellipsis,
+                onTextLayout = { result ->
+                    if (!plotExpanded) plotHasOverflow = result.hasVisualOverflow
+                }
+            )
+            if (plotHasOverflow || plotExpanded) {
+                TextButton(
+                    onClick = { plotExpanded = !plotExpanded },
+                    contentPadding = PaddingValues(horizontal = 0.dp, vertical = 4.dp)
+                ) {
+                    Text(stringResource(if (plotExpanded) R.string.details_description_collapse else R.string.details_description_expand))
+                }
+            }
+        }
+
         // Одна колонка «подпись — значение» вместо двух колонок по разным краям. Раньше левая
         // выравнивалась влево, правая вправо, между ними была широкая канава - пара
         // подпись→значение через неё не читалась, блок воспринимался как два несвязанных
@@ -894,26 +863,10 @@ private fun DetailsContent(
             modifier = Modifier
                 .padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 8.dp)
                 .fillMaxWidth()
-                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f), RoundedCornerShape(12.dp))
+                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.24f), RoundedCornerShape(12.dp))
                 .padding(12.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            tagline?.let {
-                Column {
-                    Text(
-                        stringResource(R.string.details_tagline_label),
-                        style = MaterialTheme.typography.bodySmall,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    Text(
-                        it,
-                        style = MaterialTheme.typography.titleSmall.copy(fontStyle = FontStyle.Italic),
-                        color = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.padding(top = 2.dp)
-                    )
-                }
-            }
             studio?.let {
                 MetaRow(stringResource(R.string.details_studio_label)) {
                     Text(it, style = MaterialTheme.typography.bodyMedium)
@@ -946,6 +899,11 @@ private fun DetailsContent(
                     Text(it, style = MaterialTheme.typography.bodyMedium)
                 }
             }
+            item.videoQualityLabel?.let { quality ->
+                MetaRow(stringResource(R.string.details_video_quality_label)) {
+                    Text(quality, style = MaterialTheme.typography.bodyMedium)
+                }
+            }
             audioTracks?.takeIf { it.isNotEmpty() }?.let { tracks ->
                 MetaRow(stringResource(R.string.details_audio_tracks_label).trim()) {
                     Text(
@@ -958,11 +916,10 @@ private fun DetailsContent(
             MetaRow(stringResource(R.string.details_subtitles_label).trim()) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     val hasSubtitles = item.subtitlePaths.isNotEmpty()
-                    Icon(
-                        if (hasSubtitles) Icons.Default.Check else Icons.Default.Close,
-                        contentDescription = null,
-                        tint = if (hasSubtitles) Color(0xFF4CAF50) else Color(0xFFE53935),
-                        modifier = Modifier.size(16.dp)
+                    Text(
+                        stringResource(if (hasSubtitles) R.string.details_yes else R.string.details_no),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     if (item.hasForcedSubtitles) {
                         Text(
@@ -974,39 +931,6 @@ private fun DetailsContent(
                     }
                 }
             }
-        }
-
-        // Same backdrop treatment as the tagline/studio/audio/subtitles card above it (per
-        // feedback) - a plain Text here previously had no visual container of its own at all.
-        Column(
-            modifier = Modifier
-                .padding(horizontal = 16.dp, vertical = 8.dp)
-                .fillMaxWidth()
-                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f), RoundedCornerShape(12.dp))
-                .padding(12.dp)
-        ) {
-            Text(
-                stringResource(R.string.details_description_label),
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.padding(bottom = 6.dp)
-            )
-            Text(
-                item.plot?.takeIf { it.isNotBlank() } ?: stringResource(R.string.details_no_description),
-                style = MaterialTheme.typography.bodyMedium.copy(
-                    hyphens = Hyphens.Auto,
-                    // Hyphens.Auto одного мало: переносы включаются только при «качественном» алгоритме
-                    // разбиения строк - с дефолтным LineBreak.Simple системный переносчик
-                    // не вызывается вообще (проверено на устройстве: один Hyphens.Auto ничего не меняет).
-                    lineBreak = LineBreak.Paragraph
-                ),
-                // Выключка по ширине без переносов гнала «реки» пробелов на русском тексте
-                // («Реальная   история   пианиста   Владислава»). Hyphens.Auto отдаёт перенос
-                // системному переносчику Android по локали текста - строки заполняются ровно,
-                // блок остаётся прямоугольным.
-                textAlign = TextAlign.Justify
-            )
         }
 
         if (episodes.isNotEmpty()) {
@@ -1062,31 +986,6 @@ private fun DetailsContent(
     }
 }
 
-/** Small transient confirmation ("Добавлено в избранное", ...) anchored next to the favorite/watched buttons - the icon/color swap alone wasn't a clear enough confirmation on its own per feedback. */
-@Composable
-private fun ActionHintBubble(text: String, visible: Boolean, modifier: Modifier = Modifier) {
-    AnimatedVisibility(
-        visible = visible,
-        enter = fadeIn() + scaleIn(initialScale = 0.85f),
-        exit = fadeOut(),
-        modifier = modifier
-    ) {
-        Surface(
-            shape = RoundedCornerShape(8.dp),
-            color = MaterialTheme.colorScheme.inverseSurface,
-            tonalElevation = 4.dp
-        ) {
-            Text(
-                text,
-                color = MaterialTheme.colorScheme.inverseOnSurface,
-                style = MaterialTheme.typography.labelSmall,
-                maxLines = 1,
-                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-            )
-        }
-    }
-}
-
 /** Play/Trailer/download row from the top of Details - extracted so it's previewable in isolation (see the @Preview functions right below DownloadButton) without needing a full MediaItemEntity/ViewModel. */
 @Composable
 private fun ActionButtonsRow(
@@ -1108,24 +1007,45 @@ private fun ActionButtonsRow(
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 8.dp)
     ) {
+        com.illusion.app.ui.common.TvAwareButton(
+            onClick = onPlay,
+            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Icon(Icons.Default.PlayArrow, contentDescription = null)
+            Text(
+                stringResource(if (hasStartedWatching) R.string.details_continue_watching else R.string.details_play),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(start = 8.dp)
+            )
+        }
+        if (hasStartedWatching && totalDurationMs > 0 && resumePositionMs > 0) {
+            val fraction = (resumePositionMs.toFloat() / totalDurationMs).coerceIn(0f, 1f)
+            Column {
+                LinearProgressIndicator(
+                    progress = { fraction },
+                    trackColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f),
+                    modifier = Modifier.fillMaxWidth().height(3.dp)
+                )
+                Text(
+                    stringResource(
+                        R.string.details_resume_hint,
+                        formatWatchClock(resumePositionMs),
+                        (fraction * 100).toInt(),
+                        formatWatchLeft(totalDurationMs - resumePositionMs)
+                    ),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 6.dp)
+                )
+            }
+        }
         Row(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.fillMaxWidth()
         ) {
-            com.illusion.app.ui.common.TvAwareButton(
-                onClick = onPlay,
-                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
-                modifier = Modifier.weight(1f)
-            ) {
-                Icon(Icons.Default.PlayArrow, contentDescription = null)
-                Text(
-                    stringResource(if (hasStartedWatching) R.string.details_continue_watching else R.string.details_play),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(start = 8.dp)
-                )
-            }
             if (hasTrailer) {
                 // Was icon-only (a bare Icons.Default.Theaters circle) - per user feedback, nothing
                 // about that icon alone actually reads as "trailer" to someone who hasn't already
@@ -1149,36 +1069,14 @@ private fun ActionButtonsRow(
                     )
                 }
             }
-        }
-        DownloadButton(
-            download = download,
-            itemTitle = itemTitle,
-            onStart = onStartDownload,
-            onRemove = onRemoveDownload,
-            onError = onDownloadError
-        )
-        // Кнопка говорила «Продолжить», но нигде на карточке не было видно, где именно остановились
-        // и сколько осталось - приходилось заходить в плеер, чтобы узнать. Подпись под кнопками,
-        // а не в самой кнопке: там она бы отобрала ширину у «Трейлера» и обрезалась многоточием.
-        if (hasStartedWatching && totalDurationMs > 0 && resumePositionMs > 0) {
-            val fraction = (resumePositionMs.toFloat() / totalDurationMs).coerceIn(0f, 1f)
-            Column(modifier = Modifier.padding(top = 4.dp)) {
-                LinearProgressIndicator(
-                    progress = { fraction },
-                    modifier = Modifier.fillMaxWidth().height(3.dp)
-                )
-                Text(
-                    stringResource(
-                        R.string.details_resume_hint,
-                        formatWatchClock(resumePositionMs),
-                        (fraction * 100).toInt(),
-                        formatWatchLeft(totalDurationMs - resumePositionMs)
-                    ),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 6.dp)
-                )
-            }
+            DownloadButton(
+                download = download,
+                itemTitle = itemTitle,
+                onStart = onStartDownload,
+                onRemove = onRemoveDownload,
+                onError = onDownloadError,
+                modifier = if (hasTrailer) Modifier.weight(1f) else Modifier.widthIn(max = 240.dp)
+            )
         }
     }
 }
@@ -1210,7 +1108,8 @@ private fun DownloadButton(
     itemTitle: String,
     onStart: () -> Unit,
     onRemove: () -> Unit,
-    onError: (String) -> Unit
+    onError: (String) -> Unit,
+    modifier: Modifier = Modifier
 ) {
     var showRemoveConfirm by remember { mutableStateOf(false) }
     when (download?.status) {
@@ -1218,10 +1117,10 @@ private fun DownloadButton(
             // Не сплошная заливка, как у «Смотреть»: одинаковый цвет плюс вся ширина строки
             // делали второстепенную загрузку заметнее главного действия. Тональная заливка
             // заодно уравнивает это состояние с остальными состояниями загрузки ниже - те уже тональные.
-            FilledTonalButton(
+            OutlinedButton(
                 onClick = onStart,
                 contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
-                modifier = Modifier.fillMaxWidth()
+                modifier = modifier
             ) {
                 Icon(Icons.Default.Download, contentDescription = null)
                 Text(
@@ -1241,7 +1140,7 @@ private fun DownloadButton(
             FilledTonalButton(
                 onClick = onRemove,
                 contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
-                modifier = Modifier.fillMaxWidth()
+                modifier = modifier
             ) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
@@ -1267,7 +1166,7 @@ private fun DownloadButton(
                 onClick = { showRemoveConfirm = true },
                 interactionSource = removeSource,
                 contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
-                modifier = Modifier.fillMaxWidth().focusHighlight(removeSource)
+                modifier = modifier.focusHighlight(removeSource)
             ) {
                 Icon(Icons.Default.DownloadDone, contentDescription = null)
                 Text(
@@ -1322,7 +1221,7 @@ private fun DownloadButton(
                     contentColor = MaterialTheme.colorScheme.onErrorContainer
                 ),
                 contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
-                modifier = Modifier.fillMaxWidth().focusHighlight(retrySource)
+                modifier = modifier.focusHighlight(retrySource)
             ) {
                 Icon(Icons.Default.ErrorOutline, contentDescription = null)
                 Text(
@@ -1472,11 +1371,7 @@ private fun PersonRow(
             ) {
                 names.forEach { name ->
                     val clickable = name in clickablePersons
-                    com.illusion.app.ui.common.TvAwareAssistChip(
-                        onClick = { if (clickable) onOpenPerson(name) },
-                        label = { Text(name) },
-                        enabled = clickable
-                    )
+                    PersonChip(name, clickable, onOpenPerson)
                 }
             }
         }
@@ -1493,14 +1388,32 @@ private fun PersonRow(
                 // Only worth a filmography screen when the person has more than one title here -
                 // otherwise it's just this one item again, so the chip stays inert (greyed out).
                 val clickable = name in clickablePersons
-                val personSource = remember { MutableInteractionSource() }
-                com.illusion.app.ui.common.TvAwareAssistChip(
-                    onClick = { if (clickable) onOpenPerson(name) },
-                    label = { Text(name) },
-                    enabled = clickable
-                )
+                PersonChip(name, clickable, onOpenPerson)
             }
         }
+    }
+}
+
+@Composable
+private fun PersonChip(name: String, clickable: Boolean, onOpenPerson: (String) -> Unit) {
+    if (clickable) {
+        val interactionSource = remember { MutableInteractionSource() }
+        AssistChip(
+            onClick = { onOpenPerson(name) },
+            label = { Text(name) },
+            interactionSource = interactionSource,
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.55f)),
+            modifier = Modifier.focusHighlight(interactionSource)
+        )
+    } else {
+        Text(
+            name,
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier
+                .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(8.dp))
+                .padding(horizontal = 12.dp, vertical = 8.dp)
+        )
     }
 }
 
