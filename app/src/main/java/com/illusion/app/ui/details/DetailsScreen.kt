@@ -267,7 +267,17 @@ fun DetailsScreen(
         // зарезервирована в DetailsContent, см. TOP_BAR_ROW_HEIGHT).
         val cornerIconTint = MaterialTheme.colorScheme.onSurface
         val cornerPillColor = Color.Transparent
-        Box(modifier = Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surface)) {
+        // Нижняя грань полосы была прямым срезом во всю ширину и читалась остро. Скруглённые
+        // нижние углы плюс небольшой заход на фанарт (TOP_BAR_OVERLAP): картинка подъезжает под
+        // полосу, и в углах она из-под неё выглядывает - край получается мягким, а не рубленым.
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(
+                    MaterialTheme.colorScheme.surface,
+                    RoundedCornerShape(bottomStart = TOP_BAR_OVERLAP, bottomEnd = TOP_BAR_OVERLAP)
+                )
+        ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -335,6 +345,13 @@ fun DetailsScreen(
  * которыми здесь уже приходится обходить вручную (см. statusBarsTopDp ниже).
  */
 private val TOP_BAR_ROW_HEIGHT = 40.dp
+
+/**
+ * Насколько фанарт заходит под верхнюю полосу, он же радиус скругления её нижних углов. Без
+ * захода скруглённые углы вырезали бы не картинку, а пустой фон страницы, и смысла в них бы не
+ * было; с заходом в углах видно сам кадр, и грань читается мягкой.
+ */
+private val TOP_BAR_OVERLAP = 18.dp
 
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
@@ -426,7 +443,7 @@ private fun DetailsContent(
             // down (description, cast, ...) ends up passing behind the status bar during a scroll.
             // With the viewport itself inset instead, nothing can ever render there regardless of
             // scroll position.
-            .padding(top = statusBarsTopDp + TOP_BAR_ROW_HEIGHT)
+            .padding(top = statusBarsTopDp + TOP_BAR_ROW_HEIGHT - TOP_BAR_OVERLAP)
             .verticalScroll(rememberScrollState())
             .padding(horizontal = cutoutHorizontalDp)
     ) {
@@ -511,9 +528,11 @@ private fun DetailsContent(
                     // разных цвета встык. Теперь градиент начинается ровно с цвета полосы и непрозрачным,
                     // так что шов растворяется, а не просто чуть притемняется.
                     //
-                    // Держим цвет полосы непрозрачным первые 6% высоты и растворяем только к 32%:
-                    // при мгновенном спаде (0 -> 0.18) нижняя граница полосы всё равно читалась
-                    // отчётливой линией, особенно когда верх кадра сам по себе тёмный.
+                    // Непрозрачным цвет полосы держится только те ~8% высоты, что и так спрятаны
+                    // под ней (TOP_BAR_OVERLAP), и растворяется к 18% - на глаз это около 20dp
+                    // мягкого края. Растягивать дальше нельзя: на 32% заливка доставала до лиц в
+                    // верхней трети кадра и делала их плохо различимыми. За «неострый» край теперь
+                    // отвечает скругление углов самой полосы, а не длина этой заливки.
                     val topBarColor = MaterialTheme.colorScheme.surface
                     Box(
                         modifier = Modifier
@@ -522,16 +541,16 @@ private fun DetailsContent(
                                 if (isLightBackground) {
                                     Brush.verticalGradient(
                                         0f to topBarColor,
-                                        0.06f to topBarColor,
-                                        0.32f to Color.Transparent,
+                                        0.08f to topBarColor,
+                                        0.18f to Color.Transparent,
                                         0.87f to Color.Transparent,
                                         1f to backgroundColor
                                     )
                                 } else {
                                     Brush.verticalGradient(
                                         0f to topBarColor,
-                                        0.06f to topBarColor,
-                                        0.32f to Color.Transparent,
+                                        0.08f to topBarColor,
+                                        0.18f to Color.Transparent,
                                         0.62f to Color.Transparent,
                                         1f to backgroundColor
                                     )
