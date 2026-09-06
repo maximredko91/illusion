@@ -93,6 +93,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import androidx.core.net.toUri
 import com.illusion.app.R
 import com.illusion.app.data.backup.BackupSource
 import com.illusion.app.data.download.DownloadStorage
@@ -453,7 +454,7 @@ fun SettingsScreen(
                     "about" -> {
                         val aboutContext = LocalContext.current
                         fun openUrl(url: String) {
-                            runCatching { aboutContext.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url))) }
+                            runCatching { aboutContext.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, url.toUri())) }
                         }
                         SettingsGroup {
                             ListItem(

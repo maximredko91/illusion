@@ -434,6 +434,7 @@
 
     <string name="details_play">Смотреть</string>
     <string name="details_continue_watching">Продолжить</string>
+    <string name="details_resume_hint">Остановились на %1$s · просмотрено %2$d%% · осталось %3$s</string>
     <string name="details_trailer">Трейлер</string>
     <string name="details_image_viewer_close">Закрыть просмотр изображения</string>
     <string name="details_favorite_add">Добавить в избранное</string>

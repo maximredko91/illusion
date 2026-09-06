@@ -1,5 +1,6 @@
 package com.illusion.app.ui.player
 
+import android.annotation.SuppressLint
 import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
@@ -8,6 +9,7 @@ import android.net.Uri
 import androidx.annotation.OptIn
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.core.net.toUri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
@@ -204,6 +206,10 @@ class PlayerViewModel(
     // Bound (not started) so PlaybackService only ever promotes itself to a foreground service
     // once the player it's holding actually starts playing - see PlaybackService's own KDoc for why
     // that's safer than starting it up front on a still-loading stream.
+    //
+    // Линт видит здесь StaticFieldLeak, но это обычное поле экземпляра ViewModel, а не static: ссылка
+    // живёт ровно столько, сколько сама ViewModel, и onCleared() делает unbindService.
+    @SuppressLint("StaticFieldLeak")
     private var playbackService: com.illusion.app.data.player.PlaybackService? = null
     private val playbackServiceConnection = object : android.content.ServiceConnection {
         override fun onServiceConnected(name: android.content.ComponentName?, binder: android.os.IBinder?) {
@@ -541,9 +547,9 @@ class PlayerViewModel(
         // hardware video decoder while real playback needs it.
         PlaybackActivity.isActive = true
         val download = completedDownload(item.stableId)
-        val uri = download?.let { Uri.parse(it.contentUri) } ?: SmbMediaUri.build(item.sourceId, item.filePath, item.sizeBytes)
+        val uri = download?.let { it.contentUri.toUri() } ?: SmbMediaUri.build(item.sourceId, item.filePath, item.sizeBytes)
         val subtitleConfigs = if (download != null && download.subtitles.isNotEmpty()) {
-            download.subtitles.map { sub -> buildSubtitleConfig(Uri.parse(sub.uri), sub.remotePath) }
+            download.subtitles.map { sub -> buildSubtitleConfig(sub.uri.toUri(), sub.remotePath) }
         } else {
             item.subtitlePaths.map { path -> buildSubtitleConfig(item.sourceId, path) }
         }
@@ -730,7 +736,7 @@ class PlayerViewModel(
     private suspend fun completedDownload(stableId: String): DownloadEntity? {
         val download = downloadRepository.getForItem(stableId) ?: return null
         if (download.status != DownloadStatus.COMPLETED) return null
-        return download.takeIf { DownloadStorage.exists(appContext, Uri.parse(it.contentUri)) }
+        return download.takeIf { DownloadStorage.exists(appContext, it.contentUri.toUri()) }
     }
 
     /** Intent to hand [item] off to an external video player app - null if there's no compatible app or its SMB source no longer exists. */
@@ -760,7 +766,7 @@ class PlayerViewModel(
             val streamUrl = com.illusion.app.data.player.StreamingService.streamUrl(
                 appContext, item.sourceId, item.filePath, item.sizeBytes
             )
-            ExternalPlayer.forUrl(Uri.parse(streamUrl), item.title, packageName)
+            ExternalPlayer.forUrl(streamUrl.toUri(), item.title, packageName)
         }
         return intent.takeIf { it.resolvesToRealApp() }
     }

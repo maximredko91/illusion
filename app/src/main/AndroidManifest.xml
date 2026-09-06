@@ -72,6 +72,7 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:enableOnBackInvokedCallback="true"
+        tools:targetApi="33"
         android:theme="@style/Theme.Illusion">
         <!-- IllusionApplication supplies a custom WorkerFactory (see Configuration.Provider) - the
              default WorkManager auto-initializer must be removed or it silently wins, leaving
@@ -106,11 +107,11 @@
         <activity
             android:name=".MainActivity"
             android:exported="true"
-            android:label="@string/app_name"
             android:theme="@style/Theme.Illusion.Splash"
             android:windowSoftInputMode="adjustResize"
             android:supportsPictureInPicture="true"
             android:windowLayoutInDisplayCutoutMode="always"
+            tools:targetApi="27"
             android:configChanges="screenSize|smallestScreenSize|screenLayout|orientation|uiMode" />
 
         <!-- Alternate launcher icons (Настройки > Значок приложения) - one alias per AppIcon

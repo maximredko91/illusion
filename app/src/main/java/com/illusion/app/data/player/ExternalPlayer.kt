@@ -2,6 +2,7 @@ package com.illusion.app.data.player
 
 import android.content.Intent
 import android.net.Uri
+import androidx.core.net.toUri
 
 /**
  * Builds an ACTION_VIEW Intent to hand playback off to whatever external video player the user
@@ -35,5 +36,5 @@ object ExternalPlayer {
         }
 
     fun forDownload(contentUri: String, title: String, packageName: String? = null): Intent =
-        forUrl(Uri.parse(contentUri), title, packageName, grantReadPermission = true)
+        forUrl(contentUri.toUri(), title, packageName, grantReadPermission = true)
 }

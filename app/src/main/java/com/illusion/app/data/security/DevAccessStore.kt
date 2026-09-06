@@ -1,6 +1,7 @@
 package com.illusion.app.data.security
 
 import android.content.Context
+import androidx.core.content.edit
 import androidx.security.crypto.EncryptedSharedPreferences
 import java.security.MessageDigest
 import kotlin.random.Random
@@ -34,14 +35,14 @@ class DevAccessStore(context: Context, private val buildTimePassword: String? = 
      */
     var isRemembered: Boolean
         get() = prefs.getBoolean(KEY_REMEMBERED, false)
-        set(value) = prefs.edit().putBoolean(KEY_REMEMBERED, value).apply()
+        set(value) = prefs.edit { putBoolean(KEY_REMEMBERED, value) }
 
     /** Generates and stores a new random password, returning it in plaintext exactly once so the caller can show it to the developer. */
     fun generatePassword(): String {
         val password = (1..PASSWORD_LENGTH)
             .map { PASSWORD_ALPHABET[Random.nextInt(PASSWORD_ALPHABET.length)] }
             .joinToString("")
-        prefs.edit().putString(KEY_HASH, hash(password)).apply()
+        prefs.edit { putString(KEY_HASH, hash(password)) }
         return password
     }
 
@@ -58,11 +59,11 @@ class DevAccessStore(context: Context, private val buildTimePassword: String? = 
     var tmdbApiKey: String?
         get() = prefs.getString(KEY_TMDB_API_KEY, null)
         set(value) {
-            prefs.edit().putString(KEY_TMDB_API_KEY, value?.takeIf { it.isNotBlank() }).apply()
+            prefs.edit { putString(KEY_TMDB_API_KEY, value?.takeIf { it.isNotBlank() }) }
         }
 
     /** Full factory reset - clears the password hash, remembered-device flag, and TMDB key together, same EncryptedSharedPreferences an uninstall/data-clear would already wipe. */
-    fun clearAll() = prefs.edit().clear().apply()
+    fun clearAll() = prefs.edit { clear() }
 
     private fun hash(password: String): String =
         MessageDigest.getInstance("SHA-256")

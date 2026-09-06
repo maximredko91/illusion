@@ -208,14 +208,14 @@ dependencies {
     // still play a not-yet-downloaded item, by handing them an ordinary http://127.0.0.1:port/...
     // URL instead. Small/well-established, same library the previous HomeCinema app used for
     // exactly this.
-    implementation("org.nanohttpd:nanohttpd:2.3.1")
+    implementation(libs.nanohttpd)
 
     ffmpegExtensionAar?.let { implementation(files(it)) }
 
     testImplementation(libs.junit)
     // NfoParser uses org.xmlpull.v1.XmlPullParserFactory.newInstance(), which needs a real
     // provider on the JVM unit-test classpath (Android's built-in impl isn't available there).
-    testImplementation("net.sf.kxml:kxml2:2.3.0")
+    testImplementation(libs.kxml2)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
     androidTestImplementation(libs.androidx.espresso.core)

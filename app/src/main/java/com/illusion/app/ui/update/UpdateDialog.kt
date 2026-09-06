@@ -22,6 +22,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.core.net.toUri
 import com.illusion.app.data.update.UpdateInfo
 
 /**
@@ -81,7 +82,7 @@ fun UpdatePrompt(viewModel: UpdateViewModel) {
                     context.startActivity(
                         android.content.Intent(
                             android.content.Intent.ACTION_VIEW,
-                            android.net.Uri.parse("https://github.com/maximredko91/illusion/releases/latest")
+                            ("https://github.com/maximredko91/illusion/releases/latest").toUri()
                         )
                     )
                 }

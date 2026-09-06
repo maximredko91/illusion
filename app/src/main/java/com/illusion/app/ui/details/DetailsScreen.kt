@@ -78,7 +78,6 @@ import androidx.compose.material3.Snackbar
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.navigationBars
@@ -96,7 +95,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -199,14 +197,10 @@ fun DetailsScreen(
     // anything else on a real Android TV.
     val contentFocusRequester = remember { androidx.compose.ui.focus.FocusRequester() }
 
-    // Поднято сюда из DetailsContent: угловые кнопки ниже - соседи скролла, а не его
-    // содержимое, и им нужно знать, ушёл ли фанарт из-под них.
-    val scrollState = rememberScrollState()
     Box(modifier = modifier.fillMaxSize()) {
         val item = state.item
         when {
             item != null -> DetailsContent(
-                scrollState = scrollState,
                 item = item,
                 displayTitle = state.seriesTitle ?: item.title,
                 audioTracks = state.audioTracks,
@@ -220,6 +214,8 @@ fun DetailsScreen(
                 isWatched = watchProgress?.watched == true,
                 onToggleWatched = viewModel::toggleWatched,
                 hasStartedWatching = watchProgress?.let { it.positionMs > 0 && !it.watched } == true,
+                resumePositionMs = watchProgress?.positionMs ?: 0L,
+                totalDurationMs = watchProgress?.durationMs ?: 0L,
                 download = download,
                 downloads = downloads,
                 onStartDownload = { viewModel.startDownload(context) },
@@ -265,31 +261,13 @@ fun DetailsScreen(
         // while still reading as glass rather than a solid UI chrome bar, and the icon itself keeps
         // its own theme-driven tint independent of the pill's color.
         val haptics = LocalHapticFeedback.current
-        // Полупрозрачная пилюля читается только поверх фанарта. Когда фанарт уезжает вверх,
-        // под кнопками оказывается обычный текст, и сквозь 35% заливки он просвечивал - нечитаемыми
-        // становились и текст, и сама иконка (на скриншотах они съедали «Режиссёр» и «Коллекция:»).
-        // Кнопки по-прежнему закреплены на экране (так просили раньше), просто становятся непрозрачным
-        // элементом управления, а не полупрозрачным пятном поверх текста.
-        val overContent by remember { derivedStateOf { scrollState.value > 24 } }
-        val cornerIconTint by animateColorAsState(
-            if (overContent) MaterialTheme.colorScheme.onSurface
-            else if (MaterialTheme.colorScheme.background.luminance() > 0.5f) Color.Black else Color.White,
-            label = "cornerIconTint"
-        )
-        val cornerPillColor by animateColorAsState(
-            // Поверх фанарта кнопке нужна своя подложка, над панелью - уже нет: фон даёт сама панель.
-            if (overContent) Color.Transparent
-            else MaterialTheme.colorScheme.primary.copy(alpha = 0.35f),
-            label = "cornerPillColor"
-        )
-        // Одного непрозрачного кружка мало: кнопка всё равно садилась посреди чужого текста
-        // (на скриншоте съедала «Рей» у «Рейтинг:») и читалась как клякса. Сплошная полоса во всю
-        // ширину превращает это в обычную верхнюю панель, под которую контент уезжает осмысленно.
-        val topBarColor by animateColorAsState(
-            if (overContent) MaterialTheme.colorScheme.surfaceContainer else Color.Transparent,
-            label = "topBarColor"
-        )
-        Box(modifier = Modifier.fillMaxWidth().background(topBarColor)) {
+        // Раньше кнопки висели поверх фанарта полупрозрачными кружками и закрывали собой картинку,
+        // а при прокрутке - ещё и текст под собой. Теперь это обычная полоса в цвет темы над
+        // фанартом: картинка начинается под ней и ничем не перекрывается (высота полосы
+        // зарезервирована в DetailsContent, см. TOP_BAR_ROW_HEIGHT).
+        val cornerIconTint = MaterialTheme.colorScheme.onSurface
+        val cornerPillColor = Color.Transparent
+        Box(modifier = Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surface)) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -343,6 +321,9 @@ fun DetailsScreen(
     }
 }
 
+/** Высота верхней полосы без статус-бара: IconButton ровно 48dp по умолчанию плюс по 4dp отступа сверху и снизу у самой строки. Фиксированное число, а не замер onSizeChanged - замер зависел бы от тех же инсетов, гонку с которыми здесь уже приходится обходить вручную (см. statusBarsTopDp ниже). */
+private val TOP_BAR_ROW_HEIGHT = 56.dp
+
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 private fun DetailsContent(
@@ -359,6 +340,8 @@ private fun DetailsContent(
     isWatched: Boolean,
     onToggleWatched: () -> Unit,
     hasStartedWatching: Boolean,
+    resumePositionMs: Long,
+    totalDurationMs: Long,
     download: DownloadEntity?,
     downloads: Map<String, DownloadEntity>,
     onStartDownload: () -> Unit,
@@ -372,8 +355,7 @@ private fun DetailsContent(
     onPlayTrailer: (String) -> Unit,
     onOpenPerson: (String) -> Unit,
     onOpenItem: (String) -> Unit,
-    contentFocusRequester: androidx.compose.ui.focus.FocusRequester? = null,
-    scrollState: ScrollState = rememberScrollState()
+    contentFocusRequester: androidx.compose.ui.focus.FocusRequester? = null
 ) {
     var zoomedImage by remember { mutableStateOf<Any?>(null) }
     var zoomedImageIsFanart by remember { mutableStateOf(false) }
@@ -432,8 +414,8 @@ private fun DetailsContent(
             // down (description, cast, ...) ends up passing behind the status bar during a scroll.
             // With the viewport itself inset instead, nothing can ever render there regardless of
             // scroll position.
-            .padding(top = statusBarsTopDp)
-            .verticalScroll(scrollState)
+            .padding(top = statusBarsTopDp + TOP_BAR_ROW_HEIGHT)
+            .verticalScroll(rememberScrollState())
             .padding(horizontal = cutoutHorizontalDp)
     ) {
         val haptics = LocalHapticFeedback.current
@@ -512,21 +494,26 @@ private fun DetailsContent(
                     // the last ~13% actually washes toward opaque, instead of the last third.
                     val backgroundColor = MaterialTheme.colorScheme.background
                     val isLightBackground = backgroundColor.luminance() > 0.5f
+                    // Стык с верхней полосой был резким: раньше верхний подёрнутый край был едва
+                    // заметным (0.28) и вдобавок в цвет background, а полоса над ним - в surface: два
+                    // разных цвета встык. Теперь градиент начинается ровно с цвета полосы и непрозрачным,
+                    // так что шов растворяется, а не просто чуть притемняется.
+                    val topBarColor = MaterialTheme.colorScheme.surface
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
                             .background(
                                 if (isLightBackground) {
                                     Brush.verticalGradient(
-                                        0f to backgroundColor.copy(alpha = 0.28f),
-                                        0.14f to Color.Transparent,
+                                        0f to topBarColor,
+                                        0.18f to Color.Transparent,
                                         0.87f to Color.Transparent,
                                         1f to backgroundColor
                                     )
                                 } else {
                                     Brush.verticalGradient(
-                                        0f to backgroundColor.copy(alpha = 0.28f),
-                                        0.14f to Color.Transparent,
+                                        0f to topBarColor,
+                                        0.18f to Color.Transparent,
                                         0.62f to Color.Transparent,
                                         1f to backgroundColor
                                     )
@@ -857,6 +844,8 @@ private fun DetailsContent(
         // never had.
         ActionButtonsRow(
             hasStartedWatching = hasStartedWatching,
+            resumePositionMs = resumePositionMs,
+            totalDurationMs = totalDurationMs,
             hasTrailer = item.trailerPath != null,
             download = download,
             itemTitle = displayTitle,
@@ -1082,6 +1071,8 @@ private fun ActionHintBubble(text: String, visible: Boolean, modifier: Modifier 
 @Composable
 private fun ActionButtonsRow(
     hasStartedWatching: Boolean,
+    resumePositionMs: Long = 0L,
+    totalDurationMs: Long = 0L,
     hasTrailer: Boolean,
     download: DownloadEntity?,
     itemTitle: String,
@@ -1146,6 +1137,50 @@ private fun ActionButtonsRow(
             onRemove = onRemoveDownload,
             onError = onDownloadError
         )
+        // Кнопка говорила «Продолжить», но нигде на карточке не было видно, где именно остановились
+        // и сколько осталось - приходилось заходить в плеер, чтобы узнать. Подпись под кнопками,
+        // а не в самой кнопке: там она бы отобрала ширину у «Трейлера» и обрезалась многоточием.
+        if (hasStartedWatching && totalDurationMs > 0 && resumePositionMs > 0) {
+            val fraction = (resumePositionMs.toFloat() / totalDurationMs).coerceIn(0f, 1f)
+            Column(modifier = Modifier.padding(top = 4.dp)) {
+                LinearProgressIndicator(
+                    progress = { fraction },
+                    modifier = Modifier.fillMaxWidth().height(3.dp)
+                )
+                Text(
+                    stringResource(
+                        R.string.details_resume_hint,
+                        formatWatchClock(resumePositionMs),
+                        (fraction * 100).toInt(),
+                        formatWatchLeft(totalDurationMs - resumePositionMs)
+                    ),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 6.dp)
+                )
+            }
+        }
+    }
+}
+
+/** Позиция остановки как часы: час показывается только когда он есть, чтобы у серии не было ведущего «0:». */
+private fun formatWatchClock(ms: Long): String {
+    val totalSeconds = ms / 1000
+    val hours = totalSeconds / 3600
+    val minutes = (totalSeconds % 3600) / 60
+    val seconds = totalSeconds % 60
+    return if (hours > 0) "%d:%02d:%02d".format(hours, minutes, seconds) else "%d:%02d".format(minutes, seconds)
+}
+
+/** Сколько осталось - словами, а не таймкодом: читается быстрее, чем второй часовой формат в той же строке. */
+private fun formatWatchLeft(ms: Long): String {
+    val totalMinutes = (ms / 60_000).coerceAtLeast(1)
+    val hours = totalMinutes / 60
+    val minutes = totalMinutes % 60
+    return when {
+        hours > 0 && minutes > 0 -> "$hours ч $minutes мин"
+        hours > 0 -> "$hours ч"
+        else -> "$minutes мин"
     }
 }
 

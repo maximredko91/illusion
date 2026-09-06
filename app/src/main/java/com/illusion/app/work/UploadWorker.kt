@@ -2,6 +2,7 @@ package com.illusion.app.work
 
 import android.content.Context
 import android.net.Uri
+import androidx.core.net.toUri
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import androidx.work.workDataOf
@@ -41,7 +42,7 @@ class UploadWorker(
         } ?: return Result.failure(workDataOf(KEY_ERROR to "Источник SMB недоступен"))
 
         return try {
-            val uploaded = applicationContext.contentResolver.openInputStream(Uri.parse(videoUriString))
+            val uploaded = applicationContext.contentResolver.openInputStream(videoUriString.toUri())
                 ?.use { input ->
                     smbClient.connect(info).use { connection ->
                         val existingSize = connection.fileSizeOrNull(destinationPath)

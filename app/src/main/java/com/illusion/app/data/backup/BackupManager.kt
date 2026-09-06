@@ -121,6 +121,9 @@ class BackupManager(
     }
 
     private suspend fun savePending(payload: BackupPayload) = withContext(Dispatchers.IO) {
+        // Не KTX-шный edit {}: тот возвращает Unit, а здесь нужен именно результат commit() - запись
+        // должна быть на диске до того, как мы сообщим об успехе.
+        @Suppress("UseKtx")
         check(pendingStore.edit().putString("payload", serialize(payload)).commit()) { "Не удалось сохранить импорт" }
     }
 }

@@ -28,6 +28,8 @@ internal fun openEncryptedPreferences(context: Context, name: String): SharedPre
         open(name)
     } catch (e: Exception) {
         val fresh = open("${name}_recovered")
+        // См. BackupManager: нужен результат commit(), который KTX-шный edit {} не отдаёт.
+        @Suppress("UseKtx")
         check(recovery.edit().putBoolean(name, true).commit()) { "Не удалось сохранить восстановление доступа" }
         fresh
     }

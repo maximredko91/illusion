@@ -2,6 +2,7 @@ package com.illusion.app.data.repository
 
 import android.content.Context
 import android.net.Uri
+import androidx.core.net.toUri
 import com.illusion.app.data.download.DownloadStorage
 import com.illusion.app.data.local.dao.DownloadDao
 import com.illusion.app.data.local.entity.DownloadEntity
@@ -25,8 +26,8 @@ class DownloadRepository(private val context: Context, private val dao: Download
     /** Deletes the DB row and the downloaded video + subtitle files themselves - the two must never drift apart or a stale row would point at nothing. */
     suspend fun remove(stableId: String) {
         dao.getForItem(stableId)?.let { entity ->
-            runCatching { DownloadStorage.delete(context, Uri.parse(entity.contentUri)) }
-            entity.subtitles.forEach { sub -> runCatching { DownloadStorage.delete(context, Uri.parse(sub.uri)) } }
+            runCatching { DownloadStorage.delete(context, entity.contentUri.toUri()) }
+            entity.subtitles.forEach { sub -> runCatching { DownloadStorage.delete(context, sub.uri.toUri()) } }
         }
         dao.delete(stableId)
     }

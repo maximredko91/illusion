@@ -9,6 +9,7 @@ import android.os.Build
 import android.provider.DocumentsContract
 import android.provider.MediaStore
 import android.webkit.MimeTypeMap
+import androidx.core.net.toUri
 import androidx.documentfile.provider.DocumentFile
 import java.io.OutputStream
 
@@ -31,20 +32,16 @@ object DownloadStorage {
 
     fun folderDisplayName(context: Context, treeUri: String?): String {
         if (treeUri == null) return DEFAULT_LOCATION_LABEL
-        return runCatching { DocumentFile.fromTreeUri(context, Uri.parse(treeUri))?.name }
+        return runCatching { DocumentFile.fromTreeUri(context, treeUri.toUri())?.name }
             .getOrNull() ?: DEFAULT_LOCATION_LABEL
     }
 
     /** Intent to launch the system folder picker, hinting at the public Downloads folder as a starting point. */
     fun pickerInitialUri(): Uri? =
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            DocumentsContract.buildDocumentUri(
-                "com.android.externalstorage.documents",
-                "primary:Download"
-            )
-        } else {
-            null
-        }
+        DocumentsContract.buildDocumentUri(
+            "com.android.externalstorage.documents",
+            "primary:Download"
+        )
 
     /**
      * Best-effort "show me that folder". Points at the real download location - the custom
@@ -118,7 +115,7 @@ object DownloadStorage {
     }
 
     private fun createUnderTree(context: Context, treeUri: String, folderSegments: List<String>, fileName: String, mimeType: String): Uri? {
-        var dir = DocumentFile.fromTreeUri(context, Uri.parse(treeUri)) ?: return null
+        var dir = DocumentFile.fromTreeUri(context, treeUri.toUri()) ?: return null
         for (segment in folderSegments) {
             dir = dir.findFile(segment)?.takeIf { it.isDirectory } ?: dir.createDirectory(segment) ?: return null
         }

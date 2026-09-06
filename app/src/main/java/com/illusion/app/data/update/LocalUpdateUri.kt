@@ -1,6 +1,7 @@
 package com.illusion.app.data.update
 
 import android.net.Uri
+import androidx.core.net.toUri
 
 /**
  * Encodes (sourceId, path) for a local-update APK into a pseudo-URL string, so [UpdateInfo] and
@@ -17,7 +18,7 @@ object LocalUpdateUri {
     fun isLocal(url: String): Boolean = url.startsWith("$SCHEME://")
 
     fun parse(url: String): Pair<Long, String> {
-        val uri = Uri.parse(url)
+        val uri = url.toUri()
         val sourceId = requireNotNull(uri.authority?.toLongOrNull()) { "Invalid local update uri, missing source id: $url" }
         val path = requireNotNull(uri.path?.removePrefix("/")) { "Invalid local update uri, missing path: $url" }
         return sourceId to Uri.decode(path)

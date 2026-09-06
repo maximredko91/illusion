@@ -2,6 +2,7 @@ package com.illusion.app.work
 
 import android.content.Context
 import android.net.Uri
+import androidx.core.net.toUri
 import androidx.work.CoroutineWorker
 import androidx.work.ForegroundInfo
 import androidx.work.WorkerParameters
@@ -124,7 +125,7 @@ class DownloadWorker(
 
     /** Reuses the exact Uri stored from a previous attempt so resume writes append to the same file - only falls back to creating a new one if that Uri no longer resolves (user deleted it externally, or this is the first attempt). */
     private fun resolveVideoUri(existing: DownloadEntity?, treeUri: String?, item: MediaItemEntity): Uri? {
-        val previous = existing?.takeIf { it.status != DownloadStatus.COMPLETED }?.contentUri?.let { Uri.parse(it) }
+        val previous = existing?.takeIf { it.status != DownloadStatus.COMPLETED }?.contentUri?.let { it.toUri() }
         if (previous != null && DownloadStorage.exists(applicationContext, previous)) return previous
         return DownloadStorage.create(applicationContext, treeUri, folderSegments(item), videoFileName(item))
     }

@@ -4,6 +4,8 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.media.MediaMetadataRetriever
+import androidx.core.graphics.createBitmap
+import androidx.core.graphics.scale
 import com.illusion.app.data.local.entity.MediaItemEntity
 import com.illusion.app.data.local.entity.ThumbnailSpriteEntity
 import com.illusion.app.data.player.PlaybackActivity
@@ -60,7 +62,7 @@ class ThumbnailGenerator(
                 if (PlaybackActivity.isActive) return null
                 val timeUs = index * intervalMs * 1000
                 val original = retriever.getFrameAtTime(timeUs, MediaMetadataRetriever.OPTION_CLOSEST_SYNC) ?: continue
-                val scaled = Bitmap.createScaledBitmap(original, FRAME_WIDTH, FRAME_HEIGHT, true)
+                val scaled = original.scale(FRAME_WIDTH, FRAME_HEIGHT)
                 if (scaled !== original) original.recycle()
                 frames += scaled
             }
@@ -68,7 +70,7 @@ class ThumbnailGenerator(
 
             val columns = ceil(sqrt(frames.size.toDouble())).toInt().coerceAtLeast(1)
             val rows = ceil(frames.size.toDouble() / columns).toInt()
-            val sprite = Bitmap.createBitmap(columns * FRAME_WIDTH, rows * FRAME_HEIGHT, Bitmap.Config.RGB_565)
+            val sprite = createBitmap(columns * FRAME_WIDTH, rows * FRAME_HEIGHT, Bitmap.Config.RGB_565)
             val canvas = Canvas(sprite)
             frames.forEachIndexed { index, frame ->
                 val col = index % columns

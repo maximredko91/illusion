@@ -3,6 +3,8 @@
      анимации) - используется как есть и в системном сплэше, и в Compose-оверлее ниже, чтобы
      не было рассинхронизации между двумя независимыми анимациями. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    tools:ignore="VectorRaster"
     android:width="288dp"
     android:height="288dp"
     android:viewportWidth="108"
