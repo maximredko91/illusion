@@ -1,7 +1,6 @@
 <resources>
     <string name="app_name">Иллюзион</string>
     <string name="exit_confirm_message">Нажмите ещё раз «Назад» для выхода</string>
-    <string name="player_open_external">Открыть во внешнем плеере</string>
     <string name="player_open_external_no_app">Не найдено приложение для открытия видео</string>
 
     <string name="settings_player_mode">Плеер</string>
@@ -59,13 +58,11 @@
     <string name="settings_screen_mode_section">Режим экрана</string>
     <string name="settings_category_screen_mode_description">Телефон или Android TV</string>
     <string name="settings_category_library_description">Сортировка по умолчанию</string>
-    <string name="settings_category_scan_description">Пересканирование и расписание</string>
     <string name="settings_category_player_description">Внутренний или внешний плеер</string>
     <string name="settings_category_downloads_description">Папка и объём загруженного</string>
     <string name="settings_category_backup_description">Экспорт и импорт источников</string>
     <string name="settings_category_reset_description">Сброс настроек или полный сброс приложения</string>
     <string name="settings_smb_sources">Источники SMB</string>
-    <string name="settings_scan_section">Сканирование</string>
     <string name="settings_rescan_now">Пересканировать библиотеку</string>
     <string name="settings_rescan_now_description">Найдёт новые файлы и обновит постеры/фанарт для уже добавленных</string>
     <string name="settings_rescan_now_action">Сканировать</string>
@@ -144,12 +141,10 @@
     <string name="tags_sort_alphabetical">По алфавиту</string>
     <string name="tags_filter_hint">Фильтр по названию тега</string>
     <string name="tags_empty">В библиотеке нет тегов</string>
-    <string name="action_change">Изменить</string>
     <string name="search_recent_title">Недавние запросы</string>
     <string name="search_recent_clear_all">Очистить всё</string>
     <string name="search_recent_remove">Удалить запрос</string>
 
-    <string name="library_sort">Сортировка</string>
     <string name="sort_year">По году</string>
     <string name="sort_title">По алфавиту</string>
     <string name="sort_rating">По рейтингу</string>
@@ -213,7 +208,6 @@
     <string name="details_download_retry_label">Повторить</string>
     <string name="details_download_cancel">Отменить загрузку</string>
     <string name="details_download_remove">Удалить загрузку</string>
-    <string name="details_download_retry">Повторить загрузку</string>
     <string name="details_download_remove_confirm_title">Удалить загрузку?</string>
     <string name="details_download_remove_confirm_message">Скачанный файл «%1$s» будет удалён с устройства.</string>
     <string name="details_download_remove_confirm_action">Удалить</string>
@@ -325,7 +319,6 @@
     <string name="scan_progress_source">Источник %1$d из %2$d: %3$s</string>
     <string name="scan_progress_listing">Поиск файлов… найдено %1$d</string>
     <string name="scan_progress_files">Найдено файлов: %1$d из %2$d</string>
-    <string name="scan_progress_done">Готово</string>
     <string name="scan_progress_done_count">Готово! Найдено видео: %1$d</string>
     <string name="scan_progress_newly_added_title">Добавлено новое</string>
     <string name="scan_progress_failed">Не удалось выполнить сканирование. Проверьте соединение с источником в настройках</string>
@@ -384,10 +377,8 @@
     <string name="player_retry">Повторить</string>
     <string name="player_close">Закрыть</string>
     <string name="player_track_off">Выключено</string>
-    <string name="player_speed">Скорость воспроизведения</string>
     <string name="player_audio_tracks_title">Аудиодорожка</string>
     <string name="player_subtitles_title">Субтитры</string>
-    <string name="player_video_info_title">Информация о видео</string>
     <string name="player_sharpen_toggle">Повышение резкости (GPU)</string>
     <string name="player_sharpen_disabled_by_performance_mode">Недоступно в экономичном режиме производительности (Настройки → Производительность)</string>
     <string name="player_sharpen_amount">Интенсивность: %1$d%%</string>
@@ -462,7 +453,6 @@
     <string name="details_not_found">Не удалось найти этот элемент библиотеки</string>
     <string name="details_no_description">Без описания</string>
     <string name="details_description_label">Описание</string>
-    <string name="details_audio_tracks">Озвучка: %1$s</string>
     <string name="details_audio_tracks_label">"Озвучка: "</string>
     <string name="details_subtitles_label">Субтитры: </string>
     <string name="details_forced_subtitles_suffix">(Форсированные)</string>
@@ -516,7 +506,6 @@
     <string name="addmedia_field_plot">Описание</string>
     <string name="addmedia_destination_folder">Папка на NAS</string>
     <string name="addmedia_browse">Обзор…</string>
-    <string name="addmedia_folder_picker_title">Выбор папки</string>
     <string name="addmedia_folder_picker_up">⬆ Вверх</string>
     <string name="addmedia_folder_picker_new_folder">Новая папка</string>
     <string name="addmedia_folder_picker_choose">Выбрать эту папку</string>
@@ -525,7 +514,6 @@
     <string name="addmedia_upload_button">Загрузить на NAS</string>
     <string name="addmedia_uploading">Загрузка на NAS…</string>
     <string name="addmedia_upload_done">Готово — файл на месте</string>
-    <string name="addmedia_upload_error">Ошибка загрузки: %1$s</string>
     <string name="addmedia_rescan_now">Пересканировать библиотеку</string>
     <string name="addmedia_not_configured">Нужен TMDB API-ключ (бесплатный, на themoviedb.org → Settings → API). Вставьте его сюда — сохранится на устройстве.</string>
     <string name="addmedia_tmdb_key_label">TMDB API-ключ</string>

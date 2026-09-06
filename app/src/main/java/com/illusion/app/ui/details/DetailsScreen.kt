@@ -136,6 +136,7 @@ import com.illusion.app.data.repository.AudioTrackRepository
 import com.illusion.app.data.repository.DownloadRepository
 import com.illusion.app.data.repository.LibraryRepository
 import com.illusion.app.data.repository.WatchProgressRepository
+import com.illusion.app.domain.model.genreDisplayName
 import com.illusion.app.ui.common.LocalUiMode
 import com.illusion.app.ui.common.PosterCard
 import com.illusion.app.ui.common.RatingBadge
@@ -772,7 +773,7 @@ private fun DetailsContent(
                     ) {
                         item.genres.forEach { genre ->
                             Text(
-                                genre,
+                                genreDisplayName(genre),
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSecondaryContainer,
                                 modifier = Modifier

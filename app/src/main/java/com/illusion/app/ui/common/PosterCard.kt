@@ -53,6 +53,7 @@ import com.illusion.app.data.image.posterModel
 import com.illusion.app.data.local.entity.MediaItemEntity
 import com.illusion.app.domain.model.Category
 import com.illusion.app.domain.model.UiMode
+import com.illusion.app.domain.model.genreDisplayName
 
 /** Poster + title card used in the home carousels and library grids. Falls back to a category icon when there's no poster. */
 @OptIn(ExperimentalSharedTransitionApi::class)
@@ -290,7 +291,7 @@ internal fun PerforationStrip(holeColor: Color, modifier: Modifier = Modifier) {
 }
 
 private fun posterSubtitle(item: MediaItemEntity): String? {
-    val parts = listOfNotNull(item.year?.toString(), item.genres.firstOrNull())
+    val parts = listOfNotNull(item.year?.toString(), item.genres.firstOrNull()?.let(::genreDisplayName))
     return parts.takeIf { it.isNotEmpty() }?.joinToString(" · ")
 }
 

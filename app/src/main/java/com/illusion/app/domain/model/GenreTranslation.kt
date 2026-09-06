@@ -47,6 +47,15 @@ fun russianGenreToEnglish(query: String): String? = RU_TO_EN_GENRES[query.trim()
 private val EN_TO_RU_GENRES: Map<String, List<String>> = RU_TO_EN_GENRES.entries.groupBy({ it.value }, { it.key })
 
 /**
+ * Capitalization only, no translation - `<genre>` in a .nfo comes through however whoever wrote
+ * that file typed it ("триллер" from one scraper, "Боевик" from another), and both spellings sat
+ * side by side in the same poster grid. Applied at render time rather than normalized into Room,
+ * so nothing depends on a rescan and the stored value still matches the file verbatim.
+ */
+fun genreDisplayName(name: String): String =
+    name.trim().replaceFirstChar { it.titlecase() }
+
+/**
  * Normalizes a genre string to its canonical (TMDB English) name if it's a known synonym in
  * either language, so items scraped in different languages (e.g. this app's own TMDB add-media
  * flow, English, vs. a Russian-scraped .nfo) still count as "the same genre" when scoring
