@@ -40,6 +40,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.horizontalScroll
@@ -111,6 +112,8 @@ import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.Hyphens
+import androidx.compose.ui.text.style.LineBreak
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
@@ -753,7 +756,7 @@ private fun DetailsContent(
                     listOfNotNull(
                         item.year?.toString(),
                         item.country,
-                        item.runtimeMinutes?.let { "$it мин" },
+                        item.runtimeMinutes?.let { "$it мин" },
                         item.videoQualityLabel,
                         item.editionLabel
                     ).joinToString(" · "),
@@ -922,7 +925,11 @@ private fun DetailsContent(
             // line instead of at word boundaries.
             if (mpaa != null || premiered != null || collectionName != null || seriesStatus != null) {
                 Column(
-                    modifier = Modifier.weight(1f),
+                    // Ширина по содержимому с потолком, а не weight(1f): жёсткие половины
+                    // спасали от длинного названия коллекции, душившего левую колонку, но в
+                    // обычном случае (справа одна «Премьера») слоган слева ломался на три
+                    // строки при пустой правой половине. Потолок сохраняет прежнюю защиту.
+                    modifier = Modifier.widthIn(max = 168.dp),
                     horizontalAlignment = Alignment.End,
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
@@ -1007,7 +1014,17 @@ private fun DetailsContent(
             )
             Text(
                 item.plot?.takeIf { it.isNotBlank() } ?: stringResource(R.string.details_no_description),
-                style = MaterialTheme.typography.bodyMedium,
+                style = MaterialTheme.typography.bodyMedium.copy(
+                    hyphens = Hyphens.Auto,
+                    // Hyphens.Auto одного мало: переносы включаются только при «качественном» алгоритме
+                    // разбиения строк - с дефолтным LineBreak.Simple системный переносчик
+                    // не вызывается вообще (проверено на устройстве: один Hyphens.Auto ничего не меняет).
+                    lineBreak = LineBreak.Paragraph
+                ),
+                // Выключка по ширине без переносов гнала «реки» пробелов на русском тексте
+                // («Реальная   история   пианиста   Владислава»). Hyphens.Auto отдаёт перенос
+                // системному переносчику Android по локали текста - строки заполняются ровно,
+                // блок остаётся прямоугольным.
                 textAlign = TextAlign.Justify
             )
         }
