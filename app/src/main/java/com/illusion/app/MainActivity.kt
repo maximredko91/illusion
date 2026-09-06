@@ -74,6 +74,24 @@ class MainActivity : ComponentActivity() {
         setContent {
             val accentColor by app.settingsRepository.accentColor.collectAsState(initial = com.illusion.app.domain.model.AccentColor.ILLUSION)
             val themeMode by app.settingsRepository.themeMode.collectAsState(initial = com.illusion.app.domain.model.ThemeMode.SYSTEM)
+            // enableEdgeToEdge() выше сам решает, светлыми или тёмными рисовать значки строки состояния, и
+            // смотрит при этом на ночной режим СИСТЕМЫ, а не на тему, выбранную в самом приложении. При
+            // любом расхождении значки совпадали по цвету с фоном и пропадали: система в светлой теме плюс
+            // «Чёрная» в настройках давали тёмные часы на чёрном фоне (оставался виден один значок зарядки,
+            // он зелёный сам по себе), обратное сочетание - белые на белом. Привязываем их к теме
+            // приложения - той же логикой, что в IllusionTheme.
+            val darkTheme = when (themeMode) {
+                com.illusion.app.domain.model.ThemeMode.SYSTEM -> androidx.compose.foundation.isSystemInDarkTheme()
+                com.illusion.app.domain.model.ThemeMode.LIGHT -> false
+                com.illusion.app.domain.model.ThemeMode.DARK,
+                com.illusion.app.domain.model.ThemeMode.BLACK -> true
+            }
+            val view = androidx.compose.ui.platform.LocalView.current
+            androidx.compose.runtime.SideEffect {
+                val controller = androidx.core.view.WindowCompat.getInsetsController(window, view)
+                controller.isAppearanceLightStatusBars = !darkTheme
+                controller.isAppearanceLightNavigationBars = !darkTheme
+            }
             IllusionTheme(themeMode = themeMode, accentColor = accentColor) {
                 Box(modifier = Modifier.fillMaxSize()) {
                     IllusionNavHost(
