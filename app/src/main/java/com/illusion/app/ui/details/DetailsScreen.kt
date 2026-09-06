@@ -100,6 +100,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.Color
@@ -463,10 +464,18 @@ private fun DetailsContent(
             // where a near-miss on one of them actually lands.
             val cornerButtonSize = 48.dp
             val fanartHeight = if (isTv) 460.dp else 220.dp
+            // Кадр ничем не заливается, только скруглён снизу - в обеих темах одинаково.
+            //
+            // Раньше верх и низ растворялись в цвет фона градиентом. В тёмной теме это читалось
+            // виньеткой, а в светлой белый поверх тёмного кадра давал серую дымку - грязные
+            // полосы сверху и снизу. Длину градиента подбирали трижды, каждый раз оставалось грязно.
+            // Держать разные решения по темам тоже не вариант: получались два разных стиля одного
+            // экрана. Чёткий край со скруглением работает везде: картинка остаётся чистой.
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(fanartHeight)
+                    .clip(RoundedCornerShape(bottomStart = TOP_BAR_OVERLAP, bottomEnd = TOP_BAR_OVERLAP))
                     .background(MaterialTheme.colorScheme.surfaceVariant)
             ) {
                 if (fanart != null) {
@@ -505,58 +514,6 @@ private fun DetailsContent(
                     if (fanartLoading) {
                         Box(modifier = Modifier.fillMaxSize().shimmer())
                     }
-                    // Top: barely-there, just enough to soften the seam against the flat
-                    // status-bar background above (not a real vignette - the fanart itself stays
-                    // clear and bright through the middle, per feedback against darkening it).
-                    // Bottom: a real dissolve to full opaque background over the last third of the
-                    // image, so the hard cut straight into the poster/title row below becomes a
-                    // graceful falloff instead - this is the "abrupt transition" fix, the top fade
-                    // is unrelated and was already there.
-                    //
-                    // The same alpha/stop values read very differently depending on the resolved
-                    // background color: a dark background blends into a photo like a natural
-                    // vignette, but the identical curve in a light theme washes the art out into a
-                    // near-white haze over roughly the same area. Per feedback, the top fade was
-                    // never the actual problem (kept at dark theme's own values below) - it's
-                    // specifically the BOTTOM dissolve fading to a light/white background that
-                    // reads as covering half the fanart. Pushed further down (0.87 vs 0.62) so only
-                    // the last ~13% actually washes toward opaque, instead of the last third.
-                    val backgroundColor = MaterialTheme.colorScheme.background
-                    val isLightBackground = backgroundColor.luminance() > 0.5f
-                    // Стык с верхней полосой был резким: раньше верхний подёрнутый край был едва
-                    // заметным (0.28) и вдобавок в цвет background, а полоса над ним - в surface: два
-                    // разных цвета встык. Теперь градиент начинается ровно с цвета полосы и непрозрачным,
-                    // так что шов растворяется, а не просто чуть притемняется.
-                    //
-                    // Непрозрачным цвет полосы держится только те ~8% высоты, что и так спрятаны
-                    // под ней (TOP_BAR_OVERLAP), и растворяется к 18% - на глаз это около 20dp
-                    // мягкого края. Растягивать дальше нельзя: на 32% заливка доставала до лиц в
-                    // верхней трети кадра и делала их плохо различимыми. За «неострый» край теперь
-                    // отвечает скругление углов самой полосы, а не длина этой заливки.
-                    val topBarColor = MaterialTheme.colorScheme.surface
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .background(
-                                if (isLightBackground) {
-                                    Brush.verticalGradient(
-                                        0f to topBarColor,
-                                        0.08f to topBarColor,
-                                        0.18f to Color.Transparent,
-                                        0.87f to Color.Transparent,
-                                        1f to backgroundColor
-                                    )
-                                } else {
-                                    Brush.verticalGradient(
-                                        0f to topBarColor,
-                                        0.08f to topBarColor,
-                                        0.18f to Color.Transparent,
-                                        0.62f to Color.Transparent,
-                                        1f to backgroundColor
-                                    )
-                                }
-                            )
-                    )
                     // TV-only "hero" title overlay - Netflix/Google TV-style, the title sits
                     // directly on the backdrop instead of only appearing in the metadata row
                     // below (phone's layout, unchanged). Purely additive on top of the existing
