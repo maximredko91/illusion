@@ -54,6 +54,8 @@
     <string name="home_collections">Коллекции</string>
     <string name="home_collection_item_count">%1$d</string>
     <string name="home_random_picks_refresh">Обновить подборку</string>
+    <string name="home_more_actions">Ещё</string>
+    <string name="home_continue_progress">%1$d%% · осталось %2$s</string>
 
     <string name="settings_title">Настройки</string>
     <string name="settings_category_smb_sources_description">Список подключённых сетевых папок</string>

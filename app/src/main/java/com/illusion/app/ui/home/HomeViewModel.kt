@@ -16,8 +16,17 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
-/** [progressFraction] is null when the source WatchProgressEntity has no known duration yet (e.g. probed lazily on first playback) - PosterCard just omits the bar rather than drawing a 0% one, which would misleadingly suggest "not started" for something mid-watch. */
-data class ContinueWatchingItem(val item: MediaItemEntity, val progressFraction: Float?)
+/**
+ * [progressFraction] is null when the source WatchProgressEntity has no known duration yet (e.g.
+ * probed lazily on first playback) - PosterCard just omits the bar rather than drawing a 0% one,
+ * which would misleadingly suggest "not started" for something mid-watch. [remainingMs] is null in
+ * the same case, and карточка тогда показывает обычные год и жанр вместо прогресса.
+ */
+data class ContinueWatchingItem(
+    val item: MediaItemEntity,
+    val progressFraction: Float?,
+    val remainingMs: Long?
+)
 
 class HomeViewModel(
     private val libraryRepository: LibraryRepository,
@@ -32,7 +41,12 @@ class HomeViewModel(
                 } else {
                     null
                 }
-                ContinueWatchingItem(item, fraction)
+                val remaining = if (progress.durationMs > 0) {
+                    (progress.durationMs - progress.positionMs).coerceAtLeast(0L)
+                } else {
+                    null
+                }
+                ContinueWatchingItem(item, fraction, remaining)
             }
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())

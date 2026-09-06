@@ -2,6 +2,7 @@ package com.illusion.app.ui.common
 
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.PlainTooltip
@@ -33,7 +34,18 @@ import androidx.compose.ui.graphics.vector.ImageVector
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun TooltipIconButton(label: String, icon: ImageVector, onClick: () -> Unit, modifier: Modifier = Modifier) {
+fun TooltipIconButton(
+    label: String,
+    icon: ImageVector,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    /**
+     * Круглый тональный фон вместо голой иконки. Для кнопок, стоящих не в ряду других иконок, а
+     * поодиночке рядом с текстом - там голая иконка не читается как кнопка (например «Обновить
+     * подборку» рядом с заголовком ряда на главной).
+     */
+    tonal: Boolean = false
+) {
     val interactionSource = remember { MutableInteractionSource() }
     TooltipBox(
         positionProvider = TooltipDefaults.rememberTooltipPositionProvider(TooltipAnchorPosition.Below),
@@ -44,8 +56,15 @@ fun TooltipIconButton(label: String, icon: ImageVector, onClick: () -> Unit, mod
         // downloads/settings), often flush against the real screen edge on TV; scaling up from
         // center pushed the outer half of that growth past the edge for whichever icon was last
         // in the row. Border-only focus indication avoids that.
-        IconButton(onClick = onClick, interactionSource = interactionSource, modifier = modifier.focusHighlight(interactionSource, scaleOnFocus = false)) {
-            Icon(icon, contentDescription = label)
+        val buttonModifier = modifier.focusHighlight(interactionSource, scaleOnFocus = false)
+        if (tonal) {
+            FilledTonalIconButton(onClick = onClick, interactionSource = interactionSource, modifier = buttonModifier) {
+                Icon(icon, contentDescription = label)
+            }
+        } else {
+            IconButton(onClick = onClick, interactionSource = interactionSource, modifier = buttonModifier) {
+                Icon(icon, contentDescription = label)
+            }
         }
     }
 }

@@ -145,6 +145,7 @@ import com.illusion.app.ui.common.shimmer
 import com.illusion.app.ui.common.ZoomableImageViewer
 import com.illusion.app.ui.common.bridgeFocusDown
 import com.illusion.app.ui.common.focusHighlight
+import com.illusion.app.ui.common.formatWatchLeft
 import com.illusion.app.ui.common.tick
 import com.illusion.app.ui.common.toggle
 import com.illusion.app.ui.theme.IllusionTheme
@@ -1090,17 +1091,6 @@ private fun formatWatchClock(ms: Long): String {
     return if (hours > 0) "%d:%02d:%02d".format(hours, minutes, seconds) else "%d:%02d".format(minutes, seconds)
 }
 
-/** Сколько осталось - словами, а не таймкодом: читается быстрее, чем второй часовой формат в той же строке. */
-private fun formatWatchLeft(ms: Long): String {
-    val totalMinutes = (ms / 60_000).coerceAtLeast(1)
-    val hours = totalMinutes / 60
-    val minutes = totalMinutes % 60
-    return when {
-        hours > 0 && minutes > 0 -> "$hours ч $minutes мин"
-        hours > 0 -> "$hours ч"
-        else -> "$minutes мин"
-    }
-}
 
 @Composable
 private fun DownloadButton(

@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.IntrinsicSize
@@ -31,9 +32,12 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -43,7 +47,10 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -55,6 +62,7 @@ import com.illusion.app.data.local.entity.MediaItemEntity
 import com.illusion.app.ui.common.PerforationStrip
 import com.illusion.app.ui.common.PosterCard
 import com.illusion.app.ui.common.focusHighlight
+import com.illusion.app.ui.common.formatWatchLeft
 import com.illusion.app.ui.common.posterCardMinWidth
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -149,12 +157,36 @@ fun HomeScreen(
                     // IconButton sizing/focus-scale reads as noticeably tighter than plain
                     // Material3 IconButton, which had enough of its own built-in padding to look
                     // fine on phone without this.
+                    // Было пять одинаково заметных иконок - они спорили и с логотипом, и между
+                    // собой. Снаружи остались два частых действия, остальное ушло в меню «Ещё».
                     Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                         com.illusion.app.ui.common.TooltipIconButton(stringResource(R.string.nav_search), Icons.Default.Search, onOpenSearch)
                         com.illusion.app.ui.common.TooltipIconButton(stringResource(R.string.favorites_title), Icons.Default.Favorite, onOpenFavorites)
-                        com.illusion.app.ui.common.TooltipIconButton(stringResource(R.string.history_title), Icons.Default.History, onOpenHistory)
-                        com.illusion.app.ui.common.TooltipIconButton(stringResource(R.string.downloads_title), Icons.Default.Download, onOpenDownloads)
-                        com.illusion.app.ui.common.TooltipIconButton(stringResource(R.string.settings_title), Icons.Default.Settings, onOpenSettings)
+                        var moreExpanded by remember { mutableStateOf(false) }
+                        Box {
+                            com.illusion.app.ui.common.TooltipIconButton(
+                                stringResource(R.string.home_more_actions),
+                                Icons.Default.MoreVert,
+                                onClick = { moreExpanded = true }
+                            )
+                            DropdownMenu(expanded = moreExpanded, onDismissRequest = { moreExpanded = false }) {
+                                DropdownMenuItem(
+                                    text = { Text(stringResource(R.string.history_title)) },
+                                    leadingIcon = { Icon(Icons.Default.History, contentDescription = null) },
+                                    onClick = { moreExpanded = false; onOpenHistory() }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text(stringResource(R.string.downloads_title)) },
+                                    leadingIcon = { Icon(Icons.Default.Download, contentDescription = null) },
+                                    onClick = { moreExpanded = false; onOpenDownloads() }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text(stringResource(R.string.settings_title)) },
+                                    leadingIcon = { Icon(Icons.Default.Settings, contentDescription = null) },
+                                    onClick = { moreExpanded = false; onOpenSettings() }
+                                )
+                            }
+                        }
                     }
                 }
             )
@@ -175,20 +207,35 @@ fun HomeScreen(
                 )
             }
             if (continueWatching.isNotEmpty()) {
+                // Год и жанр здесь ничего не решают - фильм уже выбран и начат. Полезно другое:
+                // сколько пройдено и сколько осталось. Полоска прогресса на постере остаётся.
+                val continueSubtitles = continueWatching.mapNotNull { entry ->
+                    val fraction = entry.progressFraction ?: return@mapNotNull null
+                    val remaining = entry.remainingMs ?: return@mapNotNull null
+                    entry.item.stableId to stringResource(
+                        R.string.home_continue_progress,
+                        (fraction * 100).toInt(),
+                        formatWatchLeft(remaining)
+                    )
+                }.toMap()
                 MediaCarousel(
                     title = stringResource(R.string.home_continue_watching),
                     items = continueWatching.map { it.item },
                     onOpenItem = onOpenItem,
                     progressByStableId = remember(continueWatching) {
                         continueWatching.mapNotNull { entry -> entry.progressFraction?.let { entry.item.stableId to it } }.toMap()
-                    }
+                    },
+                    subtitleByStableId = continueSubtitles
                 )
             }
+            // Рейтинг показываем только здесь: в подборке попадаются незнакомые фильмы, и он
+            // помогает выбрать. В «Продолжить просмотр» и коллекциях выбор уже сделан.
             MediaCarousel(
                 title = stringResource(R.string.home_random_picks),
                 items = randomPicks,
                 onOpenItem = onOpenItem,
-                onRefresh = onRefreshRandomPicks
+                onRefresh = onRefreshRandomPicks,
+                showRatingBadge = true
             )
             if (collections.isNotEmpty()) {
                 CollectionCarousel(collections = collections, onOpenItem = onOpenItem)
@@ -245,10 +292,7 @@ private fun CollectionCarousel(
     onOpenItem: (String) -> Unit
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(
-            stringResource(R.string.home_collections),
-            modifier = Modifier.fillMaxWidth()
-        )
+        SectionTitle(stringResource(R.string.home_collections), modifier = Modifier.fillMaxWidth())
         LazyRow(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             modifier = Modifier.focusGroup()
@@ -259,10 +303,14 @@ private fun CollectionCarousel(
                     modifier = Modifier.width(posterCardMinWidth())
                 ) {
                     androidx.compose.foundation.layout.Box {
+                        // showCaption = false: внутри карточки печатались название, год и жанр
+                        // одного конкретного фильма коллекции, а под ней ещё раз - название самой
+                        // коллекции. Для коллекции достаточно постера, счётчика и подписи снизу.
                         PosterCard(
                             item = collection.representative,
                             onClick = { onOpenItem(collection.representative.stableId) },
-                            modifier = Modifier.width(posterCardMinWidth())
+                            modifier = Modifier.width(posterCardMinWidth()),
+                            showCaption = false
                         )
                         Text(
                             stringResource(R.string.home_collection_item_count, collection.itemCount),
@@ -297,19 +345,24 @@ private fun MediaCarousel(
     items: List<MediaItemEntity>,
     onOpenItem: (String) -> Unit,
     onRefresh: (() -> Unit)? = null,
-    progressByStableId: Map<String, Float> = emptyMap()
+    progressByStableId: Map<String, Float> = emptyMap(),
+    subtitleByStableId: Map<String, String> = emptyMap(),
+    showRatingBadge: Boolean = false
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(
             verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
             modifier = Modifier.fillMaxWidth()
         ) {
-            Text(title, modifier = Modifier.weight(1f))
+            SectionTitle(title, modifier = Modifier.weight(1f))
             if (onRefresh != null) {
+                // Голая иконка висела рядом с заголовком сама по себе и не читалась как кнопка.
+                // Тональный круглый фон даёт ей границу и вес, не перетягивая внимание с постеров.
                 com.illusion.app.ui.common.TooltipIconButton(
                     stringResource(R.string.home_random_picks_refresh),
                     Icons.Default.Refresh,
-                    onRefresh
+                    onRefresh,
+                    tonal = true
                 )
             }
         }
@@ -334,9 +387,27 @@ private fun MediaCarousel(
                     item = item,
                     onClick = { onOpenItem(item.stableId) },
                     modifier = Modifier.width(posterCardMinWidth()),
-                    progressFraction = progressByStableId[item.stableId]
+                    progressFraction = progressByStableId[item.stableId],
+                    subtitleOverride = subtitleByStableId[item.stableId],
+                    showRatingBadge = showRatingBadge
                 )
             }
         }
     }
+}
+
+/**
+ * Заголовок ряда на главной. Отдельный composable, чтобы «Продолжить просмотр», «Случайная
+ * подборка» и «Коллекции» набирались одинаково: раньше это был просто Text со шрифтом по
+ * умолчанию, и разделы плохо отделялись друг от друга взглядом. Размер и интервалы прежние,
+ * добавлен только вес.
+ */
+@Composable
+private fun SectionTitle(text: String, modifier: Modifier = Modifier) {
+    Text(
+        text,
+        style = MaterialTheme.typography.titleMedium,
+        fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
+        modifier = modifier
+    )
 }

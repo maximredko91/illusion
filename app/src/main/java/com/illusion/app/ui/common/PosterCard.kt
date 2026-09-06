@@ -67,7 +67,11 @@ fun PosterCard(
     /** Dims the poster and labels it, e.g. for "which entry in this collection am I on" rows - see MediaRow in DetailsScreen. */
     isCurrent: Boolean = false,
     /** 0f-1f watched fraction, drawn as a thin bar along the poster's bottom edge - e.g. Home's "Продолжить просмотр" row. Null omits the bar entirely (no bar reads as "not applicable here", not "0% watched"). */
-    progressFraction: Float? = null
+    progressFraction: Float? = null,
+    /** Заменяет обычную подпись «год · жанр». В ряду «Продолжить просмотр» полезнее видеть прогресс и остаток. */
+    subtitleOverride: String? = null,
+    /** false - один постер без названия и подписи. Для коллекций: там подпись своя, под карточкой. */
+    showCaption: Boolean = true
 ) {
     val haptics = LocalHapticFeedback.current
     val interactionSource = remember { MutableInteractionSource() }
@@ -89,7 +93,7 @@ fun PosterCard(
             scale = androidx.tv.material3.CardDefaults.scale(focusedScale = 1.05f),
             modifier = modifier
         ) {
-            PosterCardContent(item, showRatingBadge, posterAspectRatio, isCurrent, progressFraction)
+            PosterCardContent(item, showRatingBadge, posterAspectRatio, isCurrent, progressFraction, subtitleOverride, showCaption)
         }
         return
     }
@@ -106,7 +110,7 @@ fun PosterCard(
                 onClick()
             }
     ) {
-        PosterCardContent(item, showRatingBadge, posterAspectRatio, isCurrent, progressFraction)
+        PosterCardContent(item, showRatingBadge, posterAspectRatio, isCurrent, progressFraction, subtitleOverride, showCaption)
     }
 }
 
@@ -116,7 +120,9 @@ private fun PosterCardContent(
     showRatingBadge: Boolean,
     posterAspectRatio: Float,
     isCurrent: Boolean,
-    progressFraction: Float?
+    progressFraction: Float?,
+    subtitleOverride: String?,
+    showCaption: Boolean
 ) {
     Column {
             // Shared-element bounds-morph into/out of Details deliberately removed (per user
@@ -202,29 +208,42 @@ private fun PosterCardContent(
                     }
                 }
             }
-            Column(modifier = Modifier.padding(8.dp)) {
-                Text(
-                    item.title,
-                    maxLines = 2,
-                    minLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                    style = MaterialTheme.typography.bodyMedium
-                )
-                Text(
-                    posterSubtitle(item) ?: "",
-                    maxLines = 1,
-                    minLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+            if (showCaption) {
+                Column(modifier = Modifier.padding(8.dp)) {
+                    Text(
+                        item.title,
+                        maxLines = 2,
+                        minLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    // Обычная подпись (год · жанр) всегда короткая и держится в одну строку, а прогресс
+                    // («39% · осталось 1 ч 4 мин») в ширину карточки не влезает и обрезался на «осталос...».
+                    // Фиксированное число строк (а не просто maxLines) - чтобы карточки в ряду остались
+                    // одной высоты.
+                    val subtitleLines = if (subtitleOverride != null) 2 else 1
+                    Text(
+                        subtitleOverride ?: posterSubtitle(item) ?: "",
+                        maxLines = subtitleLines,
+                        minLines = subtitleLines,
+                        overflow = TextOverflow.Ellipsis,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
     }
 }
 
 /** Crimson strip in the launcher mark/splash - see ic_mark.xml. Reused here so the brand's own perforation motif shows up in-app, not just on the icon. */
 internal val IllusionCrimson = Color(0xFFC2413A)
-private val RatingBadgeBackground = Color.Black.copy(alpha = 0.68f)
+/**
+ * Было жёсткое чёрное с белым текстом - на светлой теме бейдж читался чужеродным пятном.
+ * Теперь берёт цвета темы, но непрозрачные: он лежит поверх произвольного постера, и
+ * полупрозрачность здесь стоила бы читаемости.
+ */
+@Composable
+private fun ratingBadgeBackground() = MaterialTheme.colorScheme.surfaceContainerHighest
 
 @Composable
 fun RatingBadge(rating: Double, modifier: Modifier = Modifier) {
@@ -238,10 +257,10 @@ fun RatingBadge(rating: Double, modifier: Modifier = Modifier) {
         modifier = modifier
             .height(IntrinsicSize.Min)
             .clip(RoundedCornerShape(6.dp))
-            .background(RatingBadgeBackground)
+            .background(ratingBadgeBackground())
     ) {
         PerforationStrip(
-            holeColor = RatingBadgeBackground,
+            holeColor = ratingBadgeBackground(),
             modifier = Modifier.width(5.dp).fillMaxHeight()
         )
         Row(
@@ -251,12 +270,12 @@ fun RatingBadge(rating: Double, modifier: Modifier = Modifier) {
             Icon(
                 Icons.Default.Star,
                 contentDescription = null,
-                tint = Color(0xFFFFC107),
+                tint = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.size(14.dp)
             )
             Text(
                 String.format(Locale.US, "%.1f", rating),
-                color = Color.White,
+                color = MaterialTheme.colorScheme.onSurface,
                 style = MaterialTheme.typography.labelSmall,
                 modifier = Modifier.padding(start = 2.dp)
             )
