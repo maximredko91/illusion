@@ -147,7 +147,6 @@ import com.illusion.app.data.repository.WatchProgressRepository
 import com.illusion.app.domain.model.genreDisplayName
 import com.illusion.app.ui.common.LocalUiMode
 import com.illusion.app.ui.common.PosterCard
-import com.illusion.app.ui.common.RatingBadge
 import com.illusion.app.ui.common.ThumbnailImage
 import com.illusion.app.ui.common.shimmer
 import com.illusion.app.ui.common.ZoomableImageViewer
@@ -629,9 +628,6 @@ private fun DetailsContent(
                         if (posterLoading) {
                             Box(modifier = Modifier.fillMaxSize().shimmer())
                         }
-                        item.rating?.let { rating ->
-                            RatingBadge(rating, modifier = Modifier.align(Alignment.TopStart).padding(6.dp))
-                        }
                     }
                     // Moved down here from two floating corner buttons on the fanart (per user
                     // feedback) - no more translucent circle backdrop (that was only ever needed to
@@ -769,16 +765,45 @@ private fun DetailsContent(
                         }
                     }
                 }
-                Text(
-                    listOfNotNull(
-                        item.year?.toString(),
-                        item.country,
-                        item.runtimeMinutes?.let { "$it мин" }
-                    ).joinToString(" · "),
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.Medium,
-                    color = MaterialTheme.colorScheme.primary
-                )
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    androidx.compose.foundation.layout.FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        item.rating?.let { rating ->
+                            Text(
+                                "★ ${String.format(java.util.Locale.forLanguageTag("ru"), "%.1f", rating)}",
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                        val yearAndRuntime = listOfNotNull(
+                            item.year?.toString(),
+                            item.runtimeMinutes?.takeIf { it > 0 }?.let { minutes ->
+                                when {
+                                    minutes < 60 -> "$minutes мин"
+                                    minutes % 60 == 0 -> "${minutes / 60} ч"
+                                    else -> "${minutes / 60} ч ${minutes % 60} мин"
+                                }
+                            }
+                        ).joinToString(" · ")
+                        if (yearAndRuntime.isNotEmpty()) {
+                            Text(
+                                yearAndRuntime,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+                    }
+                    item.country?.takeIf { it.isNotBlank() }?.let { country ->
+                        Text(
+                            country,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
                 // Технические метки (720p, «Режиссёрская версия») раньше стояли в акцентной
                 // строке под заголовком и разгоняли её до трёх строк, споря по весу с самим
                 // заголовком. Здесь они обводкой, а не заливкой - это свойства файла, а не жанр.
