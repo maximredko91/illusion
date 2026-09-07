@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.ui.platform.LocalLayoutDirection
@@ -32,6 +33,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
@@ -78,6 +80,7 @@ fun HomeScreen(
     onOpenDownloads: () -> Unit,
     onOpenSearch: () -> Unit,
     onOpenItem: (String) -> Unit,
+    onResumeItem: (String) -> Unit,
     hasNewContent: Boolean = false,
     onRescanNow: () -> Unit = {},
     onDismissNewContentBanner: () -> Unit = {},
@@ -225,7 +228,8 @@ fun HomeScreen(
                     progressByStableId = remember(continueWatching) {
                         continueWatching.mapNotNull { entry -> entry.progressFraction?.let { entry.item.stableId to it } }.toMap()
                     },
-                    subtitleByStableId = continueSubtitles
+                    subtitleByStableId = continueSubtitles,
+                    onResumeItem = onResumeItem
                 )
             }
             // Рейтинг показываем только здесь: в подборке попадаются незнакомые фильмы, и он
@@ -329,7 +333,8 @@ private fun CollectionCarousel(
                     Text(
                         collection.name,
                         style = MaterialTheme.typography.bodySmall,
-                        maxLines = 1,
+                        minLines = 2,
+                        maxLines = 2,
                         overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                         modifier = Modifier.padding(top = 4.dp)
                     )
@@ -347,7 +352,8 @@ private fun MediaCarousel(
     onRefresh: (() -> Unit)? = null,
     progressByStableId: Map<String, Float> = emptyMap(),
     subtitleByStableId: Map<String, String> = emptyMap(),
-    showRatingBadge: Boolean = false
+    showRatingBadge: Boolean = false,
+    onResumeItem: ((String) -> Unit)? = null
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(
@@ -383,14 +389,41 @@ private fun MediaCarousel(
             modifier = Modifier.focusGroup()
         ) {
             items(items, key = { it.stableId }) { item ->
-                PosterCard(
-                    item = item,
-                    onClick = { onOpenItem(item.stableId) },
+                Column(
                     modifier = Modifier.width(posterCardMinWidth()),
-                    progressFraction = progressByStableId[item.stableId],
-                    subtitleOverride = subtitleByStableId[item.stableId],
-                    showRatingBadge = showRatingBadge
-                )
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    PosterCard(
+                        item = item,
+                        onClick = { onOpenItem(item.stableId) },
+                        modifier = Modifier.fillMaxWidth(),
+                        progressFraction = progressByStableId[item.stableId],
+                        subtitleOverride = subtitleByStableId[item.stableId],
+                        showRatingBadge = showRatingBadge
+                    )
+                    if (onResumeItem != null) {
+                        com.illusion.app.ui.common.TvAwareButton(
+                            onClick = { onResumeItem(item.stableId) },
+                            modifier = Modifier.fillMaxWidth(),
+                            contentPadding = PaddingValues(horizontal = 6.dp, vertical = 10.dp)
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Icon(
+                                    Icons.Default.PlayArrow,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Text(
+                                    stringResource(R.string.details_continue_watching),
+                                    style = MaterialTheme.typography.labelMedium
+                                )
+                            }
+                        }
+                    }
+                }
             }
         }
     }

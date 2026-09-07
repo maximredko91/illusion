@@ -259,10 +259,6 @@ fun RatingBadge(rating: Double, modifier: Modifier = Modifier) {
             .clip(RoundedCornerShape(6.dp))
             .background(ratingBadgeBackground())
     ) {
-        PerforationStrip(
-            holeColor = ratingBadgeBackground(),
-            modifier = Modifier.width(5.dp).fillMaxHeight()
-        )
         Row(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.padding(start = 4.dp, end = 6.dp, top = 3.dp, bottom = 3.dp)

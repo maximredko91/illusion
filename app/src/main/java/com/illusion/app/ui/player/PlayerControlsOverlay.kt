@@ -2,6 +2,7 @@ package com.illusion.app.ui.player
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -11,6 +12,7 @@ import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.ui.draw.clip
 import kotlin.math.roundToInt
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -27,6 +29,7 @@ import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
@@ -38,6 +41,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentSize
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.safeDrawing
@@ -51,6 +56,7 @@ import androidx.compose.material.icons.filled.Audiotrack
 import androidx.compose.material.icons.filled.BlurOff
 import androidx.compose.material.icons.filled.BlurOn
 import androidx.compose.material.icons.filled.Cast
+import androidx.compose.material.icons.filled.Deblur
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
@@ -90,8 +96,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -127,6 +138,9 @@ private fun Modifier.tvSafeSliderKeys(): Modifier {
 fun TopGradientBar(
     title: String,
     episodeLabel: String?,
+    // A one-track file opened a dialog listing that single track and nothing else - the button is
+    // simply disabled instead when there's nothing to choose between.
+    audioTrackCount: Int,
     onBack: () -> Unit,
     onOpenSubtitles: () -> Unit,
     onOpenAudioTracks: () -> Unit,
@@ -139,124 +153,176 @@ fun TopGradientBar(
     onCancelSleepTimer: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Row(
+    BoxWithConstraints(
         modifier = modifier
             .fillMaxWidth()
-            .background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.7f), Color.Transparent)))
-            .padding(horizontal = 8.dp, vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically
+            // Was a two-stop 0.7 -> transparent scrim only as tall as the row itself: over a
+            // bright frame (a daylight sky) the white icons and the title sat on almost no
+            // scrim at all and were genuinely hard to read on-device. Three stops with a denser
+            // top and extra bottom padding give the gradient real height to fade out over.
+            .background(
+                Brush.verticalGradient(
+                    listOf(Color.Black.copy(alpha = 0.85f), Color.Black.copy(alpha = 0.45f), Color.Transparent)
+                )
+            )
+            .padding(horizontal = 8.dp)
+            .padding(top = 8.dp, bottom = 28.dp)
     ) {
-        val backSource = remember { MutableInteractionSource() }
-        IconButton(onClick = onBack, interactionSource = backSource, modifier = Modifier.focusHighlight(backSource, color = Color.White)) {
-            Icon(Icons.Default.ArrowBack, contentDescription = stringResource(R.string.player_back), tint = Color.White)
-        }
-        Text(
-            text = episodeLabel ?: title,
-            color = Color.White,
-            modifier = Modifier.weight(1f).padding(start = 4.dp),
-            maxLines = 1
-        )
-        val subtitlesSource = remember { MutableInteractionSource() }
-        IconButton(onClick = onOpenSubtitles, interactionSource = subtitlesSource, modifier = Modifier.focusHighlight(subtitlesSource, color = Color.White)) {
-            Icon(Icons.Default.Subtitles, contentDescription = stringResource(R.string.player_subtitles_button), tint = Color.White)
-        }
-        // Quick on/off next to the subtitles button, deliberately without the settings panel's
-        // "this permanently locks aspect-ratio cycling" confirmation dialog - the whole point is a
-        // fast, low-friction A/B look at the sharpened vs. unsharpened picture. Anyone who does hit
-        // that consequence gets told about it right when it's actually relevant, via the aspect-
-        // ratio-blocked dialog (see PlayerScreen's cycleResizeMode()).
-        val sharpenSource = remember { MutableInteractionSource() }
-        IconButton(onClick = onToggleSharpen, interactionSource = sharpenSource, modifier = Modifier.focusHighlight(sharpenSource, color = Color.White)) {
-            // Was a fixed AutoFixHigh glyph (a generic magic-wand "auto enhance" icon, easy to
-            // mistake for some other automatic/AI feature) regardless of state, only the tint
-            // color changed. Now animates between two BlurOn/BlurOff icons - unslashed while
-            // sharpen is actually on, slashed-through while it's off - so the icon itself, not
-            // just its color, shows what tapping it does right now.
-            Crossfade(targetState = sharpenEnabled, label = "sharpenIcon") { enabled ->
+        // On a phone in portrait the action row (7 icons + back) is wider than the screen, so the
+        // title's weight(1f) resolved to zero width and the title simply wasn't drawn at all -
+        // confirmed on-device. Below this threshold the title moves to its own line under the
+        // controls instead of competing with them for the same row.
+        val compact = maxWidth < 560.dp
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+            val backSource = remember { MutableInteractionSource() }
+            IconButton(onClick = onBack, interactionSource = backSource, modifier = Modifier.focusHighlight(backSource, color = Color.White)) {
+                Icon(Icons.Default.ArrowBack, contentDescription = stringResource(R.string.player_back), tint = Color.White)
+            }
+                if (!compact) {
+                    PlayerTitle(episodeLabel ?: title, Modifier.weight(1f).padding(start = 4.dp))
+                } else {
+                    Spacer(Modifier.weight(1f))
+                }
+            val subtitlesSource = remember { MutableInteractionSource() }
+            IconButton(onClick = onOpenSubtitles, interactionSource = subtitlesSource, modifier = Modifier.focusHighlight(subtitlesSource, color = Color.White)) {
+                Icon(Icons.Default.Subtitles, contentDescription = stringResource(R.string.player_subtitles_button), tint = Color.White)
+            }
+            val audioSource = remember { MutableInteractionSource() }
+            IconButton(
+                onClick = onOpenAudioTracks,
+                enabled = audioTrackCount > 1,
+                interactionSource = audioSource,
+                modifier = Modifier.focusHighlight(audioSource, color = Color.White)
+            ) {
                 Icon(
-                    if (enabled) Icons.Default.BlurOn else Icons.Default.BlurOff,
-                    contentDescription = stringResource(R.string.player_sharpen_quick_toggle),
-                    tint = if (enabled) MaterialTheme.colorScheme.primary else Color.White
+                    Icons.Default.Audiotrack,
+                    contentDescription = stringResource(R.string.player_audio_tracks_button),
+                    tint = if (audioTrackCount > 1) Color.White else Color.White.copy(alpha = 0.4f)
                 )
             }
-        }
-        val audioSource = remember { MutableInteractionSource() }
-        IconButton(onClick = onOpenAudioTracks, interactionSource = audioSource, modifier = Modifier.focusHighlight(audioSource, color = Color.White)) {
-            Icon(Icons.Default.Audiotrack, contentDescription = stringResource(R.string.player_audio_tracks_button), tint = Color.White)
-        }
-        val aspectSource = remember { MutableInteractionSource() }
-        IconButton(onClick = onCycleAspectRatio, interactionSource = aspectSource, modifier = Modifier.focusHighlight(aspectSource, color = Color.White)) {
-            Icon(Icons.Default.AspectRatio, contentDescription = stringResource(R.string.player_aspect_ratio), tint = Color.White)
-        }
-        // Moved here from the settings panel per feedback - buried at the bottom of a long scroll
-        // it was easy to miss, unlike the season-scoped intro/credits markers which stay there
-        // (one-time-per-season actions, not something reached for every session). The countdown
-        // shows right on the icon itself (tinted like the sharpen quick-toggle) so its state is
-        // visible without opening the dropdown.
-        var sleepTimerMenuExpanded by remember { mutableStateOf(false) }
-        Box {
-            val sleepTimerSource = remember { MutableInteractionSource() }
-            IconButton(
-                onClick = { sleepTimerMenuExpanded = true },
-                interactionSource = sleepTimerSource,
-                modifier = Modifier.focusHighlight(sleepTimerSource, color = Color.White)
-            ) {
-                if (sleepTimerRemainingMs != null) {
-                    Text(
-                        formatTime(sleepTimerRemainingMs),
-                        color = MaterialTheme.colorScheme.primary,
-                        style = MaterialTheme.typography.labelSmall
-                    )
-                } else {
-                    Icon(Icons.Default.Timer, contentDescription = stringResource(R.string.player_sleep_timer_button), tint = Color.White)
-                }
-            }
-            // Fixed width on every row - the countdown text's own width otherwise shifts by a
-            // pixel or two each second as its digits change (a proportional font renders "1"
-            // narrower than "8"), and since DropdownMenu sizes itself to its widest child, that
-            // constant sub-pixel wobble in one row was visibly resizing the whole menu every tick.
-            DropdownMenu(expanded = sleepTimerMenuExpanded, onDismissRequest = { sleepTimerMenuExpanded = false }) {
-                if (sleepTimerRemainingMs != null) {
-                    DropdownMenuItem(
-                        text = { Text(stringResource(R.string.player_sleep_timer_remaining, formatTime(sleepTimerRemainingMs))) },
-                        onClick = {},
-                        modifier = Modifier.width(220.dp)
-                    )
-                }
-                listOf(15, 30, 45, 60).forEach { minutes ->
-                    DropdownMenuItem(
-                        text = { Text(stringResource(R.string.player_sleep_timer_minutes, minutes)) },
-                        onClick = {
-                            onSetSleepTimer(minutes * 60_000L)
-                            sleepTimerMenuExpanded = false
-                        },
-                        modifier = Modifier.width(220.dp)
-                    )
-                }
-                if (sleepTimerRemainingMs != null) {
-                    DropdownMenuItem(
-                        text = { Text(stringResource(R.string.player_sleep_timer_cancel)) },
-                        onClick = {
-                            onCancelSleepTimer()
-                            sleepTimerMenuExpanded = false
-                        },
-                        modifier = Modifier.width(220.dp)
+            Spacer(Modifier.width(if (compact) 0.dp else 10.dp))
+            // Quick on/off next to the subtitles button, deliberately without the settings panel's
+            // "this permanently locks aspect-ratio cycling" confirmation dialog - the whole point is a
+            // fast, low-friction A/B look at the sharpened vs. unsharpened picture. Anyone who does hit
+            // that consequence gets told about it right when it's actually relevant, via the aspect-
+            // ratio-blocked dialog (see PlayerScreen's cycleResizeMode()).
+            val sharpenSource = remember { MutableInteractionSource() }
+            IconButton(onClick = onToggleSharpen, interactionSource = sharpenSource, modifier = Modifier.focusHighlight(sharpenSource, color = Color.White)) {
+                // Was a fixed AutoFixHigh glyph (a generic magic-wand "auto enhance" icon, easy to
+                // mistake for some other automatic/AI feature) regardless of state, only the tint
+                // color changed; then a BlurOn/BlurOff pair, so the icon itself - not just its
+                // color - shows what tapping it does right now. BlurOn/BlurOff (a plain dotted square when off) didn't read as "sharpness" at all
+                // on-device - now Deblur (dots resolving into a sharp edge) while it's on, tinted with
+                // the accent, and the plainly-blurred BlurOn glyph while it's off.
+                Crossfade(targetState = sharpenEnabled, label = "sharpenIcon") { enabled ->
+                    Icon(
+                        if (enabled) Icons.Default.Deblur else Icons.Default.BlurOn,
+                        contentDescription = stringResource(R.string.player_sharpen_quick_toggle),
+                        tint = if (enabled) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.85f)
                     )
                 }
             }
-        }
-        IconButton(onClick = { /* Cast: требует настройки Google Cast SDK (App ID) - см. заметки */ }) {
-            Icon(
-                Icons.Default.Cast,
-                contentDescription = stringResource(R.string.player_cast_unavailable),
-                tint = Color.White.copy(alpha = 0.4f)
-            )
-        }
-        val settingsSource = remember { MutableInteractionSource() }
-        IconButton(onClick = onOpenSettings, interactionSource = settingsSource, modifier = Modifier.focusHighlight(settingsSource, color = Color.White)) {
-            Icon(Icons.Default.Settings, contentDescription = stringResource(R.string.player_settings), tint = Color.White)
+            val aspectSource = remember { MutableInteractionSource() }
+            IconButton(onClick = onCycleAspectRatio, interactionSource = aspectSource, modifier = Modifier.focusHighlight(aspectSource, color = Color.White)) {
+                Icon(Icons.Default.AspectRatio, contentDescription = stringResource(R.string.player_aspect_ratio), tint = Color.White)
+            }
+            Spacer(Modifier.width(if (compact) 0.dp else 10.dp))
+            // Moved here from the settings panel per feedback - buried at the bottom of a long scroll
+            // it was easy to miss, unlike the season-scoped intro/credits markers which stay there
+            // (one-time-per-season actions, not something reached for every session). The countdown
+            // shows right on the icon itself (tinted like the sharpen quick-toggle) so its state is
+            // visible without opening the dropdown.
+            var sleepTimerMenuExpanded by remember { mutableStateOf(false) }
+            Box {
+                val sleepTimerSource = remember { MutableInteractionSource() }
+                IconButton(
+                    onClick = { sleepTimerMenuExpanded = true },
+                    interactionSource = sleepTimerSource,
+                    modifier = Modifier.focusHighlight(sleepTimerSource, color = Color.White)
+                ) {
+                    if (sleepTimerRemainingMs != null) {
+                        Text(
+                            formatTime(sleepTimerRemainingMs),
+                            color = MaterialTheme.colorScheme.primary,
+                            style = MaterialTheme.typography.labelSmall
+                        )
+                    } else {
+                        Icon(Icons.Default.Timer, contentDescription = stringResource(R.string.player_sleep_timer_button), tint = Color.White)
+                    }
+                }
+                // Fixed width on every row - the countdown text's own width otherwise shifts by a
+                // pixel or two each second as its digits change (a proportional font renders "1"
+                // narrower than "8"), and since DropdownMenu sizes itself to its widest child, that
+                // constant sub-pixel wobble in one row was visibly resizing the whole menu every tick.
+                DropdownMenu(expanded = sleepTimerMenuExpanded, onDismissRequest = { sleepTimerMenuExpanded = false }) {
+                    if (sleepTimerRemainingMs != null) {
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.player_sleep_timer_remaining, formatTime(sleepTimerRemainingMs))) },
+                            onClick = {},
+                            modifier = Modifier.width(220.dp)
+                        )
+                    }
+                    listOf(15, 30, 45, 60).forEach { minutes ->
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.player_sleep_timer_minutes, minutes)) },
+                            onClick = {
+                                onSetSleepTimer(minutes * 60_000L)
+                                sleepTimerMenuExpanded = false
+                            },
+                            modifier = Modifier.width(220.dp)
+                        )
+                    }
+                    if (sleepTimerRemainingMs != null) {
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.player_sleep_timer_cancel)) },
+                            onClick = {
+                                onCancelSleepTimer()
+                                sleepTimerMenuExpanded = false
+                            },
+                            modifier = Modifier.width(220.dp)
+                        )
+                    }
+                }
+            }
+            // Deliberately enabled = false, not just a dimmed tint on a live button: it looked
+            // identical in weight to the working controls next to it, and tapping it did nothing with
+            // no explanation. Disabled it also stops taking D-pad focus on the way to Settings.
+            IconButton(onClick = {}, enabled = false) {
+                Icon(
+                    Icons.Default.Cast,
+                    contentDescription = stringResource(R.string.player_cast_unavailable),
+                    tint = Color.White.copy(alpha = 0.4f)
+                )
+            }
+            val settingsSource = remember { MutableInteractionSource() }
+            IconButton(onClick = onOpenSettings, interactionSource = settingsSource, modifier = Modifier.focusHighlight(settingsSource, color = Color.White)) {
+                Icon(Icons.Default.Settings, contentDescription = stringResource(R.string.player_settings), tint = Color.White)
+            }
+            }
+            if (compact) {
+                PlayerTitle(episodeLabel ?: title, Modifier.fillMaxWidth().padding(start = 12.dp, top = 2.dp))
+            }
         }
     }
+}
+
+/** Shared by both TopGradientBar layouts - see the `compact` note there. */
+@Composable
+private fun PlayerTitle(text: String, modifier: Modifier = Modifier) {
+    Text(
+        text = text,
+        color = Color.White,
+        // Plain default body text read as incidental text over the video rather than as the
+        // title; a heavier style plus a soft drop shadow keeps it legible on a bright frame.
+        style = MaterialTheme.typography.titleMedium.copy(
+            fontWeight = FontWeight.SemiBold,
+            shadow = Shadow(Color.Black.copy(alpha = 0.75f), Offset(0f, 1f), blurRadius = 6f)
+        ),
+        modifier = modifier,
+        maxLines = 1,
+        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+    )
 }
 
 @Composable
@@ -269,7 +335,12 @@ fun CenterTransportControls(
     IconButton(
         onClick = onTogglePlayPause,
         interactionSource = interactionSource,
-        modifier = modifier.size(72.dp).focusHighlight(interactionSource, color = Color.White)
+        // A bare white glyph disappeared into bright frames (sky, snow) - a soft dark disc behind
+        // it keeps the primary control visible on any content without adding a heavy chrome look.
+        modifier = modifier
+            .size(72.dp)
+            .background(Color.Black.copy(alpha = 0.35f), CircleShape)
+            .focusHighlight(interactionSource, color = Color.White)
     ) {
         Icon(
             if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
@@ -280,6 +351,7 @@ fun CenterTransportControls(
     }
 }
 
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 fun BottomGradientBar(
     currentPositionMs: Long,
@@ -333,35 +405,51 @@ fun BottomGradientBar(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.75f))))
-            .padding(horizontal = 12.dp, vertical = 8.dp)
+            // Mirrors the top bar's fix: a three-stop scrim with real height, so the lock button
+            // and the timecodes in the upper (previously near-transparent) part of this bar are
+            // readable over a bright frame too.
+            .background(
+                Brush.verticalGradient(
+                    listOf(Color.Transparent, Color.Black.copy(alpha = 0.45f), Color.Black.copy(alpha = 0.85f))
+                )
+            )
+            .padding(horizontal = 12.dp)
+            .padding(top = 24.dp, bottom = 8.dp)
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            if (hasNextEpisode) {
+        // Was an always-composed row (an empty Spacer when there's no next episode) that also
+        // held the lock button off on its own in the corner, visually detached from everything
+        // else. Only rendered when it has real content now; the lock moved down into the seek row.
+        if (hasNextEpisode) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
                 val nextEpisodeSource = remember { MutableInteractionSource() }
                 TextButton(
                     onClick = onNextEpisode,
                     interactionSource = nextEpisodeSource,
-                    modifier = Modifier.focusHighlight(nextEpisodeSource, color = Color.White)
+                    modifier = Modifier
+                        .background(Color.Black.copy(alpha = 0.35f), CircleShape)
+                        .focusHighlight(nextEpisodeSource, color = Color.White)
                 ) {
                     Icon(Icons.Default.SkipNext, contentDescription = null, tint = Color.White)
                     Text(stringResource(R.string.player_next_episode), color = Color.White)
                 }
                 Spacer(Modifier.weight(1f))
-            } else {
-                Spacer(Modifier.weight(1f))
             }
+        }
+
+        Row(verticalAlignment = Alignment.CenterVertically) {
             // The lock exists to guard against accidental TOUCHES while the phone is in a pocket
             // or being handled - meaningless on a D-pad remote, which can't "accidentally" press
             // anything the same way. Worse than just unnecessary on TV: getting locked left no
             // reliable way back, since the unlock icon's own screen (LockedOverlay) needs D-pad
             // focus that the always-present full-screen root behind it kept stealing back
-            // (confirmed on-device: "после блокировки не могу его разблокировать"). Simplest and
-            // most correct fix is what it looks like on paper - don't offer a control that solves
-            // a touch-only problem, and whose own unlock path isn't D-pad-reachable.
+            // (confirmed on-device: "после блокировки не могу его разблокировать").
             if (com.illusion.app.ui.common.LocalUiMode.current != com.illusion.app.domain.model.UiMode.TV) {
                 val lockSource = remember { MutableInteractionSource() }
-                IconButton(onClick = onToggleLock, interactionSource = lockSource, modifier = Modifier.focusHighlight(lockSource, color = Color.White)) {
+                IconButton(
+                    onClick = onToggleLock,
+                    interactionSource = lockSource,
+                    modifier = Modifier.focusHighlight(lockSource, color = Color.White)
+                ) {
                     Icon(
                         if (isLocked) Icons.Default.Lock else Icons.Default.LockOpen,
                         contentDescription = stringResource(if (isLocked) R.string.player_unlock else R.string.player_lock),
@@ -369,15 +457,13 @@ fun BottomGradientBar(
                     )
                 }
             }
-        }
-
-        Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
                 formatTime(currentPositionMs),
                 color = Color.White,
                 maxLines = 1,
                 textAlign = TextAlign.End,
-                modifier = Modifier.width(64.dp)
+                softWrap = false,
+                modifier = Modifier.widthIn(min = 64.dp)
             )
             val sliderInteractionSource = remember { MutableInteractionSource() }
             // Releasing a held scrub (or even a single tap-adjust) sometimes sent D-pad focus
@@ -401,17 +487,71 @@ fun BottomGradientBar(
                 if (wasDragging && !isDragging) runCatching { sliderFocusRequester.requestFocus() }
                 wasDragging = isDragging
             }
+            val sliderColors = SliderDefaults.colors(
+                thumbColor = MaterialTheme.colorScheme.primary,
+                activeTrackColor = MaterialTheme.colorScheme.primary,
+                inactiveTrackColor = Color.White.copy(alpha = 0.3f)
+            )
+            val accentColor = MaterialTheme.colorScheme.primary
             Slider(
                 value = sliderPosition,
                 onValueChange = { sliderPosition = it; isDragging = true; onSeekDragging() },
                 onValueChangeFinished = { isDragging = false; onSeekTo(sliderPosition.toLong()) },
                 valueRange = 0f..(durationMs.coerceAtLeast(1).toFloat()),
-                colors = SliderDefaults.colors(
-                    thumbColor = MaterialTheme.colorScheme.primary,
-                    activeTrackColor = MaterialTheme.colorScheme.primary,
-                    inactiveTrackColor = Color.White.copy(alpha = 0.3f)
-                ),
+                colors = sliderColors,
                 interactionSource = sliderInteractionSource,
+                // Material3 1.4's default thumb is a tall vertical bar that stands well above and
+                // below the track and reads as a separate element on top of the video. A small
+                // accent dot (growing slightly while dragging) sits on the track itself, the way
+                // a video scrubber normally looks.
+                thumb = {
+                    val thumbDiameter by animateDpAsState(
+                        targetValue = if (isDragging) 16.dp else 12.dp,
+                        label = "seekThumbSize"
+                    )
+                    Box(
+                        Modifier
+                            .size(20.dp)
+                            .wrapContentSize(Alignment.Center)
+                            .size(thumbDiameter)
+                            .background(accentColor, CircleShape)
+                    )
+                },
+                // Custom track for two reasons the default one can't cover: bufferedPositionMs was
+                // being passed into this composable and never drawn anywhere (no "loaded ahead"
+                // band at all, unusual for a streaming player), and Material3 1.4's default track
+                // paints a stop indicator dot at the far end (verified in SliderDefaults' own
+                // bytecode - drawStopIndicator/getTrackStopIndicatorSize), which over video reads
+                // as a stray artifact next to the duration rather than as a control.
+                track = { sliderState ->
+                    val playedFraction = sliderState.coercedValueAsFraction.coerceIn(0f, 1f)
+                    val bufferedFraction = if (durationMs > 0) {
+                        (bufferedPositionMs.toFloat() / durationMs.toFloat()).coerceIn(0f, 1f)
+                    } else 0f
+                    Canvas(Modifier.fillMaxWidth().height(6.dp)) {
+                        val centerY = size.height / 2f
+                        val stroke = size.height
+                        drawLine(
+                            Color.White.copy(alpha = 0.3f),
+                            Offset(0f, centerY), Offset(size.width, centerY),
+                            strokeWidth = stroke, cap = StrokeCap.Round
+                        )
+                        if (bufferedFraction > 0f) {
+                            drawLine(
+                                Color.White.copy(alpha = 0.5f),
+                                Offset(0f, centerY), Offset(size.width * bufferedFraction, centerY),
+                                strokeWidth = stroke, cap = StrokeCap.Round
+                            )
+                        }
+                        if (playedFraction > 0f) {
+                            drawLine(
+                                accentColor,
+                                Offset(0f, centerY), Offset(size.width * playedFraction, centerY),
+                                strokeWidth = stroke, cap = StrokeCap.Round
+                            )
+                        }
+                    }
+                },
                 // Material3's own Slider key handling (verified via javap on the real
                 // material3-1.4.0 jar - SliderKt$slideOnKeyEvents$2) treats DirectionUp/Down
                 // exactly like Left/Right - adjusting the seek position, not moving focus. On a
@@ -427,16 +567,33 @@ fun BottomGradientBar(
                 // a real row above it. focusHighlight() gives the slider the same visible
                 // border/scale every other player control has - its default focus indication was
                 // easy to miss entirely.
+                // The custom track fills the slider's full width (the default M3 track kept its
+                // own inset), which left the bar butting straight up against the timecodes.
                 modifier = Modifier.weight(1f)
+                    .padding(horizontal = 12.dp)
                     .focusRequester(sliderFocusRequester)
                     .tvSafeSliderKeys()
                     .focusHighlight(sliderInteractionSource, color = Color.White)
             )
+            // Only the total duration was ever shown - "how much is left" is the number people
+            // actually want mid-film, so tapping this cell switches between the two.
+            var showRemaining by remember { mutableStateOf(false) }
+            val remainingSource = remember { MutableInteractionSource() }
             Text(
-                formatTime(durationMs),
+                if (showRemaining) "-" + formatTime((durationMs - currentPositionMs).coerceAtLeast(0))
+                else formatTime(durationMs),
                 color = Color.White,
                 maxLines = 1,
-                modifier = Modifier.width(64.dp)
+                softWrap = false,
+                modifier = Modifier
+                    .clip(androidx.compose.foundation.shape.RoundedCornerShape(4.dp))
+                    .clickable(
+                        interactionSource = remainingSource,
+                        indication = null,
+                        onClickLabel = stringResource(R.string.player_show_remaining_time)
+                    ) { showRemaining = !showRemaining }
+                    .focusHighlight(remainingSource, color = Color.White)
+                    .widthIn(min = 64.dp)
             )
         }
     }
@@ -539,8 +696,6 @@ fun PlayerSettingsPanel(
     sharpenAmount: Float,
     onSharpenAmountChange: (Float) -> Unit,
     onResetSharpenAmount: () -> Unit,
-    aspectRatioLockedBySharpen: Boolean,
-    onReloadPlayer: () -> Unit,
     subtitleTextColor: Int,
     onSubtitleTextColorChange: (Int) -> Unit,
     subtitleBackgroundOpacity: Int,
@@ -568,29 +723,6 @@ fun PlayerSettingsPanel(
     onDismiss: () -> Unit
 ) {
     val speeds = listOf(0.5f, 0.75f, 1f, 1.25f, 1.5f, 2f)
-    // Turning sharpen on permanently switches this player session's video pipeline onto a Media3
-    // 1.11.0 code path whose onVideoSizeChanged is a deliberate upstream no-op (TODO b/292111083) -
-    // aspect-ratio cycling silently stops working for the rest of the session as a result. Warn
-    // before flipping the switch rather than let the user discover it later via a dead button.
-    // Kept as a real AlertDialog (unlike the panel below) - a decision like this needs a decisive
-    // yes/no interruption, not something that slides away if you tap outside it.
-    var showEnableWarning by remember { mutableStateOf(false) }
-    if (showEnableWarning) {
-        AlertDialog(
-            onDismissRequest = { showEnableWarning = false },
-            title = { Text(stringResource(R.string.player_sharpen_enable_warning_title)) },
-            text = { Text(stringResource(R.string.player_sharpen_enable_warning_message)) },
-            confirmButton = {
-                TextButton(onClick = {
-                    showEnableWarning = false
-                    onSharpenEnabledChange(true)
-                }) { Text(stringResource(R.string.player_sharpen_enable_warning_confirm)) }
-            },
-            dismissButton = {
-                TextButton(onClick = { showEnableWarning = false }) { Text(stringResource(R.string.action_cancel)) }
-            }
-        )
-    }
 
     Box(modifier = Modifier.fillMaxSize()) {
         AnimatedVisibility(
@@ -602,7 +734,7 @@ fun PlayerSettingsPanel(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.45f))
+                    .background(Color.Black.copy(alpha = 0.6f))
                     .clickable(interactionSource = scrimSource, indication = null, onClick = onDismiss)
             )
         }
@@ -615,8 +747,12 @@ fun PlayerSettingsPanel(
             Column(
                 modifier = Modifier
                     .fillMaxHeight()
-                    .width(300.dp)
-                    .background(Color(0xFF141218).copy(alpha = 0.82f))
+                    .width(340.dp)
+                    // Was translucent (alpha 0.82) - the player's own top-bar icons, the lock and
+                    // the duration timecode showed straight through the panel's own rows, so its
+                    // text sat on moving video. Opaque now; the scrim alone keeps the "player is
+                    // still behind this" feel.
+                    .background(Color(0xFF141218))
                     // Reaching the topmost/bottommost focusable in this panel and pressing
                     // Up/Down once more sent D-pad focus straight through the (semi-transparent)
                     // scrim into the player controls behind it, even though the panel was still
@@ -638,7 +774,15 @@ fun PlayerSettingsPanel(
                     .padding(20.dp)
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                    Text(stringResource(R.string.player_settings), color = Color.White, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+                    // Short title: the full "Настройки воспроизведения" wrapped onto two lines in
+                    // this panel's width. The long form stays as the gear icon's contentDescription.
+                    Text(
+                        stringResource(R.string.player_settings_panel_title),
+                        color = Color.White,
+                        style = MaterialTheme.typography.titleMedium,
+                        maxLines = 1,
+                        modifier = Modifier.weight(1f)
+                    )
                     val closeSource = remember { MutableInteractionSource() }
                     // Nothing claimed focus when this panel appeared - whatever button opened it
                     // (the gear icon in the top bar, now hidden behind the scrim) kept focus, so
@@ -662,18 +806,33 @@ fun PlayerSettingsPanel(
                 }
 
                 CollapsiblePanelSection(stringResource(R.string.player_settings_section_speed)) {
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    speeds.forEach { speed ->
-                        FilterChip(
-                            selected = speed == currentSpeed,
-                            onClick = { onSelect(speed) },
-                            label = { Text("${speed}x") },
-                            colors = FilterChipDefaults.filterChipColors(
-                                labelColor = Color.White,
-                                selectedContainerColor = MaterialTheme.colorScheme.primary,
-                                selectedLabelColor = Color.White
+                // Was a FlowRow of intrinsically-sized chips - they wrapped 3+3 at uneven widths
+                // with "2.0x" hanging alone. A fixed two-row grid of equal cells instead.
+                speeds.chunked(3).forEach { row ->
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
+                    ) {
+                        row.forEach { speed ->
+                            FilterChip(
+                                selected = speed == currentSpeed,
+                                onClick = { onSelect(speed) },
+                                label = {
+                                    Text(
+                                        "${speed}x",
+                                        maxLines = 1,
+                                        textAlign = TextAlign.Center,
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+                                },
+                                colors = FilterChipDefaults.filterChipColors(
+                                    labelColor = Color.White,
+                                    selectedContainerColor = MaterialTheme.colorScheme.primary,
+                                    selectedLabelColor = Color.White
+                                ),
+                                modifier = Modifier.weight(1f)
                             )
-                        )
+                        }
                     }
                 }
                 }
@@ -708,28 +867,24 @@ fun PlayerSettingsPanel(
                     color = Color.White.copy(alpha = 0.7f),
                     style = MaterialTheme.typography.bodySmall
                 )
-                androidx.compose.material3.Slider(
+                PanelSlider(
                     value = subtitleBackgroundOpacity.toFloat(),
                     onValueChange = { onSubtitleBackgroundOpacityChange(it.roundToInt()) },
                     valueRange = 0f..100f,
-                    steps = 9,
-                    modifier = Modifier.tvSafeSliderKeys()
+                    steps = 9
                 )
                 Text(
                     stringResource(R.string.player_subtitle_text_size, subtitleTextSizePercent),
                     color = Color.White.copy(alpha = 0.7f),
                     style = MaterialTheme.typography.bodySmall
                 )
-                androidx.compose.material3.Slider(
+                PanelSlider(
                     value = subtitleTextSizePercent.toFloat(),
                     onValueChange = { onSubtitleTextSizePercentChange(it.roundToInt()) },
                     valueRange = 50f..200f,
-                    steps = 14,
-                    modifier = Modifier.tvSafeSliderKeys()
+                    steps = 14
                 )
-                TextButton(onClick = onResetSubtitleStyle, modifier = Modifier.padding(top = 4.dp)) {
-                    Text(stringResource(R.string.player_subtitle_style_reset))
-                }
+                PanelResetButton(stringResource(R.string.player_subtitle_style_reset), onResetSubtitleStyle)
                 }
 
                 // Entirely touch-gesture concepts (double-tap/swipe/hold-to-seek, and the seek
@@ -745,12 +900,11 @@ fun PlayerSettingsPanel(
                     color = Color.White.copy(alpha = 0.7f),
                     style = MaterialTheme.typography.bodySmall
                 )
-                androidx.compose.material3.Slider(
+                PanelSlider(
                     value = seekDurationSeconds.toFloat(),
                     onValueChange = { onSeekDurationSecondsChange(it.roundToInt()) },
                     valueRange = 5f..30f,
-                    steps = 4,
-                    modifier = Modifier.tvSafeSliderKeys()
+                    steps = 4
                 )
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                     Text(stringResource(R.string.player_double_tap_seek), color = Color.White, modifier = Modifier.weight(1f))
@@ -780,9 +934,7 @@ fun PlayerSettingsPanel(
                     com.illusion.app.ui.common.TvAwareSwitch(
                         checked = sharpenEnabled,
                         enabled = !sharpenDisabledByPerformanceMode,
-                        onCheckedChange = { enabled ->
-                            if (enabled) showEnableWarning = true else onSharpenEnabledChange(false)
-                        }
+                        onCheckedChange = onSharpenEnabledChange
                     )
                 }
                 if (sharpenDisabledByPerformanceMode) {
@@ -810,28 +962,14 @@ fun PlayerSettingsPanel(
                         style = MaterialTheme.typography.bodySmall,
                         modifier = Modifier.padding(top = 8.dp)
                     )
-                    androidx.compose.material3.Slider(
+                    PanelSlider(
                         value = sharpenDragValue,
                         onValueChange = { sharpenDragValue = it },
                         onValueChangeFinished = { onSharpenAmountChange(sharpenDragValue) },
                         valueRange = 0.1f..1f,
-                        steps = 8,
-                        modifier = Modifier.tvSafeSliderKeys()
+                        steps = 8
                     )
-                    TextButton(onClick = onResetSharpenAmount, modifier = Modifier.padding(top = 4.dp)) {
-                        Text(stringResource(R.string.player_sharpen_amount_reset))
-                    }
-                }
-                if (aspectRatioLockedBySharpen) {
-                    Text(
-                        stringResource(R.string.player_aspect_ratio_locked),
-                        color = Color.White.copy(alpha = 0.7f),
-                        style = MaterialTheme.typography.bodySmall,
-                        modifier = Modifier.padding(top = 4.dp)
-                    )
-                    TextButton(onClick = onReloadPlayer, modifier = Modifier.padding(top = 4.dp)) {
-                        Text(stringResource(R.string.player_reload))
-                    }
+                    PanelResetButton(stringResource(R.string.player_sharpen_amount_reset), onResetSharpenAmount)
                 }
                 }
 
@@ -898,13 +1036,88 @@ fun PlayerSettingsPanel(
     }
 }
 
+/**
+ * Every slider inside the settings panel. The default Material3 slider (tall bar thumb, tick dots
+ * drawn along the track) looked nothing like the seek bar's own scrubber and read as a dotted,
+ * broken line at a glance - this keeps the step behaviour but draws the same clean track + accent
+ * dot the seek bar uses.
+ */
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+@Composable
+private fun PanelSlider(
+    value: Float,
+    onValueChange: (Float) -> Unit,
+    valueRange: ClosedFloatingPointRange<Float>,
+    steps: Int,
+    modifier: Modifier = Modifier,
+    onValueChangeFinished: (() -> Unit)? = null
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val accentColor = MaterialTheme.colorScheme.primary
+    val colors = SliderDefaults.colors(
+        thumbColor = accentColor,
+        activeTrackColor = accentColor,
+        inactiveTrackColor = Color.White.copy(alpha = 0.3f)
+    )
+    Slider(
+        value = value,
+        onValueChange = onValueChange,
+        onValueChangeFinished = onValueChangeFinished,
+        valueRange = valueRange,
+        steps = steps,
+        colors = colors,
+        interactionSource = interactionSource,
+        thumb = {
+            Box(
+                Modifier
+                    .size(20.dp)
+                    .wrapContentSize(Alignment.Center)
+                    .size(12.dp)
+                    .background(accentColor, CircleShape)
+            )
+        },
+        track = { sliderState ->
+            val fraction = sliderState.coercedValueAsFraction.coerceIn(0f, 1f)
+            Canvas(Modifier.fillMaxWidth().height(6.dp)) {
+                val centerY = size.height / 2f
+                drawLine(
+                    Color.White.copy(alpha = 0.3f),
+                    Offset(0f, centerY), Offset(size.width, centerY),
+                    strokeWidth = size.height, cap = StrokeCap.Round
+                )
+                if (fraction > 0f) {
+                    drawLine(
+                        accentColor,
+                        Offset(0f, centerY), Offset(size.width * fraction, centerY),
+                        strokeWidth = size.height, cap = StrokeCap.Round
+                    )
+                }
+            }
+        },
+        modifier = modifier.tvSafeSliderKeys()
+    )
+}
+
+/** One shared look for every "reset to defaults" action in the panel. */
+@Composable
+private fun PanelResetButton(text: String, onClick: () -> Unit) {
+    val source = remember { MutableInteractionSource() }
+    TextButton(
+        onClick = onClick,
+        interactionSource = source,
+        modifier = Modifier.padding(top = 4.dp).focusHighlight(source)
+    ) {
+        Text(text, style = MaterialTheme.typography.labelLarge)
+    }
+}
+
 @Composable
 private fun PanelSectionLabel(text: String) {
-    HorizontalDivider(color = Color.White.copy(alpha = 0.15f), modifier = Modifier.padding(top = 20.dp, bottom = 4.dp))
+    HorizontalDivider(color = Color.White.copy(alpha = 0.15f), modifier = Modifier.padding(top = 12.dp, bottom = 2.dp))
     Text(
         text,
-        color = Color.White.copy(alpha = 0.6f),
-        style = MaterialTheme.typography.labelMedium,
+        color = Color.White,
+        style = MaterialTheme.typography.titleSmall,
         modifier = Modifier.padding(bottom = 8.dp)
     )
 }
@@ -917,7 +1130,7 @@ private fun PanelSectionLabel(text: String) {
 @Composable
 private fun CollapsiblePanelSection(text: String, content: @Composable ColumnScope.() -> Unit) {
     var expanded by remember { mutableStateOf(false) }
-    HorizontalDivider(color = Color.White.copy(alpha = 0.15f), modifier = Modifier.padding(top = 20.dp, bottom = 4.dp))
+    HorizontalDivider(color = Color.White.copy(alpha = 0.15f), modifier = Modifier.padding(top = 12.dp, bottom = 2.dp))
     val headerSource = remember { MutableInteractionSource() }
     Row(
         verticalAlignment = Alignment.CenterVertically,
@@ -927,16 +1140,18 @@ private fun CollapsiblePanelSection(text: String, content: @Composable ColumnSco
             .focusHighlight(headerSource)
             .padding(bottom = 8.dp)
     ) {
+        // A section title used to be dimmer and smaller than the labels inside it, so the panel
+        // read from the inside out. The header is the loudest thing in its own section now.
         Text(
             text,
-            color = Color.White.copy(alpha = 0.6f),
-            style = MaterialTheme.typography.labelMedium,
+            color = Color.White,
+            style = MaterialTheme.typography.titleSmall,
             modifier = Modifier.weight(1f)
         )
         Icon(
             if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
             contentDescription = null,
-            tint = Color.White.copy(alpha = 0.6f)
+            tint = Color.White.copy(alpha = 0.7f)
         )
     }
     AnimatedVisibility(

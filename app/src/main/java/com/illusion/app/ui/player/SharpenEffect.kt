@@ -15,16 +15,26 @@ import androidx.media3.effect.GlShaderProgram
  * applied via Media3's GL effects pipeline. Meant for old, soft/heavily compressed rips - off
  * by default, toggled from the player's settings sheet.
  */
+/**
+ * [amountProvider] is read fresh on every drawn frame rather than captured once. Changing the
+ * sharpen strength used to mean handing ExoPlayer a whole new effect via setVideoEffects() on a
+ * live player - which rebuilds the GL effects pipeline underneath a playing video and reliably
+ * froze playback on-device (playback state stayed PLAYING while the position stopped advancing,
+ * plus "noteStopVideo ... refcount 0" in logcat). With a live provider the strength is just a
+ * uniform that changes on the next frame: no pipeline rebuild, no freeze.
+ */
 @UnstableApi
-class SharpenEffect(private val amount: Float = 0.4f) : GlEffect {
+class SharpenEffect(private val amountProvider: () -> Float) : GlEffect {
+    constructor(amount: Float) : this({ amount })
+
     override fun toGlShaderProgram(context: Context, useHdr: Boolean): GlShaderProgram =
-        SharpenShaderProgram(useHdr, amount)
+        SharpenShaderProgram(useHdr, amountProvider)
 }
 
 @UnstableApi
 private class SharpenShaderProgram(
     useHdr: Boolean,
-    private val amount: Float
+    private val amountProvider: () -> Float
 ) : BaseGlShaderProgram(useHdr, /* texturePoolCapacity= */ 1) {
 
     private val glProgram = GlProgram(VERTEX_SHADER, FRAGMENT_SHADER).apply {
@@ -51,7 +61,7 @@ private class SharpenShaderProgram(
         glProgram.use()
         glProgram.setSamplerTexIdUniform("uTexSampler", inputTexId, /* texUnitIndex= */ 0)
         glProgram.setFloatsUniform("uTexelSize", floatArrayOf(1f / outputWidth, 1f / outputHeight))
-        glProgram.setFloatUniform("uSharpenAmount", amount)
+        glProgram.setFloatUniform("uSharpenAmount", amountProvider())
         glProgram.bindAttributesAndUniforms()
         GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4)
         GlUtil.checkGlError()

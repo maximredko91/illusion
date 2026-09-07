@@ -35,10 +35,15 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
+import androidx.compose.material.icons.automirrored.filled.VolumeOff
+import androidx.compose.material.icons.automirrored.filled.VolumeDown
+import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
@@ -71,6 +76,9 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
@@ -254,7 +262,6 @@ fun PlayerScreen(
     var resizeMode by remember { mutableStateOf(AspectRatioFrameLayout.RESIZE_MODE_FIT) }
     var resizeModeLabel by remember { mutableStateOf<String?>(null) }
     var sharpenToggleLabel by remember { mutableStateOf<String?>(null) }
-    var showAspectRatioBlockedDialog by remember { mutableStateOf(false) }
     var playerViewRef by remember { mutableStateOf<PlayerView?>(null) }
     // The seek-drag toast (GestureLayer, a full-screen sibling of this Column) used to center on
     // the TRUE screen center via its own root Box, while CenterTransportControls below centers on
@@ -274,17 +281,52 @@ fun PlayerScreen(
     var topBarHeightPx by remember { mutableIntStateOf(0) }
     var bottomBarHeightPx by remember { mutableIntStateOf(0) }
 
+    // PlayerView sets its content frame's aspect ratio from onVideoSizeChanged, which the GL
+    // effects pipeline never fires (see PlayerViewModel.updateAspectRatioFromTracks). Applying the
+    // Format-derived ratio has to happen from the AndroidView update block rather than once from a
+    // LaunchedEffect: rotating re-binds the player (see the orientation effect below), and that
+    // re-bind resets the content frame's ratio back to "unknown" with no callback to restore it -
+    // which is exactly why resize modes looked dead in landscape.
+    // Free-form pinch zoom on top of whatever resize mode is active. Applied as a plain View
+    // scale on PlayerView's content frame - it never touches the decoder, the effects pipeline or
+    // the surface itself, so it composes with sharpen/HDR exactly like the resize modes do.
+    var videoZoom by remember { mutableFloatStateOf(1f) }
+    var pinchZoomLabel by remember { mutableStateOf<String?>(null) }
+    var pinchZoomLabelJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
+    val pinchZoomScope = rememberCoroutineScope()
+
+    fun findContentFrame(view: PlayerView): AspectRatioFrameLayout? {
+        fun find(v: android.view.View): AspectRatioFrameLayout? = when {
+            v is AspectRatioFrameLayout -> v
+            v is android.view.ViewGroup -> (0 until v.childCount)
+                .asSequence()
+                .mapNotNull { find(v.getChildAt(it)) }
+                .firstOrNull()
+            else -> null
+        }
+        return find(view)
+    }
+
+    fun applyZoom(view: PlayerView, zoom: Float) {
+        findContentFrame(view)?.let { frame ->
+            frame.scaleX = zoom
+            frame.scaleY = zoom
+        }
+    }
+
+    fun applyAspectRatio(view: PlayerView, ratio: Float) {
+        if (ratio <= 0f) return
+        findContentFrame(view)?.setAspectRatio(ratio)
+    }
+
     val fitLabel = stringResource(R.string.player_aspect_ratio_fit)
     val zoomLabel = stringResource(R.string.player_aspect_ratio_zoom)
     val fillLabel = stringResource(R.string.player_aspect_ratio_fill)
     fun cycleResizeMode() {
-        // Cycling the mode itself is harmless even when tainted (it just never has a visible
-        // effect - see PlayerViewModel.init), but showing the normal Fit/Zoom/Fill label instead
-        // of an explanation would look like the tap silently did nothing.
-        if (uiState.aspectRatioLockedBySharpen) {
-            showAspectRatioBlockedDialog = true
-            return
-        }
+        // No longer blocked while sharpen is on - the ratio the modes operate on comes from the
+        // track Format now, not from the effects pipeline's never-fired onVideoSizeChanged.
+        videoZoom = 1f
+        playerViewRef?.let { applyZoom(it, 1f) }
         resizeMode = when (resizeMode) {
             AspectRatioFrameLayout.RESIZE_MODE_FIT -> AspectRatioFrameLayout.RESIZE_MODE_ZOOM
             AspectRatioFrameLayout.RESIZE_MODE_ZOOM -> AspectRatioFrameLayout.RESIZE_MODE_FILL
@@ -295,32 +337,6 @@ fun PlayerScreen(
             AspectRatioFrameLayout.RESIZE_MODE_ZOOM -> zoomLabel
             else -> fillLabel
         }
-    }
-    if (showAspectRatioBlockedDialog) {
-        AlertDialog(
-            onDismissRequest = { showAspectRatioBlockedDialog = false },
-            title = { Text(stringResource(R.string.player_aspect_ratio_blocked_title)) },
-            text = { Text(stringResource(R.string.player_aspect_ratio_blocked_message)) },
-            confirmButton = {
-                val reloadSource = remember { MutableInteractionSource() }
-                TextButton(
-                    onClick = {
-                        showAspectRatioBlockedDialog = false
-                        viewModel.reloadPlayer()
-                    },
-                    interactionSource = reloadSource,
-                    modifier = Modifier.focusHighlight(reloadSource)
-                ) { Text(stringResource(R.string.player_aspect_ratio_blocked_reload)) }
-            },
-            dismissButton = {
-                val closeSource = remember { MutableInteractionSource() }
-                TextButton(
-                    onClick = { showAspectRatioBlockedDialog = false },
-                    interactionSource = closeSource,
-                    modifier = Modifier.focusHighlight(closeSource)
-                ) { Text(stringResource(R.string.player_close)) }
-            }
-        )
     }
     LaunchedEffect(resizeModeLabel) {
         if (resizeModeLabel != null) {
@@ -353,6 +369,10 @@ fun PlayerScreen(
             val boundPlayer = view.player
             view.player = null
             view.player = boundPlayer
+            // The re-bind above clears the content frame's aspect ratio; with sharpen on nothing
+            // ever restores it (no onVideoSizeChanged), so put it back explicitly.
+            applyAspectRatio(view, uiState.videoAspectRatio)
+            applyZoom(view, videoZoom)
         }
         playerViewRef?.requestLayout()
     }
@@ -467,6 +487,8 @@ fun PlayerScreen(
             update = { view ->
                 view.player = currentPlayer
                 view.resizeMode = resizeMode
+                applyAspectRatio(view, uiState.videoAspectRatio)
+                applyZoom(view, videoZoom)
                 // backgroundAlpha is the per-glyph "подложка" directly behind the text - windowColor
                 // (the larger padded box around the whole cue) is left fully transparent since that's
                 // not what "opacity" here refers to. edgeType/edgeColor stay Media3's own defaults.
@@ -505,6 +527,21 @@ fun PlayerScreen(
                 // pause icon to line up with, and GestureLayer's own true-screen-center is already
                 // correct then.
                 centerToastOffsetPx = if (controlsVisible) (topBarHeightPx - bottomBarHeightPx) / 2 else 0,
+                onPinchZoom = { change ->
+                    val updated = (videoZoom * change).coerceIn(1f, 2.5f)
+                    if (updated != videoZoom) {
+                        videoZoom = updated
+                        playerViewRef?.let { applyZoom(it, updated) }
+                    }
+                    // Same transient label the resize-mode cycle uses, so the two read as one
+                    // family; shown even when clamped so hitting the 1x/2.5x limit is visible.
+                    pinchZoomLabel = "${(updated * 100).roundToInt()}%"
+                    pinchZoomLabelJob?.cancel()
+                    pinchZoomLabelJob = pinchZoomScope.launch {
+                        delay(700)
+                        pinchZoomLabel = null
+                    }
+                },
                 onCenterToastVisibleChange = { centerSeekToastVisible = it },
                 modifier = Modifier.fillMaxSize()
             )
@@ -517,6 +554,11 @@ fun PlayerScreen(
                 }
             }
             sharpenToggleLabel?.let { label ->
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    LabelToast(label, modifier = Modifier.align(Alignment.Center))
+                }
+            }
+            pinchZoomLabel?.let { label ->
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     LabelToast(label, modifier = Modifier.align(Alignment.Center))
                 }
@@ -569,7 +611,7 @@ fun PlayerScreen(
                 )
             }
             AnimatedVisibility(
-                visible = controlsVisible && !isLocked,
+                visible = controlsVisible && !isLocked && !showSpeedDialog,
                 enter = fadeIn(tween(com.illusion.app.ui.common.economicalDurationMs(300))),
                 exit = fadeOut(tween(com.illusion.app.ui.common.economicalDurationMs(300)))
             ) {
@@ -585,6 +627,7 @@ fun PlayerScreen(
                         episodeLabel = uiState.episodeLabel,
                         onBack = onBack,
                         onOpenSubtitles = { bumpInteraction(); showSubtitleDialog = true },
+                        audioTrackCount = uiState.audioTracks.size,
                         onOpenAudioTracks = { bumpInteraction(); showAudioDialog = true },
                         onCycleAspectRatio = { bumpInteraction(); cycleResizeMode() },
                         onOpenSettings = { bumpInteraction(); showSpeedDialog = true },
@@ -730,8 +773,6 @@ fun PlayerScreen(
             sharpenAmount = uiState.sharpenAmount,
             onSharpenAmountChange = viewModel::setSharpenAmount,
             onResetSharpenAmount = viewModel::resetSharpenAmount,
-            aspectRatioLockedBySharpen = uiState.aspectRatioLockedBySharpen,
-            onReloadPlayer = viewModel::reloadPlayer,
             subtitleTextColor = uiState.subtitleTextColor,
             onSubtitleTextColorChange = viewModel::setSubtitleTextColor,
             subtitleBackgroundOpacity = uiState.subtitleBackgroundOpacity,
@@ -895,6 +936,8 @@ private fun GestureLayer(
     // seek committed just before another swipe starts could show the spinner's bare arc and
     // "Буферизация" bleeding through the toast's own rounded background underneath it.
     onCenterToastVisibleChange: (Boolean) -> Unit = {},
+    // Relative scale factor of a two-finger pinch, reported continuously while it happens.
+    onPinchZoom: (Float) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     if (!enabled) {
@@ -1004,6 +1047,25 @@ private fun GestureLayer(
             // drag detector (active in the left/right EDGE_ZONE_FRACTION thirds) claimed it first
             // since the shade's own gesture-recognition strip is thin and this Box sat right under it.
             .padding(horizontal = EDGE_DEAD_ZONE, vertical = EDGE_DEAD_ZONE)
+            // Pinch-to-zoom. Deliberately NOT detectTransformGestures: that also fires (and
+            // consumes) for single-finger pans, which would eat the brightness/volume/seek drags
+            // below it. This only ever touches events that actually have two fingers down, and
+            // consumes nothing otherwise, so every existing one-finger gesture is untouched.
+            .pointerInput(Unit) {
+                awaitEachGesture {
+                    awaitFirstDown(requireUnconsumed = false)
+                    do {
+                        val event = awaitPointerEvent()
+                        if (event.changes.count { it.pressed } >= 2) {
+                            val zoomChange = event.calculateZoom()
+                            if (zoomChange != 1f && zoomChange > 0f) {
+                                onPinchZoom(zoomChange)
+                                event.changes.forEach { it.consume() }
+                            }
+                        }
+                    } while (event.changes.any { it.pressed })
+                }
+            }
             .pointerInput(Unit, doubleTapSeekEnabled, holdToSeekEnabled) {
                 detectTapGestures(
                     onPress = { offset ->
@@ -1164,7 +1226,11 @@ private fun GestureLayer(
             exit = fadeOut(),
             modifier = Modifier.align(Alignment.CenterEnd).padding(end = gestureIndicatorEdgePadding)
         ) {
-            GestureIndicator(label = "Яркость", fraction = brightnessFraction)
+            GestureIndicator(
+                icon = Icons.Default.LightMode,
+                contentDescription = stringResource(R.string.player_brightness_hud),
+                fraction = brightnessFraction
+            )
         }
         AnimatedVisibility(
             visible = showVolume,
@@ -1172,7 +1238,17 @@ private fun GestureLayer(
             exit = fadeOut(),
             modifier = Modifier.align(Alignment.CenterStart).padding(start = gestureIndicatorEdgePadding)
         ) {
-            GestureIndicator(label = "Громкость", fraction = volumeFraction)
+            GestureIndicator(
+                icon = when {
+                    volumeFraction <= 0.01f -> Icons.AutoMirrored.Filled.VolumeOff
+                    volumeFraction < 0.5f -> Icons.AutoMirrored.Filled.VolumeDown
+                    else -> Icons.AutoMirrored.Filled.VolumeUp
+                },
+                // "Громкость плеера", not the system volume - this gesture drives player.volume,
+                // a multiplier on top of it (see the drag handler above).
+                contentDescription = stringResource(R.string.player_volume_hud),
+                fraction = volumeFraction
+            )
         }
         seekToastText?.let { text ->
             LabelToast(
@@ -1210,36 +1286,49 @@ private fun LabelToast(label: String, modifier: Modifier = Modifier) {
 
 /** A vertical capsule HUD for volume/brightness, positioned at a screen edge so the two never overlap. */
 @Composable
-private fun GestureIndicator(label: String, fraction: Float, modifier: Modifier = Modifier) {
+private fun GestureIndicator(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    contentDescription: String,
+    fraction: Float,
+    modifier: Modifier = Modifier
+) {
+    // Was a bare label + white-on-white capsule sitting straight on the video: on a bright frame
+    // the whole HUD washed out, and at high values the fill was indistinguishable from the track.
+    // Now it sits on its own scrim, fills in the accent color like every other meter in the player,
+    // and leads with an icon (which also carries the volume-off/low/high state) instead of a word.
+    val accentColor = MaterialTheme.colorScheme.primary
     Column(
-        modifier = modifier,
+        modifier = modifier
+            .background(Color.Black.copy(alpha = 0.5f), RoundedCornerShape(20.dp))
+            .padding(horizontal = 12.dp, vertical = 14.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(6.dp)
+        verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        Text(
-            text = label,
-            color = Color.White.copy(alpha = 0.85f),
-            style = MaterialTheme.typography.titleSmall
+        Icon(
+            imageVector = icon,
+            contentDescription = contentDescription,
+            tint = Color.White,
+            modifier = Modifier.size(22.dp)
         )
         Box(
             modifier = Modifier
-                .width(28.dp)
-                .height(96.dp)
-                .clip(RoundedCornerShape(14.dp))
-                .background(Color.Black.copy(alpha = 0.3f)),
+                .width(36.dp)
+                .height(120.dp)
+                .clip(RoundedCornerShape(18.dp))
+                .background(Color.White.copy(alpha = 0.22f)),
             contentAlignment = Alignment.BottomCenter
         ) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .fillMaxHeight(fraction.coerceIn(0f, 1f))
-                    .clip(RoundedCornerShape(14.dp))
-                    .background(Color.White.copy(alpha = 0.75f))
+                    .clip(RoundedCornerShape(18.dp))
+                    .background(accentColor)
             )
         }
         Text(
             text = "${(fraction * 100).roundToInt()}%",
-            color = Color.White.copy(alpha = 0.85f),
+            color = Color.White,
             style = MaterialTheme.typography.titleMedium
         )
     }

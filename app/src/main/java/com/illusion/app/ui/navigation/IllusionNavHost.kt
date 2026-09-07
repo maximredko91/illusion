@@ -700,6 +700,7 @@ private fun TabsHost(
                 onOpenDownloads = { navController.navigate(Destination.Downloads) },
                 onOpenSearch = { navController.navigate(Destination.Search()) },
                 onOpenItem = { stableId -> navController.navigate(Destination.Details(stableId)) },
+                onResumeItem = { stableId -> navController.navigate(Destination.Player(stableId)) { launchSingleTop = true } },
                 hasNewContent = hasNewContent,
                 onRescanNow = {
                     homeViewModel.dismissNewContentBanner()
@@ -781,6 +782,11 @@ private fun TabsHost(
             val selected = isTabSelected(tab.category)
             val interactionSource = remember { MutableInteractionSource() }
             NavigationRailItem(
+                            colors = androidx.compose.material3.NavigationRailItemDefaults.colors(
+                                selectedIconColor = MaterialTheme.colorScheme.primary,
+                                selectedTextColor = MaterialTheme.colorScheme.primary,
+                                indicatorColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.16f)
+                            ),
                 selected = selected,
                 onClick = { selectTab(tab.category) },
                 icon = { Icon(tab.icon, contentDescription = stringResource(tab.labelRes)) },
@@ -863,6 +869,11 @@ private fun TabsHost(
                         val selected = isTabSelected(tab.category)
                         val interactionSource = remember { MutableInteractionSource() }
                         NavigationBarItem(
+                            colors = androidx.compose.material3.NavigationBarItemDefaults.colors(
+                                selectedIconColor = MaterialTheme.colorScheme.primary,
+                                selectedTextColor = MaterialTheme.colorScheme.primary,
+                                indicatorColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.16f)
+                            ),
                             selected = selected,
                             onClick = { selectTab(tab.category) },
                             icon = { Icon(tab.icon, contentDescription = stringResource(tab.labelRes)) },

@@ -1,6 +1,13 @@
 package com.illusion.app.ui.common
 
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.unit.dp
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
@@ -58,8 +65,13 @@ fun TooltipIconButton(
         // in the row. Border-only focus indication avoids that.
         val buttonModifier = modifier.focusHighlight(interactionSource, scaleOnFocus = false)
         if (tonal) {
-            FilledTonalIconButton(onClick = onClick, interactionSource = interactionSource, modifier = buttonModifier) {
-                Icon(icon, contentDescription = label)
+            IconButton(onClick = onClick, interactionSource = interactionSource, modifier = buttonModifier) {
+                Box(
+                    modifier = Modifier.size(32.dp).background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f), CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(icon, contentDescription = label, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
+                }
             }
         } else {
             IconButton(onClick = onClick, interactionSource = interactionSource, modifier = buttonModifier) {

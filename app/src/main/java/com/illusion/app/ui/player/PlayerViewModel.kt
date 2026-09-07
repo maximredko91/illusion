@@ -110,7 +110,6 @@ data class PlayerUiState(
     val sharpenAmount: Float = 0.4f,
     val seekDurationMs: Long = 10_000L,
     /** True once sharpen has been turned on at least once this player session - aspect-ratio cycling is inert from that point on (see the comment in [PlayerViewModel.init]). */
-    val aspectRatioLockedBySharpen: Boolean = false,
     val doubleTapSeekEnabled: Boolean = true,
     val swipeSeekEnabled: Boolean = true,
     val holdToSeekEnabled: Boolean = true,
@@ -315,6 +314,9 @@ class PlayerViewModel(
             // pipeline needs tracking separately from `enabled` itself - see the reload branch
             // below for why.
             var wasEnabled = false
+            // The live value every SharpenEffect instance reads per frame (see SharpenEffect's own
+            // KDoc) - changing the strength writes here instead of calling setVideoEffects() again.
+            var appliedEffect = false
             // Economical performance mode force-disables the GPU sharpen shader regardless of the
             // user's own sharpenEnabled switch - the single most expensive per-frame effect this
             // player can apply (see PerformanceMode's own KDoc for the other things it bundles).
@@ -338,8 +340,13 @@ class PlayerViewModel(
                     // _state.value.sharpenEnabled/sharpenAmount to decide what to re-apply on the
                     // fresh player instance, so it needs this emission's values, not the previous
                     // one's.
-                    _state.update { it.copy(sharpenEnabled = enabled, sharpenAmount = amount, aspectRatioLockedBySharpen = effectsPipelineTainted) }
+                    _state.update { it.copy(sharpenEnabled = enabled, sharpenAmount = amount) }
+                    sharpenAmountValue = amount
                     when {
+                        // Amount-only change while sharpen is already running: the shader picks the
+                        // new uniform up on its next frame. Touching setVideoEffects() here is what
+                        // froze playback mid-drag (confirmed on-device, see SharpenEffect's KDoc).
+                        enabled && wasEnabled && !reenableAfterOff && appliedEffect -> Unit
                         reenableAfterOff -> {
                             // Media3's GL effects VideoSink doesn't reliably pick a fresh
                             // setVideoEffects() call back up once it's already seen an *empty*
@@ -351,7 +358,10 @@ class PlayerViewModel(
                             // as a real reload to the user.
                             reloadPlayer()
                         }
-                        enabled -> player.setVideoEffects(listOf(SharpenEffect(amount)))
+                        enabled -> {
+                            player.setVideoEffects(listOf(SharpenEffect { sharpenAmountValue }))
+                            appliedEffect = true
+                        }
                         // Was a plain player.setVideoEffects(emptyList()) call - crashed on-device
                         // (confirmed via logcat: BufferQueueProducer "already connected", EGL_BAD_ALLOC
                         // creating a new EGL surface) the moment a NEW media item was loaded afterward
@@ -394,6 +404,13 @@ class PlayerViewModel(
             settingsRepository.subtitleTextSizePercent.collect { percent -> _state.update { it.copy(subtitleTextSizePercent = percent) } }
         }
     }
+
+    /**
+     * Current sharpen strength, read live by every [SharpenEffect] this player hands to ExoPlayer.
+     * Volatile because the GL effects pipeline reads it from its own render thread.
+     */
+    @Volatile
+    private var sharpenAmountValue: Float = 0.4f
 
     fun setSharpenEnabled(enabled: Boolean) {
         viewModelScope.launch { settingsRepository.setSharpenEnabled(enabled) }
@@ -511,7 +528,7 @@ class PlayerViewModel(
             _player.value = fresh
             cuesSeekDisabledForCurrentPlayer = needsCuesWorkaround
             playbackService?.attachPlayer(fresh)
-            if (_state.value.sharpenEnabled) fresh.setVideoEffects(listOf(SharpenEffect(_state.value.sharpenAmount)))
+            if (_state.value.sharpenEnabled) fresh.setVideoEffects(listOf(SharpenEffect { sharpenAmountValue }))
         }
         if (!needsCuesWorkaround) {
             // First play of a file with no known Cues-table problem: watch for the exact signature
@@ -661,7 +678,7 @@ class PlayerViewModel(
         // MediaSession's player can't be swapped in place - re-attaching rebuilds it around the
         // fresh instance so the notification keeps working after a sharpen-triggered reload.
         playbackService?.attachPlayer(fresh)
-        if (_state.value.sharpenEnabled) fresh.setVideoEffects(listOf(SharpenEffect(_state.value.sharpenAmount)))
+        if (_state.value.sharpenEnabled) fresh.setVideoEffects(listOf(SharpenEffect { sharpenAmountValue }))
 
         viewModelScope.launch {
             when {
@@ -1048,7 +1065,18 @@ class PlayerViewModel(
         for (group in tracks.groups) {
             for (i in 0 until group.length) {
                 val format = group.getTrackFormat(i)
-                val label = format.language ?: format.label ?: "Дорожка ${i + 1}"
+                // format.language is a raw ISO code ("ru") - it was winning over format.label and
+                // showing up verbatim in the track picker. Prefer the embedded human label, and
+                // otherwise turn the code into its Russian display name ("Русский").
+                val label = format.label
+                    ?: format.language?.let { code ->
+                        java.util.Locale.forLanguageTag(code)
+                            .getDisplayLanguage(java.util.Locale("ru"))
+                            .takeIf { it.isNotBlank() && !it.equals(code, ignoreCase = true) }
+                            ?.replaceFirstChar { c -> c.uppercase() }
+                            ?: code
+                    }
+                    ?: "Дорожка ${i + 1}"
                 when (group.type) {
                     C.TRACK_TYPE_AUDIO -> audio += TrackOption(group, i, label, group.isTrackSelected(i))
                     C.TRACK_TYPE_TEXT -> subtitles += TrackOption(group, i, label, group.isTrackSelected(i))
@@ -1057,6 +1085,34 @@ class PlayerViewModel(
             }
         }
         _state.update { it.copy(audioTracks = audio, subtitleTracks = subtitles) }
+        updateAspectRatioFromTracks(tracks)
+    }
+
+    /**
+     * The GL effects pipeline (i.e. sharpen on) never fires onVideoSizeChanged - its implementation
+     * is a deliberate upstream no-op in Media3 1.11.0 (TODO b/292111083), which is why aspect-ratio
+     * cycling used to go dead for the rest of the session once sharpen had been switched on. The
+     * selected video track's own Format carries width/height/pixelWidthHeightRatio regardless of
+     * which render path is in use, so read the ratio from there instead and hand it to the UI,
+     * which applies it to PlayerView's content frame itself (see PlayerScreen).
+     */
+    private fun updateAspectRatioFromTracks(tracks: Tracks) {
+        for (group in tracks.groups) {
+            if (group.type != C.TRACK_TYPE_VIDEO) continue
+            for (i in 0 until group.length) {
+                if (!group.isTrackSelected(i)) continue
+                val format = group.getTrackFormat(i)
+                if (format.width <= 0 || format.height <= 0) continue
+                val pixelRatio = if (format.pixelWidthHeightRatio > 0f) format.pixelWidthHeightRatio else 1f
+                // A 90/270-degree rotation swaps the displayed dimensions.
+                val rotated = format.rotationDegrees == 90 || format.rotationDegrees == 270
+                val width = (if (rotated) format.height else format.width).toFloat()
+                val height = (if (rotated) format.width else format.height).toFloat()
+                val ratio = if (rotated) width / (height * pixelRatio) else (width * pixelRatio) / height
+                if (ratio > 0f) _state.update { it.copy(videoAspectRatio = ratio) }
+                return
+            }
+        }
     }
 
     private fun buildSubtitleConfig(sourceId: Long, path: String): MediaItem.SubtitleConfiguration =
