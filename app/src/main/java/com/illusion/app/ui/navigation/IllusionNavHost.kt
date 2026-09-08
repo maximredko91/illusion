@@ -742,10 +742,12 @@ private fun TabsHost(
             val countryFilter by libraryViewModel.countryFilter.collectAsState()
             val availableCountries by libraryViewModel.availableCountries.collectAsState()
             val seriesCounts by libraryViewModel.seriesCounts.collectAsState()
+            val totalCount by libraryViewModel.totalCount.collectAsState()
             LibraryScreen(
                 category = category,
                 items = items,
                 seriesCounts = seriesCounts,
+                totalCount = totalCount,
                 isLoading = isLoading,
                 sortOrder = sortOrder,
                 onSortOrderChange = libraryViewModel::setSortOrder,

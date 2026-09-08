@@ -583,9 +583,13 @@ private fun DetailsContent(
                 // lines below instead, which keeps the column from running away in the first place.
                 val posterSource = remember { MutableInteractionSource() }
                 val posterWidth = if (isTv) 184.dp else 120.dp
+                Column(
+                    modifier = Modifier.width(posterWidth),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
                 Box(
                     modifier = Modifier
-                        .width(posterWidth)
+                        .fillMaxWidth()
                         .aspectRatio(2f / 3f)
                         .let { if (contentFocusRequester != null) it.focusRequester(contentFocusRequester) else it }
                         .focusHighlight(posterSource)
@@ -604,6 +608,26 @@ private fun DetailsContent(
                     if (posterLoading) {
                         Box(modifier = Modifier.fillMaxSize().shimmer())
                     }
+                }
+                // Свойства именно этого файла - качество картинки и издание («Режиссёрская
+                // версия»). Раньше издание стояло среди жанров, а качество было доступно только
+                // в блоке фактов далеко внизу. Здесь они и не путаются с жанрами, и заполняют
+                // пустоту, которая оставалась под постером рядом с более высокой колонкой справа.
+                val techTags = listOfNotNull(item.videoQualityLabel, item.editionLabel)
+                techTags.forEach { tag ->
+                    Text(
+                        tag,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(50))
+                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                    )
+                }
                 }
             }
             Column(
@@ -704,11 +728,10 @@ private fun DetailsContent(
                         )
                     }
                 }
-                // Технические метки (720p, «Режиссёрская версия») раньше стояли в акцентной
-                // строке под заголовком и разгоняли её до трёх строк, споря по весу с самим
-                // заголовком. Здесь они обводкой, а не заливкой - это свойства файла, а не жанр.
-                val techTags = listOfNotNull(item.editionLabel)
-                if (item.genres.isNotEmpty() || techTags.isNotEmpty()) {
+                // Техметки (качество, «Режиссёрская версия») стояли в одном ряду с жанрами и
+                // читались как ещё один жанр. Теперь они под постером - см. TechTagColumn ниже,
+                // где заодно занимают пустое место, которое оставляла более низкая колонка постера.
+                if (item.genres.isNotEmpty()) {
                     // FlowRow, not a horizontally-scrolling Row (tried first, dropped per user
                     // feedback - same reasoning as the accent-color swatches in Settings: genre
                     // chips should all be visible at once, wrapping to a second line, not scrolled
@@ -721,16 +744,6 @@ private fun DetailsContent(
                         item.genres.forEach { genre ->
                             Text(
                                 genreDisplayName(genre),
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier
-                                    .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(50))
-                                    .padding(horizontal = 10.dp, vertical = 4.dp)
-                            )
-                        }
-                        techTags.forEach { tag ->
-                            Text(
-                                tag,
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier
@@ -928,11 +941,6 @@ private fun DetailsContent(
             collectionName?.let {
                 MetaRow(stringResource(R.string.details_collection_name_label)) {
                     Text(it, style = MaterialTheme.typography.bodyMedium)
-                }
-            }
-            item.videoQualityLabel?.let { quality ->
-                MetaRow(stringResource(R.string.details_video_quality_label)) {
-                    Text(quality, style = MaterialTheme.typography.bodyMedium)
                 }
             }
             audioTracks?.takeIf { it.isNotEmpty() }?.let { tracks ->

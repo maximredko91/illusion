@@ -91,6 +91,11 @@ class LibraryViewModel(
         .onEach { _isLoading.value = false }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    /** Сколько всего в разделе ДО фильтров - подпись под заголовком показывает «Найдено N из M». */
+    val totalCount: StateFlow<Int> = allItems
+        .map { it.size }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
+
     /** Season/episode totals per series card - empty for non-series categories. */
     @OptIn(ExperimentalCoroutinesApi::class)
     val seriesCounts: StateFlow<Map<String, com.illusion.app.data.repository.SeriesCounts>> =

@@ -71,6 +71,7 @@ import com.illusion.app.work.UploadWorker
 import com.illusion.app.work.WorkScheduler
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import com.illusion.app.ui.common.MenuShape
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -257,7 +258,7 @@ private fun SetupStep(
             com.illusion.app.ui.common.TvAwareOutlinedButton(onClick = { sourceMenuExpanded = true }, modifier = Modifier.fillMaxWidth()) {
                 Text(selectedSource?.displayName ?: stringResource(R.string.addmedia_source))
             }
-            DropdownMenu(expanded = sourceMenuExpanded, onDismissRequest = { sourceMenuExpanded = false }) {
+            DropdownMenu(expanded = sourceMenuExpanded, onDismissRequest = { sourceMenuExpanded = false }, shape = MenuShape) {
                 state.sources.forEach { source ->
                     DropdownMenuItem(
                         text = { Text(source.displayName) },

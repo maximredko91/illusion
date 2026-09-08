@@ -37,6 +37,7 @@ import com.illusion.app.ui.common.reject
 import com.illusion.app.work.PosterPreloadWorker
 import com.illusion.app.work.WorkScheduler
 import kotlinx.coroutines.flow.Flow
+import com.illusion.app.ui.common.MenuShape
 
 /** Split out of [SettingsScreen] into its own destination so the main Settings list doesn't have to carry cache-management UI (size, clear, poster-caching toggle + preload progress) inline. */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -265,7 +266,7 @@ private fun ImageCacheLimitMenu(currentMb: Int, onChange: (Int) -> Unit) {
         ) {
             Text(imageCacheLimitLabel(currentMb))
         }
-        androidx.compose.material3.DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+        androidx.compose.material3.DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }, shape = MenuShape) {
             options.forEach { option ->
                 val itemSource = remember { MutableInteractionSource() }
                 androidx.compose.material3.DropdownMenuItem(

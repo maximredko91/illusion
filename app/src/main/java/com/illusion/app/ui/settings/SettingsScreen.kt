@@ -89,6 +89,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -109,6 +111,7 @@ import com.illusion.app.ui.common.tick
 import com.illusion.app.ui.common.toggle
 import com.illusion.app.ui.library.sortLabel
 import kotlinx.coroutines.flow.Flow
+import com.illusion.app.ui.common.MenuShape
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -1789,7 +1792,16 @@ private fun AccentColorSwatch(
 private fun DefaultSortOrderMenu(current: SortOrder, onChange: (SortOrder) -> Unit, modifier: Modifier = Modifier) {
     var expanded by remember { mutableStateOf(false) }
     val haptics = LocalHapticFeedback.current
-    Box(modifier = modifier) {
+    // Ширина выпадающего списка привязана к ширине самой кнопки: по умолчанию
+    // DropdownMenu сжимается по самому длинному пункту и выглядит как огрызок посреди
+    // широкой капсулы, а не как её раскрытие.
+    val menuDensity = LocalDensity.current
+    var menuWidth by remember { mutableStateOf(0.dp) }
+    Box(
+        modifier = modifier.onSizeChanged {
+            menuWidth = with(menuDensity) { it.width.toDp() }
+        }
+    ) {
         val triggerSource = remember { MutableInteractionSource() }
         TvAwareOutlinedButton(onClick = { expanded = true }, modifier = Modifier.fillMaxWidth()) {
             Row(
@@ -1805,7 +1817,12 @@ private fun DefaultSortOrderMenu(current: SortOrder, onChange: (SortOrder) -> Un
                 )
             }
         }
-        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+            shape = MenuShape,
+            modifier = if (menuWidth > 0.dp) Modifier.width(menuWidth) else Modifier
+        ) {
             SortOrder.entries.forEach { order ->
                 val itemSource = remember { MutableInteractionSource() }
                 DropdownMenuItem(
@@ -1828,7 +1845,16 @@ private val TV_OVERSCAN_MARGIN_OPTIONS = listOf(0, 2, 4, 6, 8, 10)
 @Composable
 private fun TvOverscanMarginMenu(percent: Int, onChange: (Int) -> Unit, modifier: Modifier = Modifier) {
     var expanded by remember { mutableStateOf(false) }
-    Box(modifier = modifier) {
+    // Ширина выпадающего списка привязана к ширине самой кнопки: по умолчанию
+    // DropdownMenu сжимается по самому длинному пункту и выглядит как огрызок посреди
+    // широкой капсулы, а не как её раскрытие.
+    val menuDensity = LocalDensity.current
+    var menuWidth by remember { mutableStateOf(0.dp) }
+    Box(
+        modifier = modifier.onSizeChanged {
+            menuWidth = with(menuDensity) { it.width.toDp() }
+        }
+    ) {
         val triggerSource = remember { MutableInteractionSource() }
         TvAwareOutlinedButton(onClick = { expanded = true }, modifier = Modifier.fillMaxWidth()) {
             Row(
@@ -1844,7 +1870,12 @@ private fun TvOverscanMarginMenu(percent: Int, onChange: (Int) -> Unit, modifier
                 )
             }
         }
-        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+            shape = MenuShape,
+            modifier = if (menuWidth > 0.dp) Modifier.width(menuWidth) else Modifier
+        ) {
             TV_OVERSCAN_MARGIN_OPTIONS.forEach { option ->
                 val itemSource = remember { MutableInteractionSource() }
                 DropdownMenuItem(
@@ -1865,7 +1896,16 @@ private fun TvOverscanMarginMenu(percent: Int, onChange: (Int) -> Unit, modifier
 private fun ThemeModeMenu(current: com.illusion.app.domain.model.ThemeMode, onChange: (com.illusion.app.domain.model.ThemeMode) -> Unit, modifier: Modifier = Modifier) {
     var expanded by remember { mutableStateOf(false) }
     val haptics = LocalHapticFeedback.current
-    Box(modifier = modifier) {
+    // Ширина выпадающего списка привязана к ширине самой кнопки: по умолчанию
+    // DropdownMenu сжимается по самому длинному пункту и выглядит как огрызок посреди
+    // широкой капсулы, а не как её раскрытие.
+    val menuDensity = LocalDensity.current
+    var menuWidth by remember { mutableStateOf(0.dp) }
+    Box(
+        modifier = modifier.onSizeChanged {
+            menuWidth = with(menuDensity) { it.width.toDp() }
+        }
+    ) {
         val triggerSource = remember { MutableInteractionSource() }
         TvAwareOutlinedButton(onClick = { expanded = true }, modifier = Modifier.fillMaxWidth()) {
             Row(
@@ -1881,7 +1921,12 @@ private fun ThemeModeMenu(current: com.illusion.app.domain.model.ThemeMode, onCh
                 )
             }
         }
-        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+            shape = MenuShape,
+            modifier = if (menuWidth > 0.dp) Modifier.width(menuWidth) else Modifier
+        ) {
             com.illusion.app.domain.model.ThemeMode.entries.forEach { mode ->
                 val itemSource = remember { MutableInteractionSource() }
                 DropdownMenuItem(
@@ -1911,7 +1956,16 @@ private fun themeModeLabel(mode: com.illusion.app.domain.model.ThemeMode): Strin
 private fun PlayerModeMenu(current: com.illusion.app.domain.model.PlayerMode, onChange: (com.illusion.app.domain.model.PlayerMode) -> Unit, modifier: Modifier = Modifier) {
     var expanded by remember { mutableStateOf(false) }
     val haptics = LocalHapticFeedback.current
-    Box(modifier = modifier) {
+    // Ширина выпадающего списка привязана к ширине самой кнопки: по умолчанию
+    // DropdownMenu сжимается по самому длинному пункту и выглядит как огрызок посреди
+    // широкой капсулы, а не как её раскрытие.
+    val menuDensity = LocalDensity.current
+    var menuWidth by remember { mutableStateOf(0.dp) }
+    Box(
+        modifier = modifier.onSizeChanged {
+            menuWidth = with(menuDensity) { it.width.toDp() }
+        }
+    ) {
         val triggerSource = remember { MutableInteractionSource() }
         TvAwareOutlinedButton(onClick = { expanded = true }, modifier = Modifier.fillMaxWidth()) {
             Row(
@@ -1927,7 +1981,12 @@ private fun PlayerModeMenu(current: com.illusion.app.domain.model.PlayerMode, on
                 )
             }
         }
-        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+            shape = MenuShape,
+            modifier = if (menuWidth > 0.dp) Modifier.width(menuWidth) else Modifier
+        ) {
             com.illusion.app.domain.model.PlayerMode.entries.forEach { mode ->
                 val itemSource = remember { MutableInteractionSource() }
                 DropdownMenuItem(
@@ -1949,7 +2008,16 @@ private fun PlayerModeMenu(current: com.illusion.app.domain.model.PlayerMode, on
 private fun PlayerBufferSizeMenu(current: com.illusion.app.domain.model.PlayerBufferSize, onChange: (com.illusion.app.domain.model.PlayerBufferSize) -> Unit, modifier: Modifier = Modifier) {
     var expanded by remember { mutableStateOf(false) }
     val haptics = LocalHapticFeedback.current
-    Box(modifier = modifier) {
+    // Ширина выпадающего списка привязана к ширине самой кнопки: по умолчанию
+    // DropdownMenu сжимается по самому длинному пункту и выглядит как огрызок посреди
+    // широкой капсулы, а не как её раскрытие.
+    val menuDensity = LocalDensity.current
+    var menuWidth by remember { mutableStateOf(0.dp) }
+    Box(
+        modifier = modifier.onSizeChanged {
+            menuWidth = with(menuDensity) { it.width.toDp() }
+        }
+    ) {
         val triggerSource = remember { MutableInteractionSource() }
         TvAwareOutlinedButton(onClick = { expanded = true }, modifier = Modifier.fillMaxWidth()) {
             Row(
@@ -1965,7 +2033,12 @@ private fun PlayerBufferSizeMenu(current: com.illusion.app.domain.model.PlayerBu
                 )
             }
         }
-        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+            shape = MenuShape,
+            modifier = if (menuWidth > 0.dp) Modifier.width(menuWidth) else Modifier
+        ) {
             com.illusion.app.domain.model.PlayerBufferSize.entries.forEach { size ->
                 val itemSource = remember { MutableInteractionSource() }
                 DropdownMenuItem(
@@ -1994,7 +2067,16 @@ private fun playerBufferSizeLabel(size: com.illusion.app.domain.model.PlayerBuff
 private fun PerformanceModeMenu(current: com.illusion.app.domain.model.PerformanceMode, onChange: (com.illusion.app.domain.model.PerformanceMode) -> Unit, modifier: Modifier = Modifier) {
     var expanded by remember { mutableStateOf(false) }
     val haptics = LocalHapticFeedback.current
-    Box(modifier = modifier) {
+    // Ширина выпадающего списка привязана к ширине самой кнопки: по умолчанию
+    // DropdownMenu сжимается по самому длинному пункту и выглядит как огрызок посреди
+    // широкой капсулы, а не как её раскрытие.
+    val menuDensity = LocalDensity.current
+    var menuWidth by remember { mutableStateOf(0.dp) }
+    Box(
+        modifier = modifier.onSizeChanged {
+            menuWidth = with(menuDensity) { it.width.toDp() }
+        }
+    ) {
         val triggerSource = remember { MutableInteractionSource() }
         TvAwareOutlinedButton(onClick = { expanded = true }, modifier = Modifier.fillMaxWidth()) {
             Row(
@@ -2010,7 +2092,12 @@ private fun PerformanceModeMenu(current: com.illusion.app.domain.model.Performan
                 )
             }
         }
-        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+            shape = MenuShape,
+            modifier = if (menuWidth > 0.dp) Modifier.width(menuWidth) else Modifier
+        ) {
             com.illusion.app.domain.model.PerformanceMode.entries.forEach { mode ->
                 val itemSource = remember { MutableInteractionSource() }
                 DropdownMenuItem(
@@ -2039,7 +2126,16 @@ private fun performanceModeLabel(mode: com.illusion.app.domain.model.Performance
 private fun UpdateSourceMenu(current: com.illusion.app.domain.model.UpdateSource, onChange: (com.illusion.app.domain.model.UpdateSource) -> Unit, modifier: Modifier = Modifier) {
     var expanded by remember { mutableStateOf(false) }
     val haptics = LocalHapticFeedback.current
-    Box(modifier = modifier) {
+    // Ширина выпадающего списка привязана к ширине самой кнопки: по умолчанию
+    // DropdownMenu сжимается по самому длинному пункту и выглядит как огрызок посреди
+    // широкой капсулы, а не как её раскрытие.
+    val menuDensity = LocalDensity.current
+    var menuWidth by remember { mutableStateOf(0.dp) }
+    Box(
+        modifier = modifier.onSizeChanged {
+            menuWidth = with(menuDensity) { it.width.toDp() }
+        }
+    ) {
         val triggerSource = remember { MutableInteractionSource() }
         TvAwareOutlinedButton(onClick = { expanded = true }, modifier = Modifier.fillMaxWidth()) {
             Row(
@@ -2055,7 +2151,12 @@ private fun UpdateSourceMenu(current: com.illusion.app.domain.model.UpdateSource
                 )
             }
         }
-        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+            shape = MenuShape,
+            modifier = if (menuWidth > 0.dp) Modifier.width(menuWidth) else Modifier
+        ) {
             com.illusion.app.domain.model.UpdateSource.entries.forEach { source ->
                 val itemSource = remember { MutableInteractionSource() }
                 DropdownMenuItem(
@@ -2089,7 +2190,16 @@ private fun LocalUpdateSourceMenu(
     var expanded by remember { mutableStateOf(false) }
     val haptics = LocalHapticFeedback.current
     val current = sources.firstOrNull { it.id == currentId }
-    Box(modifier = modifier) {
+    // Ширина выпадающего списка привязана к ширине самой кнопки: по умолчанию
+    // DropdownMenu сжимается по самому длинному пункту и выглядит как огрызок посреди
+    // широкой капсулы, а не как её раскрытие.
+    val menuDensity = LocalDensity.current
+    var menuWidth by remember { mutableStateOf(0.dp) }
+    Box(
+        modifier = modifier.onSizeChanged {
+            menuWidth = with(menuDensity) { it.width.toDp() }
+        }
+    ) {
         val triggerSource = remember { MutableInteractionSource() }
         TvAwareOutlinedButton(onClick = { expanded = true }, modifier = Modifier.fillMaxWidth()) {
             Row(
@@ -2105,7 +2215,12 @@ private fun LocalUpdateSourceMenu(
                 )
             }
         }
-        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+            shape = MenuShape,
+            modifier = if (menuWidth > 0.dp) Modifier.width(menuWidth) else Modifier
+        ) {
             sources.forEach { source ->
                 val itemSource = remember { MutableInteractionSource() }
                 DropdownMenuItem(
@@ -2136,7 +2251,16 @@ private fun updateCheckIntervalLabel(hours: Int): String = when {
 private fun UpdateCheckIntervalMenu(currentHours: Int, onChange: (Int) -> Unit, modifier: Modifier = Modifier) {
     var expanded by remember { mutableStateOf(false) }
     val haptics = LocalHapticFeedback.current
-    Box(modifier = modifier) {
+    // Ширина выпадающего списка привязана к ширине самой кнопки: по умолчанию
+    // DropdownMenu сжимается по самому длинному пункту и выглядит как огрызок посреди
+    // широкой капсулы, а не как её раскрытие.
+    val menuDensity = LocalDensity.current
+    var menuWidth by remember { mutableStateOf(0.dp) }
+    Box(
+        modifier = modifier.onSizeChanged {
+            menuWidth = with(menuDensity) { it.width.toDp() }
+        }
+    ) {
         val triggerSource = remember { MutableInteractionSource() }
         TvAwareOutlinedButton(onClick = { expanded = true }, modifier = Modifier.fillMaxWidth()) {
             Row(
@@ -2152,7 +2276,12 @@ private fun UpdateCheckIntervalMenu(currentHours: Int, onChange: (Int) -> Unit, 
                 )
             }
         }
-        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+            shape = MenuShape,
+            modifier = if (menuWidth > 0.dp) Modifier.width(menuWidth) else Modifier
+        ) {
             UPDATE_CHECK_INTERVAL_OPTIONS.forEach { hours ->
                 val itemSource = remember { MutableInteractionSource() }
                 DropdownMenuItem(
@@ -2180,7 +2309,16 @@ private fun ExternalPlayerAppMenu(currentPackage: String?, onChange: (String?) -
     val apps = remember { com.illusion.app.data.player.InstalledPlayerApps.list(context) }
     val systemLabel = stringResource(R.string.settings_external_player_app_system)
     val currentLabel = apps.find { it.packageName == currentPackage }?.label ?: systemLabel
-    Box(modifier = modifier) {
+    // Ширина выпадающего списка привязана к ширине самой кнопки: по умолчанию
+    // DropdownMenu сжимается по самому длинному пункту и выглядит как огрызок посреди
+    // широкой капсулы, а не как её раскрытие.
+    val menuDensity = LocalDensity.current
+    var menuWidth by remember { mutableStateOf(0.dp) }
+    Box(
+        modifier = modifier.onSizeChanged {
+            menuWidth = with(menuDensity) { it.width.toDp() }
+        }
+    ) {
         val triggerSource = remember { MutableInteractionSource() }
         TvAwareOutlinedButton(onClick = { expanded = true }, modifier = Modifier.fillMaxWidth()) {
             Row(
@@ -2196,7 +2334,12 @@ private fun ExternalPlayerAppMenu(currentPackage: String?, onChange: (String?) -
                 )
             }
         }
-        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+            shape = MenuShape,
+            modifier = if (menuWidth > 0.dp) Modifier.width(menuWidth) else Modifier
+        ) {
             val defaultSource = remember { MutableInteractionSource() }
             DropdownMenuItem(
                 text = { Text(systemLabel) },

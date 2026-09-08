@@ -110,6 +110,7 @@ import com.illusion.app.R
 import com.illusion.app.ui.common.dpadFieldNavigation
 import com.illusion.app.ui.common.focusHighlight
 import java.util.Locale
+import com.illusion.app.ui.common.MenuShape
 
 /**
  * Every Material3 Slider in this file needs the same D-pad fix (verified via javap on the real
@@ -255,7 +256,7 @@ fun TopGradientBar(
                 // pixel or two each second as its digits change (a proportional font renders "1"
                 // narrower than "8"), and since DropdownMenu sizes itself to its widest child, that
                 // constant sub-pixel wobble in one row was visibly resizing the whole menu every tick.
-                DropdownMenu(expanded = sleepTimerMenuExpanded, onDismissRequest = { sleepTimerMenuExpanded = false }) {
+                DropdownMenu(expanded = sleepTimerMenuExpanded, onDismissRequest = { sleepTimerMenuExpanded = false }, shape = MenuShape) {
                     if (sleepTimerRemainingMs != null) {
                         DropdownMenuItem(
                             text = { Text(stringResource(R.string.player_sleep_timer_remaining, formatTime(sleepTimerRemainingMs))) },

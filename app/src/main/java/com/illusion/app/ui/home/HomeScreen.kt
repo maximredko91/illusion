@@ -66,6 +66,7 @@ import com.illusion.app.ui.common.PosterCard
 import com.illusion.app.ui.common.focusHighlight
 import com.illusion.app.ui.common.formatWatchLeft
 import com.illusion.app.ui.common.posterCardMinWidth
+import com.illusion.app.ui.common.MenuShape
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -172,7 +173,7 @@ fun HomeScreen(
                                 Icons.Default.MoreVert,
                                 onClick = { moreExpanded = true }
                             )
-                            DropdownMenu(expanded = moreExpanded, onDismissRequest = { moreExpanded = false }) {
+                            DropdownMenu(expanded = moreExpanded, onDismissRequest = { moreExpanded = false }, shape = MenuShape) {
                                 DropdownMenuItem(
                                     text = { Text(stringResource(R.string.history_title)) },
                                     leadingIcon = { Icon(Icons.Default.History, contentDescription = null) },

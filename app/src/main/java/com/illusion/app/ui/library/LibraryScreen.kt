@@ -36,6 +36,10 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.windowInsetsTopHeight
 import androidx.compose.foundation.layout.height
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowUpward
@@ -91,6 +95,7 @@ import com.illusion.app.ui.common.posterGridColumns
 import com.illusion.app.ui.common.segmentTick
 import com.illusion.app.ui.common.tick
 import kotlinx.coroutines.launch
+import com.illusion.app.ui.common.MenuShape
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -99,6 +104,8 @@ fun LibraryScreen(
     items: List<MediaItemEntity>,
     /** Season/episode totals behind each series card, keyed by its stableId - empty for film categories. */
     seriesCounts: Map<String, com.illusion.app.data.repository.SeriesCounts> = emptyMap(),
+    /** Сколько всего в разделе до фильтров - для подписи «Найдено N из M». */
+    totalCount: Int = items.size,
     isLoading: Boolean,
     sortOrder: SortOrder,
     onSortOrderChange: (SortOrder) -> Unit,
@@ -275,25 +282,34 @@ fun LibraryScreen(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.fillMaxWidth().height(64.dp).padding(start = 4.dp, end = 4.dp)
             ) {
-                Text(
-                    categoryTitle(category),
-                    style = MaterialTheme.typography.titleLarge,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                // Сколько всего в разделе и - что важнее - сколько осталось после фильтров:
-                // без этого выбранный жанр/год мог оставить три карточки, и понять это можно было
-                // только прокрутив список до конца.
-                if (!isLoading) {
+                // Голое число рядом с заголовком не говорило, что оно значит, и висело не по высоте
+                // относительно названия. Теперь это подпись под заголовком: «Всего 1005», а при
+                // выбранном фильтре - «Найдено 239 из 1005».
+                Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        items.size.toString(),
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        categoryTitle(category),
+                        style = MaterialTheme.typography.titleLarge,
                         maxLines = 1,
-                        modifier = Modifier.padding(start = 8.dp)
+                        overflow = TextOverflow.Ellipsis
                     )
+                    if (!isLoading) {
+                        val filtered = genreFilter != null || yearFilter != null || countryFilter != null
+                        Text(
+                            if (filtered) {
+                                stringResource(R.string.library_count_filtered, items.size, totalCount)
+                            } else {
+                                stringResource(R.string.library_count_total, items.size)
+                            },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = if (filtered) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            },
+                            maxLines = 1
+                        )
+                    }
                 }
-                Spacer(modifier = Modifier.weight(1f))
                 // Same split the Home header already uses: two frequent actions stay out, the rest
                 // move into "Ещё". Five equal-weight icons competed with each other and with the
                 // category title, and left the two screens looking like different apps.
@@ -324,7 +340,7 @@ fun LibraryScreen(
                         Icons.Default.MoreVert,
                         onClick = { moreExpanded = true }
                     )
-                    DropdownMenu(expanded = moreExpanded, onDismissRequest = { moreExpanded = false }) {
+                    DropdownMenu(expanded = moreExpanded, onDismissRequest = { moreExpanded = false }, shape = MenuShape) {
                         DropdownMenuItem(
                             text = { Text(stringResource(R.string.history_title)) },
                             leadingIcon = { Icon(Icons.Default.History, contentDescription = null) },
@@ -590,7 +606,7 @@ private fun SortMenu(
             onClick = { expanded = true },
             label = { Text(sortDirectionLabel(sortOrder, ascending)) }
         )
-        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }, shape = MenuShape) {
             SortOrder.entries.forEach { order ->
                 val itemSource = remember { MutableInteractionSource() }
                 val isCurrent = order == sortOrder
@@ -602,7 +618,12 @@ private fun SortMenu(
                 // closing the menu same as before this feature existed.
                 val rowAscending = if (isCurrent) ascending else order.defaultAscending
                 DropdownMenuItem(
-                    text = { Text(sortLabel(order)) },
+                    text = {
+                        Text(
+                            sortLabel(order),
+                            color = if (isCurrent) MaterialTheme.colorScheme.primary else LocalContentColor.current
+                        )
+                    },
                     trailingIcon = {
                         Icon(
                             if (rowAscending) Icons.Default.ArrowUpward else Icons.Default.ArrowDownward,
@@ -660,12 +681,37 @@ private fun FilterMenu(
     Box {
         TvAwareAssistChip(
             onClick = { expanded = true },
-            label = { Text(selected ?: label) }
+            label = { Text(selected ?: label) },
+            selected = selected != null,
+            // Сбросить фильтр можно было только через пункт «Все» внутри списка - крестик
+            // на самом чипе делает это в одно касание.
+            trailingIcon = if (selected != null) {
+                {
+                    Icon(
+                        Icons.Default.Close,
+                        contentDescription = stringResource(R.string.library_filter_all),
+                        modifier = Modifier
+                            .size(18.dp)
+                            .clickable {
+                                haptics.segmentTick()
+                                onSelected(null)
+                            }
+                    )
+                }
+            } else {
+                null
+            }
         )
-        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }, shape = MenuShape) {
             val allSource = remember { MutableInteractionSource() }
             DropdownMenuItem(
                 text = { Text(allLabel) },
+                // В списке не было видно, что выбрано сейчас - галочка показывает текущее значение.
+                trailingIcon = if (selected == null) {
+                    { Icon(Icons.Default.Check, contentDescription = null, tint = MaterialTheme.colorScheme.primary) }
+                } else {
+                    null
+                },
                 onClick = {
                     haptics.segmentTick()
                     onSelected(null)
@@ -676,8 +722,19 @@ private fun FilterMenu(
             )
             options.forEach { option ->
                 val itemSource = remember { MutableInteractionSource() }
+                val isSelected = option == selected
                 DropdownMenuItem(
-                    text = { Text(option) },
+                    text = {
+                        Text(
+                            option,
+                            color = if (isSelected) MaterialTheme.colorScheme.primary else LocalContentColor.current
+                        )
+                    },
+                    trailingIcon = if (isSelected) {
+                        { Icon(Icons.Default.Check, contentDescription = null, tint = MaterialTheme.colorScheme.primary) }
+                    } else {
+                        null
+                    },
                     onClick = {
                         haptics.segmentTick()
                         onSelected(option)

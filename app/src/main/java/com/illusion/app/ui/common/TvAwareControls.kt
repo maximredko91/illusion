@@ -44,13 +44,34 @@ fun TvAwareAssistChip(
     onClick: () -> Unit,
     label: @Composable () -> Unit,
     modifier: Modifier = Modifier,
-    enabled: Boolean = true
+    enabled: Boolean = true,
+    trailingIcon: (@Composable () -> Unit)? = null,
+    /** Активный фильтр заливается акцентом: раньше чип с выбранным значением выглядел так же, как пустой. */
+    selected: Boolean = false
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     AssistChip(
         onClick = onClick,
         label = label,
         enabled = enabled,
+        trailingIcon = trailingIcon,
+        colors = if (selected) {
+            androidx.compose.material3.AssistChipDefaults.assistChipColors(
+                containerColor = androidx.compose.material3.MaterialTheme.colorScheme.primaryContainer,
+                labelColor = androidx.compose.material3.MaterialTheme.colorScheme.onPrimaryContainer,
+                trailingIconContentColor = androidx.compose.material3.MaterialTheme.colorScheme.onPrimaryContainer
+            )
+        } else {
+            androidx.compose.material3.AssistChipDefaults.assistChipColors()
+        },
+        border = if (selected) {
+            androidx.compose.material3.AssistChipDefaults.assistChipBorder(
+                enabled = enabled,
+                borderColor = androidx.compose.material3.MaterialTheme.colorScheme.primary
+            )
+        } else {
+            androidx.compose.material3.AssistChipDefaults.assistChipBorder(enabled = enabled)
+        },
         interactionSource = interactionSource,
         modifier = modifier.focusHighlight(interactionSource)
     )

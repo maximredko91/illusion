@@ -41,6 +41,7 @@ import androidx.compose.ui.unit.dp
 import com.illusion.app.R
 import com.illusion.app.ui.common.dpadFieldNavigation
 import com.illusion.app.ui.common.focusHighlight
+import com.illusion.app.ui.common.MenuShape
 
 @Composable
 fun SmbSourceFormFields(
@@ -290,7 +291,7 @@ private fun SuggestibleTextField(
                 // down into the popup's first item instead.
                 .let { if (!menuVisible) it.dpadFieldNavigation() else it }
         )
-        ExposedDropdownMenu(expanded = menuVisible, onDismissRequest = { expanded = false }) {
+        ExposedDropdownMenu(expanded = menuVisible, onDismissRequest = { expanded = false }, shape = MenuShape) {
             filtered.forEach { suggestion ->
                 val itemSource = remember { MutableInteractionSource() }
                 DropdownMenuItem(

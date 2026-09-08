@@ -168,6 +168,8 @@
     <string name="sort_rating_desc">Рейтинг: сначала высокий</string>
     <string name="sort_title_asc">Название: А→Я</string>
     <string name="sort_title_desc">Название: Я→А</string>
+    <string name="library_count_total">Всего %1$d</string>
+    <string name="library_count_filtered">Найдено %1$d из %2$d</string>
     <string name="library_filter_all">Все</string>
     <string name="library_empty">Здесь пока ничего нет</string>
     <string name="library_scroll_to_top">Наверх</string>
