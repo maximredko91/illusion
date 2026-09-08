@@ -17,6 +17,8 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -28,6 +30,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Backup
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
@@ -303,6 +306,13 @@ fun SettingsScreen(
         contentWindowInsets = com.illusion.app.ui.common.tvSafeContentWindowInsets(WindowInsets.safeDrawing),
         topBar = {
             TopAppBar(
+                // Bar was transparent, so rows scrolling past it were cut off mid-letter with
+                // nothing behind them. An opaque surface gives the content something to disappear
+                // under instead of appearing to be clipped in mid-air.
+                colors = androidx.compose.material3.TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surface,
+                    scrolledContainerColor = MaterialTheme.colorScheme.surface
+                ),
                 windowInsets = com.illusion.app.ui.common.rememberLatchedStatusBarsInsets(),
                 title = { Text(if (category != null) categoryTitle(category!!) else stringResource(R.string.settings_title)) },
                 navigationIcon = {
@@ -341,48 +351,24 @@ fun SettingsScreen(
             ) {
                 when (category) {
                     null -> {
+                        // Двенадцать пунктов шли одним списком, где «Кеш», «Загрузки» и «Библиотека»
+                        // были разбросаны между «Режимом экрана» и «Производительностью». Сгруппированы
+                        // по смыслу: где лежат файлы, как выглядит, как играет, всё остальное.
+                        SettingsSectionLabel(stringResource(R.string.settings_section_group_library))
                         CategoryRow(
                             title = stringResource(R.string.settings_smb_sources),
                             description = stringResource(R.string.settings_category_smb_sources_description),
                             icon = Icons.Default.Dns,
                             onClick = { onOpenCategory("smb_sources") }
                         )
-                        SettingsDivider()
-                        CategoryRow(
-                            title = stringResource(R.string.settings_ui_mode_section),
-                            description = stringResource(R.string.settings_category_ui_mode_description),
-                            icon = Icons.Default.Palette,
-                            onClick = { onOpenCategory("ui_mode") }
-                        )
-                        SettingsDivider()
-                        CategoryRow(
-                            title = stringResource(R.string.settings_screen_mode_section),
-                            description = stringResource(R.string.settings_category_screen_mode_description),
-                            icon = Icons.Default.Devices,
-                            onClick = { onOpenCategory("screen_mode") }
-                        )
-                        SettingsDivider()
-                        CategoryRow(
-                            title = stringResource(R.string.settings_performance_section),
-                            description = stringResource(R.string.settings_category_performance_description),
-                            icon = Icons.Default.Speed,
-                            onClick = { onOpenCategory("performance") }
-                        )
-                        SettingsDivider()
+                        SettingsDivider(indented = true)
                         CategoryRow(
                             title = stringResource(R.string.settings_library_section),
                             description = stringResource(R.string.settings_category_library_description),
                             icon = Icons.Default.VideoLibrary,
                             onClick = { onOpenCategory("library") }
                         )
-                        SettingsDivider()
-                        CategoryRow(
-                            title = stringResource(R.string.settings_player_section),
-                            description = stringResource(R.string.settings_category_player_description),
-                            icon = Icons.Default.PlayCircle,
-                            onClick = { onOpenCategory("player") }
-                        )
-                        SettingsDivider()
+                        SettingsDivider(indented = true)
                         // Unlike the other rows, this one navigates straight to the real Cache
                         // screen (already its own NavController destination) rather than to a
                         // category panel here - nothing to reorganize, it already worked this way.
@@ -396,53 +382,85 @@ fun SettingsScreen(
                             icon = Icons.Default.Storage,
                             onClick = onOpenCache
                         )
-                        SettingsDivider()
+                        SettingsDivider(indented = true)
                         CategoryRow(
                             title = stringResource(R.string.settings_downloads),
                             description = stringResource(R.string.settings_category_downloads_description),
                             icon = Icons.Default.Download,
                             onClick = { onOpenCategory("downloads") }
                         )
-                        SettingsDivider()
+                        SettingsDivider(indented = true)
                         CategoryRow(
                             title = stringResource(R.string.settings_backup),
                             description = stringResource(R.string.settings_category_backup_description),
                             icon = Icons.Default.Backup,
                             onClick = { onOpenCategory("backup") }
                         )
+
+                        SettingsSectionLabel(stringResource(R.string.settings_section_group_appearance))
+                        CategoryRow(
+                            title = stringResource(R.string.settings_ui_mode_section),
+                            description = stringResource(R.string.settings_category_ui_mode_description),
+                            icon = Icons.Default.Palette,
+                            onClick = { onOpenCategory("ui_mode") }
+                        )
+                        SettingsDivider(indented = true)
+                        CategoryRow(
+                            title = stringResource(R.string.settings_screen_mode_section),
+                            description = stringResource(R.string.settings_category_screen_mode_description),
+                            icon = Icons.Default.Devices,
+                            onClick = { onOpenCategory("screen_mode") }
+                        )
+                        SettingsDivider(indented = true)
+                        CategoryRow(
+                            title = stringResource(R.string.settings_performance_section),
+                            description = stringResource(R.string.settings_category_performance_description),
+                            icon = Icons.Default.Speed,
+                            onClick = { onOpenCategory("performance") }
+                        )
+
+                        SettingsSectionLabel(stringResource(R.string.settings_section_group_playback))
+                        CategoryRow(
+                            title = stringResource(R.string.settings_player_section),
+                            description = stringResource(R.string.settings_category_player_description),
+                            icon = Icons.Default.PlayCircle,
+                            onClick = { onOpenCategory("player") }
+                        )
+
+                        SettingsSectionLabel(stringResource(R.string.settings_section_group_other))
                         // Developer-only flow (TMDB scrape + SMB upload) built phone-first - its own
                         // screen isn't wired for D-pad focus at all (see CLAUDE.md), so on a TV Box
                         // this row would open an unusable dead end rather than a real feature.
                         if (currentUiMode != UiMode.TV) {
-                        SettingsDivider()
-                        CategoryRow(
-                            title = stringResource(R.string.settings_add_media),
-                            description = stringResource(R.string.settings_add_media_description),
-                            icon = Icons.Default.LibraryAdd,
-                            onClick = { onOpenCategory("add_media") }
-                        )
+                            CategoryRow(
+                                title = stringResource(R.string.settings_add_media),
+                                description = stringResource(R.string.settings_add_media_description),
+                                icon = Icons.Default.LibraryAdd,
+                                onClick = { onOpenCategory("add_media") }
+                            )
+                            SettingsDivider(indented = true)
                         }
-                        SettingsDivider()
                         CategoryRow(
                             title = stringResource(R.string.settings_feedback),
                             description = stringResource(R.string.settings_feedback_description),
                             icon = Icons.Default.Feedback,
                             onClick = { onOpenCategory("feedback") }
                         )
-                        SettingsDivider()
+                        SettingsDivider(indented = true)
                         CategoryRow(
                             title = stringResource(R.string.settings_reset_section),
                             description = stringResource(R.string.settings_category_reset_description),
                             icon = Icons.Default.RestartAlt,
                             onClick = { onOpenCategory("reset") }
                         )
-                        SettingsDivider()
+                        SettingsDivider(indented = true)
                         CategoryRow(
                             title = stringResource(R.string.settings_about_section),
                             description = stringResource(R.string.settings_version, com.illusion.app.BuildConfig.VERSION_NAME),
                             icon = Icons.Default.Info,
                             onClick = { onOpenCategory("about") }
                         )
+                        Spacer(modifier = Modifier.height(16.dp))
                     }
 
                     "about" -> {
@@ -839,9 +857,18 @@ fun SettingsScreen(
                             ) {
                                 Text(
                                     stringResource(R.string.settings_accent_color),
-                                    style = MaterialTheme.typography.titleSmall,
-                                    modifier = Modifier.weight(1f)
+                                    style = MaterialTheme.typography.titleSmall
                                 )
+                                // Текущее значение рядом с заголовком - чтобы свёрнутая секция говорила,
+                                // что выбрано, как это делает кнопка выбора темы выше.
+                                Text(
+                                    accentColorLabel(currentAccentColor),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                    modifier = Modifier.padding(start = 8.dp)
+                                )
+                                Spacer(modifier = Modifier.weight(1f))
                                 com.illusion.app.ui.common.TvAwareIconButton(onClick = { accentColorExpanded = !accentColorExpanded }) {
                                     Icon(
                                         if (accentColorExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
@@ -865,7 +892,15 @@ fun SettingsScreen(
                                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                                 verticalArrangement = Arrangement.spacedBy(12.dp)
                             ) {
-                                com.illusion.app.domain.model.AccentColor.entries.forEach { color ->
+                                // В свёрнутом виде FlowRow показывал первые три цвета по порядку enum, и
+                                // выбранного среди них могло не быть вовсе - текущий акцент был не виден,
+                                // пока не развернёшь список. Выбранный всегда идёт первым.
+                                val orderedAccents = if (accentColorExpanded) {
+                                    com.illusion.app.domain.model.AccentColor.entries.toList()
+                                } else {
+                                    com.illusion.app.domain.model.AccentColor.entries.sortedByDescending { it == currentAccentColor }
+                                }
+                                orderedAccents.forEach { color ->
                                     // Fixed-width column, not wrap-content: a plain Column's width
                                     // follows its widest child, so a longer label ("Бирюзовый")
                                     // pushed that whole cell wider than a shorter one ("Синий") -
@@ -907,9 +942,17 @@ fun SettingsScreen(
                             ) {
                                 Text(
                                     stringResource(R.string.settings_app_icon),
-                                    style = MaterialTheme.typography.titleSmall,
-                                    modifier = Modifier.weight(1f)
+                                    style = MaterialTheme.typography.titleSmall
                                 )
+                                // Текущее значение рядом с заголовком - как у акцентного цвета выше.
+                                Text(
+                                    appIconLabel(currentAppIcon),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                    modifier = Modifier.padding(start = 8.dp)
+                                )
+                                Spacer(modifier = Modifier.weight(1f))
                                 com.illusion.app.ui.common.TvAwareIconButton(onClick = { appIconExpanded = !appIconExpanded }) {
                                     Icon(
                                         if (appIconExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
@@ -927,7 +970,13 @@ fun SettingsScreen(
                                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                                 verticalArrangement = Arrangement.spacedBy(12.dp)
                             ) {
-                                com.illusion.app.domain.model.AppIcon.entries.forEach { icon ->
+                                // Свёрнутый список начинается с выбранного значка, как и у акцентного цвета.
+                                val orderedIcons = if (appIconExpanded) {
+                                    com.illusion.app.domain.model.AppIcon.entries.toList()
+                                } else {
+                                    com.illusion.app.domain.model.AppIcon.entries.sortedByDescending { it == currentAppIcon }
+                                }
+                                orderedIcons.forEach { icon ->
                                     Column(
                                         horizontalAlignment = Alignment.CenterHorizontally,
                                         modifier = Modifier.width(76.dp)
@@ -1569,10 +1618,23 @@ internal fun SettingsGroup(modifier: Modifier = Modifier, content: @Composable a
 }
 
 @Composable
-internal fun SettingsDivider() {
+internal fun SettingsDivider(indented: Boolean = false) {
     androidx.compose.material3.HorizontalDivider(
-        modifier = Modifier.padding(horizontal = 16.dp),
+        // Rows with a leading icon get an inset divider (starts where the text starts), so the
+        // line doesn't cut across the icon column - the usual Material list treatment.
+        modifier = Modifier.padding(start = if (indented) 72.dp else 16.dp, end = 16.dp),
         color = MaterialTheme.colorScheme.outlineVariant
+    )
+}
+
+/** Small all-caps-ish label above a run of related category rows. */
+@Composable
+private fun SettingsSectionLabel(text: String) {
+    Text(
+        text,
+        style = MaterialTheme.typography.labelLarge,
+        color = MaterialTheme.colorScheme.primary,
+        modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 20.dp, bottom = 6.dp)
     )
 }
 
@@ -1634,7 +1696,7 @@ private fun AppIconSwatch(
             .background(androidx.compose.ui.res.colorResource(R.color.icon_bg))
             .then(
                 if (selected) {
-                    Modifier.border(3.dp, MaterialTheme.colorScheme.onSurface, androidx.compose.foundation.shape.RoundedCornerShape(14.dp))
+                    Modifier.border(3.dp, MaterialTheme.colorScheme.primary, androidx.compose.foundation.shape.RoundedCornerShape(14.dp))
                 } else {
                     Modifier
                 }
@@ -1650,6 +1712,27 @@ private fun AppIconSwatch(
             contentDescription = null,
             modifier = Modifier.size(34.dp)
         )
+        // Выбор отмечался по-разному в соседних секциях: у цвета - галочка, у значка - только
+        // рамка. Теперь везде рамка акцентом плюс галочка; у значка она в углу, чтобы не
+        // закрывать сам рисунок.
+        if (selected) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(2.dp)
+                    .size(16.dp)
+                    .clip(androidx.compose.foundation.shape.CircleShape)
+                    .background(MaterialTheme.colorScheme.primary),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    Icons.Default.Check,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onPrimary,
+                    modifier = Modifier.size(12.dp)
+                )
+            }
+        }
     }
 }
 
@@ -1677,7 +1760,7 @@ private fun AccentColorSwatch(
             .background(color)
             .then(
                 if (selected) {
-                    Modifier.border(3.dp, MaterialTheme.colorScheme.onSurface, androidx.compose.foundation.shape.CircleShape)
+                    Modifier.border(3.dp, MaterialTheme.colorScheme.primary, androidx.compose.foundation.shape.CircleShape)
                 } else {
                     Modifier
                 }
@@ -1709,7 +1792,18 @@ private fun DefaultSortOrderMenu(current: SortOrder, onChange: (SortOrder) -> Un
     Box(modifier = modifier) {
         val triggerSource = remember { MutableInteractionSource() }
         TvAwareOutlinedButton(onClick = { expanded = true }, modifier = Modifier.fillMaxWidth()) {
-            Text(sortLabel(current))
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(sortLabel(current))
+                Icon(
+                    Icons.Default.ArrowDropDown,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             SortOrder.entries.forEach { order ->
@@ -1737,7 +1831,18 @@ private fun TvOverscanMarginMenu(percent: Int, onChange: (Int) -> Unit, modifier
     Box(modifier = modifier) {
         val triggerSource = remember { MutableInteractionSource() }
         TvAwareOutlinedButton(onClick = { expanded = true }, modifier = Modifier.fillMaxWidth()) {
-            Text(if (percent <= 0) stringResource(R.string.settings_tv_overscan_margin_off) else "$percent%")
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(if (percent <= 0) stringResource(R.string.settings_tv_overscan_margin_off) else "$percent%")
+                Icon(
+                    Icons.Default.ArrowDropDown,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             TV_OVERSCAN_MARGIN_OPTIONS.forEach { option ->
@@ -1763,7 +1868,18 @@ private fun ThemeModeMenu(current: com.illusion.app.domain.model.ThemeMode, onCh
     Box(modifier = modifier) {
         val triggerSource = remember { MutableInteractionSource() }
         TvAwareOutlinedButton(onClick = { expanded = true }, modifier = Modifier.fillMaxWidth()) {
-            Text(themeModeLabel(current))
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(themeModeLabel(current))
+                Icon(
+                    Icons.Default.ArrowDropDown,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             com.illusion.app.domain.model.ThemeMode.entries.forEach { mode ->
@@ -1798,7 +1914,18 @@ private fun PlayerModeMenu(current: com.illusion.app.domain.model.PlayerMode, on
     Box(modifier = modifier) {
         val triggerSource = remember { MutableInteractionSource() }
         TvAwareOutlinedButton(onClick = { expanded = true }, modifier = Modifier.fillMaxWidth()) {
-            Text(playerModeLabel(current))
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(playerModeLabel(current))
+                Icon(
+                    Icons.Default.ArrowDropDown,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             com.illusion.app.domain.model.PlayerMode.entries.forEach { mode ->
@@ -1825,7 +1952,18 @@ private fun PlayerBufferSizeMenu(current: com.illusion.app.domain.model.PlayerBu
     Box(modifier = modifier) {
         val triggerSource = remember { MutableInteractionSource() }
         TvAwareOutlinedButton(onClick = { expanded = true }, modifier = Modifier.fillMaxWidth()) {
-            Text(playerBufferSizeLabel(current))
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(playerBufferSizeLabel(current))
+                Icon(
+                    Icons.Default.ArrowDropDown,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             com.illusion.app.domain.model.PlayerBufferSize.entries.forEach { size ->
@@ -1859,7 +1997,18 @@ private fun PerformanceModeMenu(current: com.illusion.app.domain.model.Performan
     Box(modifier = modifier) {
         val triggerSource = remember { MutableInteractionSource() }
         TvAwareOutlinedButton(onClick = { expanded = true }, modifier = Modifier.fillMaxWidth()) {
-            Text(performanceModeLabel(current))
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(performanceModeLabel(current))
+                Icon(
+                    Icons.Default.ArrowDropDown,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             com.illusion.app.domain.model.PerformanceMode.entries.forEach { mode ->
@@ -1893,7 +2042,18 @@ private fun UpdateSourceMenu(current: com.illusion.app.domain.model.UpdateSource
     Box(modifier = modifier) {
         val triggerSource = remember { MutableInteractionSource() }
         TvAwareOutlinedButton(onClick = { expanded = true }, modifier = Modifier.fillMaxWidth()) {
-            Text(updateSourceLabel(current))
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(updateSourceLabel(current))
+                Icon(
+                    Icons.Default.ArrowDropDown,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             com.illusion.app.domain.model.UpdateSource.entries.forEach { source ->
@@ -1932,7 +2092,18 @@ private fun LocalUpdateSourceMenu(
     Box(modifier = modifier) {
         val triggerSource = remember { MutableInteractionSource() }
         TvAwareOutlinedButton(onClick = { expanded = true }, modifier = Modifier.fillMaxWidth()) {
-            Text(current?.displayName ?: stringResource(R.string.settings_local_update_source_pick))
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(current?.displayName ?: stringResource(R.string.settings_local_update_source_pick))
+                Icon(
+                    Icons.Default.ArrowDropDown,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             sources.forEach { source ->
@@ -1968,7 +2139,18 @@ private fun UpdateCheckIntervalMenu(currentHours: Int, onChange: (Int) -> Unit, 
     Box(modifier = modifier) {
         val triggerSource = remember { MutableInteractionSource() }
         TvAwareOutlinedButton(onClick = { expanded = true }, modifier = Modifier.fillMaxWidth()) {
-            Text(updateCheckIntervalLabel(currentHours))
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(updateCheckIntervalLabel(currentHours))
+                Icon(
+                    Icons.Default.ArrowDropDown,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             UPDATE_CHECK_INTERVAL_OPTIONS.forEach { hours ->
@@ -2001,7 +2183,18 @@ private fun ExternalPlayerAppMenu(currentPackage: String?, onChange: (String?) -
     Box(modifier = modifier) {
         val triggerSource = remember { MutableInteractionSource() }
         TvAwareOutlinedButton(onClick = { expanded = true }, modifier = Modifier.fillMaxWidth()) {
-            Text(currentLabel)
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(currentLabel)
+                Icon(
+                    Icons.Default.ArrowDropDown,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             val defaultSource = remember { MutableInteractionSource() }

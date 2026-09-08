@@ -9,6 +9,7 @@ import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import com.illusion.app.domain.model.AccentColor
@@ -79,19 +80,37 @@ fun IllusionTheme(
                 darkColorScheme(
                     primary = accentColor.darkPrimary,
                     onPrimary = onColorFor(accentColor.darkPrimary),
+                    // *Container roles are NOT derived from `primary` by darkColorScheme - anything
+                    // not passed here keeps Material3's baked-in purple baseline. That showed up as
+                    // twelve lilac icon tiles on the Settings list while the rest of the app was
+                    // teal (the same trap the library FAB hit earlier with primaryContainer).
+                    // Deriving them keeps every tonal surface on the user's chosen accent.
+                    primaryContainer = lerp(accentColor.darkPrimary, Color.Black, 0.62f),
+                    onPrimaryContainer = accentColor.darkPrimary,
                     secondary = accentColor.darkSecondary,
                     onSecondary = onColorFor(accentColor.darkSecondary),
+                    secondaryContainer = lerp(accentColor.darkSecondary, Color.Black, 0.62f),
+                    onSecondaryContainer = accentColor.darkSecondary,
                     tertiary = accentColor.darkTertiary,
-                    onTertiary = onColorFor(accentColor.darkTertiary)
+                    onTertiary = onColorFor(accentColor.darkTertiary),
+                    tertiaryContainer = lerp(accentColor.darkTertiary, Color.Black, 0.62f),
+                    onTertiaryContainer = accentColor.darkTertiary
                 )
             } else {
                 lightColorScheme(
                     primary = accentColor.lightPrimary,
                     onPrimary = onColorFor(accentColor.lightPrimary),
+                    // See the dark scheme above - same reason, mirrored for a light background.
+                    primaryContainer = lerp(accentColor.lightPrimary, Color.White, 0.72f),
+                    onPrimaryContainer = lerp(accentColor.lightPrimary, Color.Black, 0.45f),
                     secondary = accentColor.lightSecondary,
                     onSecondary = onColorFor(accentColor.lightSecondary),
+                    secondaryContainer = lerp(accentColor.lightSecondary, Color.White, 0.72f),
+                    onSecondaryContainer = lerp(accentColor.lightSecondary, Color.Black, 0.45f),
                     tertiary = accentColor.lightTertiary,
-                    onTertiary = onColorFor(accentColor.lightTertiary)
+                    onTertiary = onColorFor(accentColor.lightTertiary),
+                    tertiaryContainer = lerp(accentColor.lightTertiary, Color.White, 0.72f),
+                    onTertiaryContainer = lerp(accentColor.lightTertiary, Color.Black, 0.45f)
                 )
             }
         }

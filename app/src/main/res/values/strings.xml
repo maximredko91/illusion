@@ -57,6 +57,10 @@
     <string name="home_more_actions">Ещё</string>
     <string name="home_continue_progress">%1$d%% · осталось %2$s</string>
 
+    <string name="settings_section_group_library">Библиотека</string>
+    <string name="settings_section_group_appearance">Внешний вид</string>
+    <string name="settings_section_group_playback">Воспроизведение</string>
+    <string name="settings_section_group_other">Прочее</string>
     <string name="settings_title">Настройки</string>
     <string name="settings_category_smb_sources_description">Список подключённых сетевых папок</string>
     <string name="settings_category_ui_mode_description">Тема, акцентный цвет, тактильный отклик, анимация жеста «назад»</string>
@@ -232,7 +236,7 @@
     <string name="settings_ui_mode_tv_warning_message">Интерфейс режима ТВ реагирует только на пульт (D-pad), а не на касания экрана — включая кнопки в самих Настройках. Если на этом устройстве нет физического пульта, пользоваться приложением станет невозможно, и вернуть телефонный режим можно будет только очисткой данных приложения через настройки Android (Приложения → Иллюзион → Хранилище → Очистить данные) — это сотрёт все настройки и источники SMB. Включить всё равно?</string>
     <string name="settings_ui_mode_tv_warning_confirm">Включить</string>
     <string name="settings_performance_section">Производительность</string>
-    <string name="settings_category_performance_description">Баланс плавности и нагрузки на слабых устройствах</string>
+    <string name="settings_category_performance_description">Баланс плавности и нагрузки</string>
     <string name="settings_performance_mode">Режим производительности</string>
     <string name="settings_performance_mode_description">Один переключатель сразу для нескольких вещей: анимация загрузки постеров, скорость переходов между экранами, фоновые градиенты, GPU-шейдер резкости в плеере и тактильный отклик. «Авто» сам определяет, слабое ли устройство, и выбирает подходящий режим — можно переопределить вручную</string>
     <string name="settings_performance_mode_auto">Авто</string>
@@ -244,9 +248,9 @@
     <string name="settings_haptics_description">Тактильный отклик на нажатия и переключатели</string>
     <string name="settings_haptics_disabled_by_performance_mode">Отключена экономичным режимом производительности (Настройки → Производительность)</string>
     <string name="settings_predictive_back">Анимация жеста «назад»</string>
-    <string name="settings_predictive_back_description">Плавный анимированный предпросмотр экрана при свайпе назад (Android 13+). Отключите, если анимация подтормаживает на вашем устройстве — возврат назад будет мгновенным, без анимации</string>
+    <string name="settings_predictive_back_description">Анимированный предпросмотр при свайпе назад (Android 13+)</string>
     <string name="settings_glass_effect">Эффект стекла</string>
-    <string name="settings_glass_effect_description">Полупрозрачное размытие с преломлением (как матовое стекло) на кнопке прокрутки наверх в библиотеке. Требует Android 12+ (полное преломление — Android 13+), выключено по умолчанию</string>
+    <string name="settings_glass_effect_description">Матовое стекло на кнопке прокрутки наверх (Android 12+)</string>
     <string name="settings_accent_color">Акцентный цвет</string>
     <string name="settings_app_icon">Значок приложения</string>
     <string name="settings_expand">Развернуть</string>
@@ -490,7 +494,7 @@
 
     <string name="addmedia_title">Добавить медиа</string>
     <string name="settings_add_media">Добавление медиа</string>
-    <string name="settings_add_media_description">Скачать метаданные с TMDB и загрузить файл на NAS. Только для разработчика — требует пароль</string>
+    <string name="settings_add_media_description">Загрузка файла на NAS с метаданными TMDB. По паролю</string>
     <string name="settings_add_media_open">Открыть</string>
     <string name="addmedia_source">Источник SMB</string>
     <string name="addmedia_kind_movie">Фильм</string>
