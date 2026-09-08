@@ -311,8 +311,14 @@ internal fun PerforationStrip(holeColor: Color, modifier: Modifier = Modifier) {
     }
 }
 
+/** A trailing "(2001)" in a title - show folder names conventionally carry the year already. */
+private val TITLE_YEAR_PATTERN = Regex("""\(\s*\d{4}\s*\)""")
+
 private fun posterSubtitle(item: MediaItemEntity): String? {
-    val parts = listOfNotNull(item.year?.toString(), item.genres.firstOrNull()?.let(::genreDisplayName))
+    // Series titles come from the show's folder ("Клиника (2001)"), so printing the year again
+    // right under it was pure repetition.
+    val year = item.year?.toString()?.takeIf { !TITLE_YEAR_PATTERN.containsMatchIn(item.title) }
+    val parts = listOfNotNull(year, item.genres.firstOrNull()?.let(::genreDisplayName))
     return parts.takeIf { it.isNotEmpty() }?.joinToString(" · ")
 }
 

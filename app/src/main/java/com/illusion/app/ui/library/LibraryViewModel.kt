@@ -91,6 +91,19 @@ class LibraryViewModel(
         .onEach { _isLoading.value = false }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    /** Season/episode totals per series card - empty for non-series categories. */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val seriesCounts: StateFlow<Map<String, com.illusion.app.data.repository.SeriesCounts>> =
+        combine(_sortOrder, _sortAscending) { sort, ascending -> sort to ascending }
+            .flatMapLatest { (sort, ascending) ->
+                if (isSeriesCategory) {
+                    libraryRepository.observeSeriesCountsByCategory(category, sort, ascending)
+                } else {
+                    kotlinx.coroutines.flow.flowOf(emptyMap())
+                }
+            }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
+
     val items: StateFlow<List<MediaItemEntity>> = combine(allItems, _genreFilter, _yearFilter, _countryFilter) { items, genre, year, country ->
         val filtered = items.filter { item ->
             (genre == null || item.genres.any { it.equals(genre, ignoreCase = true) }) && (year == null || item.year == year) && (country == null || item.country == country)

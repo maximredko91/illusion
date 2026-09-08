@@ -86,6 +86,15 @@ data class PlayerUiState(
     val durationMs: Long = 0,
     val bufferedPositionMs: Long = 0,
     val error: String? = null,
+    /**
+     * True while playing a stream this device can only decode badly. Concretely: MPEG-4 Part 2 in
+     * Advanced Simple Profile (XviD/DivX rips), where the only decoder any of these phones ships
+     * for video/mp4v-es is c2.android.mpeg4.decoder - Simple Profile only, so ASP's B-frames and
+     * packed bitstream come out as broken macroblocks. Players that handle these files (MX, VLC)
+     * carry their own FFmpeg build instead of using the system decoder; until this app does too
+     * (see the note in CLAUDE.md), the honest move is to say so and offer the external player.
+     */
+    val videoCodecPoorlySupported: Boolean = false,
     val audioTracks: List<TrackOption> = emptyList(),
     val subtitleTracks: List<TrackOption> = emptyList(),
     val subtitlesEnabled: Boolean = true,
@@ -990,6 +999,26 @@ class PlayerViewModel(
             if (format == null) {
                 appendLine()
                 appendLine("Видеодорожка ещё не определена")
+                // When the renderer never gets a video format, the interesting question is whether
+                // the container even exposed a video track and whether this device can decode it -
+                // "no video track at all" and "track present but unsupported codec" look identical
+                // on screen (an endless buffering spinner) but mean completely different things.
+                val videoGroups = player.currentTracks.groups.filter { it.type == C.TRACK_TYPE_VIDEO }
+                if (videoGroups.isEmpty()) {
+                    appendLine("В контейнере не найдено ни одной видеодорожки")
+                } else {
+                    for (group in videoGroups) {
+                        for (i in 0 until group.length) {
+                            val trackFormat = group.getTrackFormat(i)
+                            val supported = if (group.isTrackSupported(i)) "поддерживается" else "НЕ поддерживается"
+                            appendLine(
+                                "Дорожка: ${trackFormat.sampleMimeType ?: "—"} " +
+                                    "${trackFormat.width}x${trackFormat.height} - $supported" +
+                                    if (group.isTrackSelected(i)) ", выбрана" else ""
+                            )
+                        }
+                    }
+                }
             } else {
                 val color = format.colorInfo
                 val dvProfile = format.codecs
@@ -1086,6 +1115,7 @@ class PlayerViewModel(
         }
         _state.update { it.copy(audioTracks = audio, subtitleTracks = subtitles) }
         updateAspectRatioFromTracks(tracks)
+        updatePoorlySupportedCodecFromTracks(tracks)
     }
 
     /**
@@ -1096,6 +1126,21 @@ class PlayerViewModel(
      * which render path is in use, so read the ratio from there instead and hand it to the UI,
      * which applies it to PlayerView's content frame itself (see PlayerScreen).
      */
+    /** See [PlayerUiState.videoCodecPoorlySupported]. */
+    private fun updatePoorlySupportedCodecFromTracks(tracks: Tracks) {
+        val poorlySupported = tracks.groups
+            .filter { it.type == C.TRACK_TYPE_VIDEO }
+            .any { group ->
+                (0 until group.length).any { i ->
+                    group.isTrackSelected(i) &&
+                        group.getTrackFormat(i).sampleMimeType == MimeTypes.VIDEO_MP4V
+                }
+            }
+        if (_state.value.videoCodecPoorlySupported != poorlySupported) {
+            _state.update { it.copy(videoCodecPoorlySupported = poorlySupported) }
+        }
+    }
+
     private fun updateAspectRatioFromTracks(tracks: Tracks) {
         for (group in tracks.groups) {
             if (group.type != C.TRACK_TYPE_VIDEO) continue

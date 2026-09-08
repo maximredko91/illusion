@@ -25,6 +25,7 @@ import androidx.compose.foundation.layout.calculateStartPadding
 import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.lazy.grid.GridItemSpan
@@ -41,6 +42,7 @@ import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AssistChip
@@ -94,6 +96,8 @@ import kotlinx.coroutines.launch
 fun LibraryScreen(
     category: Category,
     items: List<MediaItemEntity>,
+    /** Season/episode totals behind each series card, keyed by its stableId - empty for film categories. */
+    seriesCounts: Map<String, com.illusion.app.data.repository.SeriesCounts> = emptyMap(),
     isLoading: Boolean,
     sortOrder: SortOrder,
     onSortOrderChange: (SortOrder) -> Unit,
@@ -151,13 +155,7 @@ fun LibraryScreen(
     val isTv = com.illusion.app.ui.common.LocalUiMode.current == com.illusion.app.domain.model.UiMode.TV
     // Wrap controls so every filter remains visible on narrow screens and at large font sizes.
     val sortFilterRow: @Composable () -> Unit = {
-        val menus: @Composable () -> Unit = {
-            SortMenu(
-                sortOrder,
-                onSortOrderChange = { scrollToTop(); onSortOrderChange(it) },
-                ascending = sortAscending,
-                onAscendingChange = { scrollToTop(); onSortAscendingChange(it) }
-            )
+        val filters: @Composable () -> Unit = {
             if (availableGenres.isNotEmpty()) {
                 FilterMenu(
                     label = stringResource(R.string.library_genre),
@@ -183,10 +181,21 @@ fun LibraryScreen(
                 )
             }
         }
-        androidx.compose.foundation.layout.FlowRow(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp)
-        ) { menus() }
+        // Sorting and filtering used to sit in one undifferentiated wrap of identical chips, where
+        // the long "Рейтинг: сначала высокий" pushed the filters onto a ragged second line and
+        // read as just another filter. Own row for the sort, own row for the filters.
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            SortMenu(
+                sortOrder,
+                onSortOrderChange = { scrollToTop(); onSortOrderChange(it) },
+                ascending = sortAscending,
+                onAscendingChange = { scrollToTop(); onSortAscendingChange(it) }
+            )
+            androidx.compose.foundation.layout.FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) { filters() }
+        }
     }
 
     // No longer read by a TopAppBar's `windowInsets` param (there's no TopAppBar here anymore) -
@@ -272,11 +281,55 @@ fun LibraryScreen(
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f)
                 )
+                // Same split the Home header already uses: two frequent actions stay out, the rest
+                // move into "Ещё". Five equal-weight icons competed with each other and with the
+                // category title, and left the two screens looking like different apps.
+                //
+                // Spacing and the offset both exist to line these up with Home's own TopAppBar
+                // actions, which sit in a Row with spacedBy(4.dp) at the true window edge. This
+                // header is the grid's first item, so the grid's horizontal contentPadding pulls it
+                // inward - measured on-device as the icons landing 13px and 26px left of where the
+                // same icons sit on Home, which is visible as them jumping when switching tabs.
+                // Shifting only this trailing group back out by that padding leaves the title
+                // aligned with the poster cards below it (deliberate - see the comment above).
+                // Cancels the grid's own end contentPadding for this trailing group only, so the
+                // icons land at the same place Home's TopAppBar actions do (W - cutout) in every
+                // orientation - a flat 8.dp would leave the landscape cutout term uncancelled and
+                // put them somewhere else than on Home. The title keeps the padding on purpose: it
+                // stays aligned with the poster cards below it.
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.offset(x = gridEndPadding)
+                ) {
                 com.illusion.app.ui.common.TooltipIconButton(stringResource(R.string.nav_search), Icons.Default.Search, onOpenSearch)
                 com.illusion.app.ui.common.TooltipIconButton(stringResource(R.string.favorites_title), Icons.Default.Favorite, onOpenFavorites)
-                com.illusion.app.ui.common.TooltipIconButton(stringResource(R.string.history_title), Icons.Default.History, onOpenHistory)
-                com.illusion.app.ui.common.TooltipIconButton(stringResource(R.string.downloads_title), Icons.Default.Download, onOpenDownloads)
-                com.illusion.app.ui.common.TooltipIconButton(stringResource(R.string.settings_title), Icons.Default.Settings, onOpenSettings)
+                var moreExpanded by remember { mutableStateOf(false) }
+                Box {
+                    com.illusion.app.ui.common.TooltipIconButton(
+                        stringResource(R.string.home_more_actions),
+                        Icons.Default.MoreVert,
+                        onClick = { moreExpanded = true }
+                    )
+                    DropdownMenu(expanded = moreExpanded, onDismissRequest = { moreExpanded = false }) {
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.history_title)) },
+                            leadingIcon = { Icon(Icons.Default.History, contentDescription = null) },
+                            onClick = { moreExpanded = false; onOpenHistory() }
+                        )
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.downloads_title)) },
+                            leadingIcon = { Icon(Icons.Default.Download, contentDescription = null) },
+                            onClick = { moreExpanded = false; onOpenDownloads() }
+                        )
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.settings_title)) },
+                            leadingIcon = { Icon(Icons.Default.Settings, contentDescription = null) },
+                            onClick = { moreExpanded = false; onOpenSettings() }
+                        )
+                    }
+                }
+                }
             }
             if (category == Category.CARTOONS || category == Category.CARTOON_SERIES) {
                 CartoonCategoryToggle(
@@ -380,15 +433,23 @@ fun LibraryScreen(
             targetState = if (isLoading) 0 else if (items.isEmpty()) 1 else 2,
             modifier = Modifier.fillMaxSize()
         ) { state ->
+            // Both non-grid states wrap header() in the SAME horizontal padding the grid applies to
+            // it via contentPadding. Without that, the first switch to a tab showed the header at
+            // the screen edge while the list was still loading, then shifted it inward by 8dp the
+            // moment rows arrived - measured frame by frame at 60fps as the title moving 23px right
+            // and the icons 26px left, which reads as the header spreading out and snapping back.
+            // Only the first visit to a tab hits it, because after that the rows are already cached
+            // and this branch never renders.
+            val headerRowPadding = PaddingValues(start = gridStartPadding, end = gridEndPadding)
             when (state) {
                 0 -> Column(modifier = Modifier.fillMaxSize()) {
-                    header()
+                    Box(modifier = Modifier.padding(headerRowPadding)) { header() }
                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         CircularProgressIndicator()
                     }
                 }
                 1 -> Column(modifier = Modifier.fillMaxSize()) {
-                    header()
+                    Box(modifier = Modifier.padding(headerRowPadding)) { header() }
                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         Text(
                             stringResource(
@@ -433,11 +494,18 @@ fun LibraryScreen(
                         // multi-column grid simultaneously produced visible dark bar
                         // artifacts sweeping across rows mid-transition, not a clean
                         // reflow. A plain instant re-layout has no such glitch.
+                        // For a show, "год · жанр" repeats what the title already says (folder
+                        // names carry the year) and says nothing about the thing that actually
+                        // distinguishes one show card from another - how much of it there is.
+                        val counts = seriesCounts[item.stableId]
                         PosterCard(
                             item = item,
                             onClick = { onOpenItem(item.stableId) },
                             modifier = Modifier.padding(4.dp),
-                            showRatingBadge = sortOrder == SortOrder.RATING
+                            showRatingBadge = sortOrder == SortOrder.RATING,
+                            subtitleOverride = counts?.let {
+                                seriesCountsLabel(it.seasons, it.episodes)
+                            }
                         )
                     }
                 }
@@ -784,4 +852,22 @@ private fun LibraryScreenTvPreview() {
             )
         }
     }
+}
+
+private fun russianPlural(count: Int, one: String, few: String, many: String): String {
+    val mod100 = count % 100
+    val mod10 = count % 10
+    return when {
+        mod100 in 11..14 -> many
+        mod10 == 1 -> one
+        mod10 in 2..4 -> few
+        else -> many
+    }
+}
+
+/** "6 сезонов · 168 эпизодов" - a series card's caption. */
+internal fun seriesCountsLabel(seasons: Int, episodes: Int): String {
+    val seasonsPart = if (seasons > 0) "$seasons ${russianPlural(seasons, "сезон", "сезона", "сезонов")}" else null
+    val episodesPart = "$episodes ${russianPlural(episodes, "эпизод", "эпизода", "эпизодов")}"
+    return listOfNotNull(seasonsPart, episodesPart).joinToString(" · ")
 }

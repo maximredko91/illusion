@@ -392,19 +392,53 @@ class LibraryScanner(
         } else {
             null
         }
-        // Same folder as the video only (not the show root) - trailers are per-movie/per-episode,
-        // never shared across a whole series the way a poster is. "<basename>-trailer[N]" wins over
-        // a bare "trailer[N]" when both happen to be present.
-        fun matchesTrailer(ref: SmbFileRef): Boolean {
+        // "<basename>-trailer[N]" (this exact episode/movie) wins over a season trailer, which in
+        // turn wins over a bare "trailer[N]" shared by the folder.
+        fun isNumberedSuffix(rest: String) = rest.all { it.isDigit() || it == '-' || it == '_' }
+
+        fun matchesOwnTrailer(ref: SmbFileRef): Boolean {
             val refBase = ref.baseName.lowercase()
             val prefix = "${baseName.lowercase()}-trailer"
-            if (refBase == prefix || (refBase.startsWith(prefix) && refBase.substring(prefix.length).all { it.isDigit() || it == '-' || it == '_' })) return true
-            if (refBase == "trailer" || (refBase.startsWith("trailer") && refBase.substring("trailer".length).all { it.isDigit() || it == '-' || it == '_' })) return true
-            return false
+            return refBase == prefix || (refBase.startsWith(prefix) && isNumberedSuffix(refBase.substring(prefix.length)))
         }
-        val trailerFile = trailerFiles
-            .filter { it.path.substringBeforeLast('\\') == videoFolder && matchesTrailer(it) }
-            .minByOrNull { it.name }
+
+        fun matchesBareTrailer(ref: SmbFileRef): Boolean {
+            val refBase = ref.baseName.lowercase()
+            return refBase == "trailer" ||
+                (refBase.startsWith("trailer") && isNumberedSuffix(refBase.substring("trailer".length)))
+        }
+
+        // Per-season trailer, named "<whatever>-S<n>-trailer[N].ext" ("Название-S1-trailer.mp4").
+        // Unlike the two forms above it may also live at the show root rather than beside the
+        // episodes, since one file covers a whole season.
+        fun matchesSeasonTrailer(ref: SmbFileRef, season: Int): Boolean {
+            val refBase = ref.baseName.lowercase()
+            val markerIndex = SEASON_TRAILER_PATTERN.find(refBase)
+                ?.takeIf { it.groupValues[1].toIntOrNull() == season }
+                ?.range?.last ?: return false
+            return isNumberedSuffix(refBase.substring(markerIndex + 1))
+        }
+
+        // The season number an episode belongs to. metadata?.season is the authoritative source but
+        // isn't parsed yet at this point (and doesn't exist at all without a .nfo), so callers pass
+        // whatever they know and this fills in from the usual "S01E02" shape in the file name.
+        fun seasonFromFileName(): Int? =
+            SEASON_EPISODE_PATTERN.find(baseName)?.groupValues?.get(1)?.toIntOrNull()
+
+        fun resolveTrailer(season: Int?): SmbFileRef? {
+            val inVideoFolder = trailerFiles.filter { it.path.substringBeforeLast('\\') == videoFolder }
+            inVideoFolder.filter { matchesOwnTrailer(it) }.minByOrNull { it.name }?.let { return it }
+            val effectiveSeason = season ?: seasonFromFileName()
+            if (effectiveSeason != null) {
+                val seasonSearchFolders = listOfNotNull(videoFolder, showFolder).distinct()
+                seasonSearchFolders.firstNotNullOfOrNull { folder ->
+                    trailerFiles
+                        .filter { it.path.substringBeforeLast('\\') == folder && matchesSeasonTrailer(it, effectiveSeason) }
+                        .minByOrNull { it.name }
+                }?.let { return it }
+            }
+            return inVideoFolder.filter { matchesBareTrailer(it) }.minByOrNull { it.name }
+        }
 
         // Fields that only ever come from an SMB read of the video itself (content-hash stableId)
         // or its .nfo (everything metadata-shaped) never need re-deriving when neither has changed
@@ -419,7 +453,8 @@ class LibraryScanner(
             previous.lastModified == file.lastModified &&
             previous.nfoLastModified == nfoRef?.lastModified
         if (unchanged) {
-            return previous!!.copy(
+            val trailerFile = resolveTrailer(previous!!.seasonNumber)
+            return previous.copy(
                 category = category,
                 posterPath = localPosterPath ?: previous.posterPath,
                 fanartPath = localFanartPath ?: previous.fanartPath,
@@ -447,6 +482,7 @@ class LibraryScanner(
         // genre/year on any item, which silently disables the Library genre/year filter chips
         // (they only render when at least one item in the category has a value).
         val showMetadata = showFolder?.let { fetchShowNfo(connection, it, showNfoCache) }
+        val trailerFile = resolveTrailer(metadata?.season)
 
         return MediaItemEntity(
             stableId = stableId,
@@ -579,5 +615,11 @@ class LibraryScanner(
         private const val STABLE_ID_SAMPLE_BYTES = 65536
 
         private val COLLECTION_FOLDER_REGEX = Regex("""^(.+?)\s*\(Коллекция\)$""", RegexOption.IGNORE_CASE)
+
+        /** "Название-S1-trailer.mp4" / "Show - s02 - trailer2.mkv" - the season marker plus the word itself. */
+        private val SEASON_TRAILER_PATTERN = Regex("""[-_. ]s(\d{1,2})[-_. ]+trailer""", RegexOption.IGNORE_CASE)
+
+        /** Usual "S01E02" episode naming, used to place an episode in a season when it has no .nfo. */
+        private val SEASON_EPISODE_PATTERN = Regex("""s(\d{1,2})[-_. ]?e\d{1,3}""", RegexOption.IGNORE_CASE)
     }
 }

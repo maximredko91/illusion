@@ -26,6 +26,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -223,22 +224,26 @@ fun DetailsScreen(
                 // errored on its own SMB connection attempt if there was no Wi-Fi - a real "no
                 // Wi-Fi" state read as a broken player. A completed download plays from a local
                 // file regardless of network, so it's the one case allowed through unconditionally.
-                onPlay = {
+                // Takes the id it's given, NOT item.stableId - this lambda used to discard its
+                // argument, so tapping any episode in the list played the show's representative
+                // episode (S1E1) instead of the one tapped, confirmed on-device.
+                onPlay = { stableId ->
                     if (download?.status == DownloadStatus.COMPLETED || com.illusion.app.ui.common.isOnLocalNetwork(context)) {
-                        onPlay(item.stableId)
+                        onPlay(stableId)
                     } else {
                         scope.launch { snackbarHostState.showSnackbar(offlineWarning) }
                     }
                 },
-                onPlayTrailer = {
+                onPlayTrailer = { stableId ->
                     // Trailers are never downloaded (see the app's own README/CLAUDE notes - TMDB
                     // has no downloadable file), so there's no local-file exception here.
                     if (com.illusion.app.ui.common.isOnLocalNetwork(context)) {
-                        onPlayTrailer(item.stableId)
+                        onPlayTrailer(stableId)
                     } else {
                         scope.launch { snackbarHostState.showSnackbar(offlineWarning) }
                     }
                 },
+                onPlaySeasonTrailer = onPlayTrailer,
                 onOpenPerson = onOpenPerson,
                 onOpenItem = onOpenItem,
                 contentFocusRequester = contentFocusRequester
@@ -370,6 +375,7 @@ private fun DetailsContent(
     downloads: Map<String, DownloadEntity>,
     onStartDownload: () -> Unit,
     onRemoveDownload: () -> Unit,
+    onPlaySeasonTrailer: (String) -> Unit,
     onDownloadSeason: (List<String>) -> Unit,
     onDownloadEpisode: (String) -> Unit,
     onRemoveEpisodeDownload: (String) -> Unit,
@@ -670,16 +676,18 @@ private fun DetailsContent(
                                 color = MaterialTheme.colorScheme.primary
                             )
                         }
+                        val isSeries = item.seriesStableId != null
                         val yearAndRuntime = listOfNotNull(
-                            item.year?.toString(),
-                            item.runtimeMinutes?.takeIf { it > 0 }?.let { minutes ->
-                                when {
-                                    minutes < 60 -> "$minutes мин"
-                                    minutes % 60 == 0 -> "${minutes / 60} ч"
-                                    else -> "${minutes / 60} ч ${minutes % 60} мин"
-                                }
-                            }
-                        ).joinToString(" · ")
+                            // A show's title comes from its folder name, which conventionally
+                            // already carries the year ("Клиника (2001)") - repeating it right underneath
+                            // read as a mistake.
+                            item.year?.toString()?.takeIf { !TITLE_YEAR_PATTERN.containsMatchIn(displayTitle) },
+                            // For a series the item behind this screen is one episode, so its own
+                            // runtime ("22 мин") described that episode while sitting exactly where a
+                            // film's total runtime goes. Season/episode counts belong in that slot
+                            // for a show.
+                            if (isSeries) seasonsAndEpisodesLabel(episodes) else formatRuntime(item.runtimeMinutes)
+                        ).joinToString(" · ")
                         if (yearAndRuntime.isNotEmpty()) {
                             Text(
                                 yearAndRuntime,
@@ -785,15 +793,37 @@ private fun DetailsContent(
         // read as a deliberate part of the design. Grouped together in their own lightly-tinted
         // card here instead, both get the room to breathe a plain inline `Text` next to a poster
         // never had.
+        // For a series the header has no trailer of its own (the item behind it is an episode), so
+        // the first season's trailer stands in as the show's - that's the one a viewer means by
+        // "the trailer" on a series card. Later seasons stay reachable from their own season rows.
+        val headerTrailerItem = item.takeIf { it.trailerPath != null }
+            ?: episodes
+                .filter { it.hasSeasonWideTrailer() }
+                .minByOrNull { it.seasonNumber ?: Int.MAX_VALUE }
         ActionButtonsRow(
             hasStartedWatching = hasStartedWatching,
             resumePositionMs = resumePositionMs,
             totalDurationMs = totalDurationMs,
-            hasTrailer = item.trailerPath != null,
+            hasTrailer = headerTrailerItem != null,
+            // "Смотреть"/"Продолжить" alone said nothing about WHICH episode a series card would
+            // start - the episode label makes the button's actual effect visible before tapping.
+            playEpisodeLabel = if (item.seriesStableId != null) {
+                item.seasonNumber?.let { season ->
+                    item.episodeNumber?.let { episode ->
+                        stringResource(R.string.details_season_episode, season, episode)
+                    }
+                }
+            } else {
+                null
+            },
+            // A series download button in the header downloads this one representative episode,
+            // which reads as "download the show". Each season row has its own download action,
+            // which is the unambiguous one.
+            showDownload = item.seriesStableId == null,
             download = download,
             itemTitle = displayTitle,
             onPlay = { onPlay(item.stableId) },
-            onPlayTrailer = { onPlayTrailer(item.stableId) },
+            onPlayTrailer = { headerTrailerItem?.let { onPlayTrailer(it.stableId) } },
             onStartDownload = onStartDownload,
             onRemoveDownload = onRemoveDownload,
             onDownloadError = onDownloadError
@@ -914,6 +944,11 @@ private fun DetailsContent(
                     )
                 }
             }
+            // Skipped for a series: subtitlePaths belongs to the one representative episode behind
+            // this screen, so "Субтитры: Нет" sat among show-wide facts (studio, premiere, status)
+            // while actually describing a single file. Per-episode subtitle state isn't something
+            // this block can honestly summarize for a whole show.
+            if (item.seriesStableId == null) {
             MetaRow(stringResource(R.string.details_subtitles_label).trim()) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     val hasSubtitles = item.subtitlePaths.isNotEmpty()
@@ -932,10 +967,11 @@ private fun DetailsContent(
                     }
                 }
             }
+            }
         }
 
         if (episodes.isNotEmpty()) {
-            EpisodeList(episodes, downloads, onPlay, onDownloadSeason, onDownloadEpisode, onRemoveEpisodeDownload, onRemoveSeasonDownloads)
+            EpisodeList(episodes, downloads, item.plot, onPlay, onPlaySeasonTrailer, onDownloadSeason, onDownloadEpisode, onRemoveEpisodeDownload, onRemoveSeasonDownloads)
         }
 
         if (item.director.isNotEmpty()) {
@@ -994,6 +1030,9 @@ private fun ActionButtonsRow(
     resumePositionMs: Long = 0L,
     totalDurationMs: Long = 0L,
     hasTrailer: Boolean,
+    /** "S1E1" for a series, null for a film - appended to the play button so it names the episode it starts. */
+    playEpisodeLabel: String? = null,
+    showDownload: Boolean = true,
     download: DownloadEntity?,
     itemTitle: String,
     onPlay: () -> Unit,
@@ -1014,8 +1053,11 @@ private fun ActionButtonsRow(
             modifier = Modifier.fillMaxWidth()
         ) {
             Icon(Icons.Default.PlayArrow, contentDescription = null)
+            val playLabel = stringResource(
+                if (hasStartedWatching) R.string.details_continue_watching else R.string.details_play
+            )
             Text(
-                stringResource(if (hasStartedWatching) R.string.details_continue_watching else R.string.details_play),
+                playEpisodeLabel?.let { "$playLabel · $it" } ?: playLabel,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.padding(start = 8.dp)
@@ -1070,14 +1112,16 @@ private fun ActionButtonsRow(
                     )
                 }
             }
-            DownloadButton(
-                download = download,
-                itemTitle = itemTitle,
-                onStart = onStartDownload,
-                onRemove = onRemoveDownload,
-                onError = onDownloadError,
-                modifier = if (hasTrailer) Modifier.weight(1f) else Modifier.widthIn(max = 240.dp)
-            )
+            if (showDownload) {
+                DownloadButton(
+                    download = download,
+                    itemTitle = itemTitle,
+                    onStart = onStartDownload,
+                    onRemove = onRemoveDownload,
+                    onError = onDownloadError,
+                    modifier = if (hasTrailer) Modifier.weight(1f) else Modifier.widthIn(max = 240.dp)
+                )
+            }
         }
     }
 }
@@ -1407,11 +1451,71 @@ private fun PersonChip(name: String, clickable: Boolean, onOpenPerson: (String) 
     }
 }
 
+/** A trailing "(2001)" in a title - show folders conventionally carry the year already. */
+private val TITLE_YEAR_PATTERN = Regex("""\(\s*\d{4}\s*\)""")
+
+private fun formatRuntime(minutes: Int?): String? {
+    val value = minutes?.takeIf { it > 0 } ?: return null
+    return when {
+        value < 60 -> "$value мин"
+        value % 60 == 0 -> "${value / 60} ч"
+        else -> "${value / 60} ч ${value % 60} мин"
+    }
+}
+
+private fun russianPlural(count: Int, one: String, few: String, many: String): String {
+    val mod100 = count % 100
+    val mod10 = count % 10
+    return when {
+        mod100 in 11..14 -> many
+        mod10 == 1 -> one
+        mod10 in 2..4 -> few
+        else -> many
+    }
+}
+
+/** "6 сезонов · 168 эпизодов" - what a series card's meta line should say instead of one episode's runtime. */
+private fun seasonsAndEpisodesLabel(episodes: List<MediaItemEntity>): String? {
+    if (episodes.isEmpty()) return null
+    val seasons = episodes.mapNotNull { it.seasonNumber }.distinct().size
+    val episodeCount = episodes.size
+    val seasonsPart = if (seasons > 0) {
+        "$seasons ${russianPlural(seasons, "сезон", "сезона", "сезонов")}"
+    } else {
+        null
+    }
+    val episodesPart = "$episodeCount ${russianPlural(episodeCount, "эпизод", "эпизода", "эпизодов")}"
+    return listOfNotNull(seasonsPart, episodesPart).joinToString(" · ")
+}
+
+/** "Название-S1-trailer.mp4" - the shape LibraryScanner assigns to every episode of one season. */
+private val SEASON_TRAILER_FILE_PATTERN = Regex("""[-_. ]s\d{1,2}[-_. ]+trailer""", RegexOption.IGNORE_CASE)
+
+/**
+ * True when this item's trailer is one a whole season shares, rather than the item's own
+ * "<episode>-trailer.mkv". Two shapes qualify: the per-season file above, and a bare "trailer.mkv"
+ * sitting in the season's folder (which the scanner hands to every episode there).
+ */
+private fun MediaItemEntity.hasSeasonWideTrailer(): Boolean {
+    val fileBase = trailerPath
+        ?.substringAfterLast('\\')
+        ?.substringBeforeLast('.')
+        ?.lowercase()
+        ?: return false
+    if (SEASON_TRAILER_FILE_PATTERN.containsMatchIn(fileBase)) return true
+    return fileBase == "trailer" ||
+        (fileBase.startsWith("trailer") &&
+            fileBase.substring("trailer".length).all { it.isDigit() || it == '-' || it == '_' })
+}
+
 @Composable
 private fun EpisodeList(
     episodes: List<MediaItemEntity>,
     downloads: Map<String, DownloadEntity>,
+    /** The show's own synopsis - episodes that merely inherit it don't repeat it in their row. */
+    seriesPlot: String?,
     onPlay: (String) -> Unit,
+    onPlaySeasonTrailer: (String) -> Unit,
     onDownloadSeason: (List<String>) -> Unit,
     onDownloadEpisode: (String) -> Unit,
     onRemoveEpisodeDownload: (String) -> Unit,
@@ -1483,6 +1587,14 @@ private fun EpisodeList(
 
     Column(modifier = Modifier.padding(top = 8.dp)) {
         bySeason.forEach { (season, seasonEpisodes) ->
+            val seasonTrailerEpisode = seasonEpisodes.firstOrNull { it.hasSeasonWideTrailer() }
+            // With several seasons all pointing at the same file, that file sits at the show root
+            // and belongs to the show as a whole (the Details header already offers it) - showing
+            // it again on every season row would just be the same trailer repeated.
+            val seasonTrailerIsShared = seasonTrailerEpisode != null && bySeason.size > 1 &&
+                bySeason.values.count { others ->
+                    others.any { it.trailerPath == seasonTrailerEpisode.trailerPath }
+                } > 1
             val expanded = season in expandedSeasons
             val seasonSource = remember { MutableInteractionSource() }
             Row(
@@ -1506,6 +1618,34 @@ private fun EpisodeList(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(end = 4.dp)
                 )
+                if (seasonTrailerEpisode != null && !seasonTrailerIsShared) {
+                    // A bare Theaters glyph next to a season told nobody what it does (same
+                    // feedback the header's trailer button got earlier) - it's a labelled chip now.
+                    val seasonTrailerSource = remember { MutableInteractionSource() }
+                    OutlinedButton(
+                        onClick = { onPlaySeasonTrailer(seasonTrailerEpisode.stableId) },
+                        interactionSource = seasonTrailerSource,
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.primary),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                        modifier = Modifier
+                            .padding(end = 4.dp)
+                            .heightIn(min = 32.dp)
+                            .focusHighlight(seasonTrailerSource)
+                    ) {
+                        Icon(
+                            Icons.Default.Theaters,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Text(
+                            stringResource(R.string.details_trailer),
+                            style = MaterialTheme.typography.labelMedium,
+                            maxLines = 1,
+                            modifier = Modifier.padding(start = 6.dp)
+                        )
+                    }
+                }
                 val seasonHasDownloads = seasonEpisodes.any { downloads[it.stableId]?.status == DownloadStatus.COMPLETED }
                 com.illusion.app.ui.common.TvAwareIconButton(
                     onClick = {
@@ -1546,36 +1686,56 @@ private fun EpisodeList(
                             .fillMaxWidth()
                             .focusHighlight(episodeSource)
                             .clickable(interactionSource = episodeSource, indication = LocalIndication.current) { onPlay(episode.stableId) }
-                            .padding(horizontal = 16.dp, vertical = 12.dp)
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
                         Box(
                             modifier = Modifier
-                                .width(120.dp)
+                                .width(148.dp)
                                 .aspectRatio(16f / 9f)
+                                .clip(RoundedCornerShape(8.dp))
                                 .background(MaterialTheme.colorScheme.surfaceVariant)
                         ) {
                             ThumbnailImage(episode.episodeThumbModel, contentDescription = null)
                         }
                         Column(modifier = Modifier.padding(start = 12.dp).weight(1f)) {
-                            Row {
-                                Text(label.ifBlank { episode.title }, modifier = Modifier.weight(1f))
-                                episode.premiered?.let {
-                                    Text(
-                                        formatPremieredDate(it),
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        modifier = Modifier.padding(start = 8.dp)
-                                    )
-                                }
-                            }
-                            episode.plot?.takeIf { it.isNotBlank() }?.let {
+                            // The premiere date used to sit in the same row as the title, taking
+                            // enough width that a title like "Мой первый день" wrapped one word per
+                            // line. It's supporting information - it belongs on the meta line below
+                            // together with the runtime, not competing with the title for width.
+                            Text(
+                                label.ifBlank { episode.title },
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            val episodeMeta = listOfNotNull(
+                                episode.premiered?.takeIf { it.isNotBlank() }?.let { formatPremieredDate(it) },
+                                formatRuntime(episode.runtimeMinutes)
+                            ).joinToString(" · ")
+                            if (episodeMeta.isNotEmpty()) {
                                 Text(
-                                    it,
-                                    style = MaterialTheme.typography.bodySmall,
+                                    episodeMeta,
+                                    style = MaterialTheme.typography.labelSmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.padding(top = 4.dp)
+                                    modifier = Modifier.padding(top = 2.dp)
                                 )
                             }
+                            // Episodes without their own <plot> inherit the show's, so every row
+                            // repeated the synopsis already shown at the top of this screen -
+                            // skipped entirely in that case. What's left is capped at two lines:
+                            // a full synopsis per row made a 33-episode season unreadable.
+                            episode.plot
+                                ?.takeIf { it.isNotBlank() && it != seriesPlot }
+                                ?.let {
+                                    Text(
+                                        it,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 2,
+                                        overflow = TextOverflow.Ellipsis,
+                                        modifier = Modifier.padding(top = 4.dp)
+                                    )
+                                }
                         }
                         when (downloads[episode.stableId]?.status) {
                             DownloadStatus.COMPLETED -> {

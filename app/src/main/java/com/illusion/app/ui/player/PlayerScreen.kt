@@ -441,6 +441,45 @@ fun PlayerScreen(
     }
     val isInPip = PipController.isInPipMode
 
+    // Offered once per playback: this device's only video/mp4v-es decoder mangles ASP streams
+    // (see PlayerUiState.videoCodecPoorlySupported), so the picture is watchable but visibly
+    // broken up - better to say so and offer the app that can actually decode it.
+    var showPoorCodecPrompt by remember { mutableStateOf(false) }
+    var poorCodecPromptShown by remember { mutableStateOf(false) }
+    LaunchedEffect(uiState.videoCodecPoorlySupported) {
+        if (uiState.videoCodecPoorlySupported && !poorCodecPromptShown) {
+            poorCodecPromptShown = true
+            showPoorCodecPrompt = true
+        }
+    }
+    if (showPoorCodecPrompt && !isInPip) {
+        AlertDialog(
+            onDismissRequest = { showPoorCodecPrompt = false },
+            title = { Text(stringResource(R.string.player_codec_unsupported_title)) },
+            text = { Text(stringResource(R.string.player_codec_unsupported_message)) },
+            confirmButton = {
+                val externalSource = remember { MutableInteractionSource() }
+                TextButton(
+                    onClick = {
+                        showPoorCodecPrompt = false
+                        viewModel.choosePlayerMode(external = true)
+                    },
+                    interactionSource = externalSource,
+                    modifier = Modifier.focusHighlight(externalSource)
+                ) { Text(stringResource(R.string.player_codec_unsupported_open_external)) }
+            },
+            dismissButton = {
+                val staySource = remember { MutableInteractionSource() }
+                TextButton(
+                    onClick = { showPoorCodecPrompt = false },
+                    interactionSource = staySource,
+                    modifier = Modifier.focusHighlight(staySource)
+                ) { Text(stringResource(R.string.player_codec_unsupported_stay)) }
+            }
+        )
+    }
+
+
     Box(
         modifier = modifier
             .fillMaxSize()

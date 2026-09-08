@@ -1,6 +1,8 @@
 package com.illusion.app.ui.navigation
 
 import android.content.res.Configuration
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.togetherWith
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
@@ -739,9 +741,11 @@ private fun TabsHost(
             val availableYears by libraryViewModel.availableYears.collectAsState()
             val countryFilter by libraryViewModel.countryFilter.collectAsState()
             val availableCountries by libraryViewModel.availableCountries.collectAsState()
+            val seriesCounts by libraryViewModel.seriesCounts.collectAsState()
             LibraryScreen(
                 category = category,
                 items = items,
+                seriesCounts = seriesCounts,
                 isLoading = isLoading,
                 sortOrder = sortOrder,
                 onSortOrderChange = libraryViewModel::setSortOrder,
@@ -769,6 +773,17 @@ private fun TabsHost(
     }
 
     val content: @Composable (PaddingValues) -> Unit = { innerPadding ->
+        // Was a plain Crossfade, whose outgoing and incoming content overlap at the midpoint of the
+        // transition: two different screen titles ("ИЛЛЮЗИОН" over "Фильмы") and two copies of the
+        // header icons were drawn on top of each other for ~100ms, which reads as the title
+        // twitching in the top-left corner rather than as a fade. Verified frame-by-frame from a
+        // screen recording - the title's own position never moves, the letters are just doubled.
+        // Sequencing the two halves (old fades out, then new fades in) removes the overlap without
+        // making the switch feel slower - each half is half the previous total duration.
+        // The header "spreading apart and snapping back" on the first switch to a tab turned out
+        // not to be this transition at all - LibraryScreen drew its header without the grid's
+        // horizontal contentPadding while the list was still loading (fixed there). This fade is
+        // the original behaviour and stays.
         Crossfade(
             targetState = selectedCategory,
             animationSpec = tween(com.illusion.app.ui.common.economicalDurationMs(200)),

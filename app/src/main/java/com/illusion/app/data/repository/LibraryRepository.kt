@@ -28,6 +28,23 @@ class LibraryRepository(private val dao: MediaItemDao) {
     fun observeSeriesGroupedByCategory(category: Category, sort: SortOrder, ascending: Boolean): Flow<List<MediaItemEntity>> =
         observeByCategory(category, sort, ascending).map { collapseSeriesToRepresentatives(it) }
 
+    /** How many seasons/episodes each series representative stands for, keyed by that representative's stableId - a series card's most useful caption, and only computable while the un-collapsed episode list is still at hand. */
+    fun observeSeriesCountsByCategory(category: Category, sort: SortOrder, ascending: Boolean): Flow<Map<String, SeriesCounts>> =
+        observeByCategory(category, sort, ascending).map { items ->
+            items
+                .filter { it.seriesStableId != null }
+                .groupBy { it.seriesStableId }
+                .values
+                .mapNotNull { group ->
+                    val representative = group.minWith(compareBy({ it.seasonNumber ?: Int.MAX_VALUE }, { it.episodeNumber ?: Int.MAX_VALUE }))
+                    representative.stableId to SeriesCounts(
+                        seasons = group.mapNotNull { it.seasonNumber }.distinct().size,
+                        episodes = group.size
+                    )
+                }
+                .toMap()
+        }
+
     /** Collapses every episode of a series down to a single representative row (its earliest season/episode, title swapped for the show's own name) - shared by [observeSeriesGroupedByCategory] and [getRandom]. Standalone (non-series) items pass through untouched. */
     private fun collapseSeriesToRepresentatives(items: List<MediaItemEntity>): List<MediaItemEntity> {
         val (episodes, standalone) = items.partition { it.seriesStableId != null }
@@ -182,3 +199,6 @@ class LibraryRepository(private val dao: MediaItemDao) {
         }
     }
 }
+
+/** Season/episode totals behind one series card. */
+data class SeriesCounts(val seasons: Int, val episodes: Int)
