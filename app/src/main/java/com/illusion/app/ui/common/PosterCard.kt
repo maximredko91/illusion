@@ -6,6 +6,7 @@ import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -42,6 +43,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.unit.dp
 import java.util.Locale
@@ -160,9 +162,10 @@ private fun PosterCardContent(
                 } else {
                     PosterPlaceholder(item.category)
                 }
-                if (showRatingBadge && item.rating != null) {
-                    RatingBadge(item.rating, modifier = Modifier.align(Alignment.TopStart).padding(6.dp))
-                }
+                // Бейдж рейтинга с постера убран: какой угол ни выбери, у части постеров там
+                // окажется название фильма («Шоу Трумана», «Список Шиндлера», «1917») - бейдж его
+                // перекроет. Рейтинг теперь в подписи под постером (CaptionMetaRow): виден всегда,
+                // а не только при сортировке по рейтингу, и ничего не закрывает.
                 if (isCurrent) {
                     Box(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.55f)))
                     // Perforated top/bottom frame - a deliberately rarer touch than the rating
@@ -209,27 +212,39 @@ private fun PosterCardContent(
                 }
             }
             if (showCaption) {
-                Column(modifier = Modifier.padding(8.dp)) {
+                // Название раньше всегда занимало две строки (minLines = 2) ради одинаковой высоты
+                // карточек в ряду - у коротких названий это оставляло пустую строку ровно между
+                // названием и метастрокой. Высота держится тем же числом строк, но метастрока
+                // прижата к низу, а воздух уходит под название.
+                val subtitleLines = 2
+                val captionHeight = with(LocalDensity.current) {
+                    val titleLine = MaterialTheme.typography.bodyMedium.lineHeight.toDp()
+                    val metaLine = MaterialTheme.typography.bodySmall.lineHeight.toDp()
+                    titleLine * 2 + metaLine * subtitleLines + 4.dp
+                }
+                Column(
+                    verticalArrangement = Arrangement.SpaceBetween,
+                    modifier = Modifier.padding(8.dp).height(captionHeight)
+                ) {
                     Text(
                         item.title,
                         maxLines = 2,
-                        minLines = 2,
                         overflow = TextOverflow.Ellipsis,
                         style = MaterialTheme.typography.bodyMedium
                     )
-                    // Обычная подпись (год · жанр) всегда короткая и держится в одну строку, а прогресс
-                    // («39% · осталось 1 ч 4 мин») в ширину карточки не влезает и обрезался на «осталос...».
-                    // Фиксированное число строк (а не просто maxLines) - чтобы карточки в ряду остались
-                    // одной высоты.
-                    val subtitleLines = if (subtitleOverride != null) 2 else 1
-                    Text(
-                        subtitleOverride ?: posterSubtitle(item) ?: "",
-                        maxLines = subtitleLines,
-                        minLines = subtitleLines,
-                        overflow = TextOverflow.Ellipsis,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    // Прогресс («39% · осталось 1 ч 4 мин») в ширину карточки не влезает
+                    // в одну строку - ему даётся две, обычной метастроке хватает одной.
+                    if (subtitleOverride != null) {
+                        Text(
+                            subtitleOverride,
+                            maxLines = subtitleLines,
+                            overflow = TextOverflow.Ellipsis,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    } else {
+                        CaptionMetaRow(item)
+                    }
                 }
             }
     }
@@ -308,6 +323,68 @@ internal fun PerforationStrip(holeColor: Color, modifier: Modifier = Modifier) {
             drawRect(color = holeColor, topLeft = topLeft, size = holeSize)
             pos += holeLength + gap
         }
+    }
+}
+
+/**
+ * Рейтинг + год + длительность одной строкой под названием. Жанр отсюда убран: он рядом
+ * есть фильтром, часто не влезал («2012 · Научная фантаст...») и ничего не говорил о том,
+ * стоит ли включать фильм сейчас - в отличие от длительности.
+ */
+@Composable
+private fun CaptionMetaRow(item: MediaItemEntity) {
+    // Две короткие строки вместо одной длинной: «рейтинг · год · длительность · жанр»
+    // в ширину карточки не влезает и обрезалась бы на самом жанре (так было со старой
+    // подписью: «2012 · Научная фантаст...»).
+    Column {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            item.rating?.let { rating ->
+                Icon(
+                    Icons.Default.Star,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(12.dp)
+                )
+                // Запятая, как в карточке фильма («9,0»), а не точка.
+                Text(
+                    String.format(Locale.forLanguageTag("ru"), "%.1f", rating),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.padding(start = 2.dp)
+                )
+            }
+            val year = item.year?.toString()?.takeIf { !TITLE_YEAR_PATTERN.containsMatchIn(item.title) }
+            if (year != null) {
+                Text(
+                    if (item.rating != null) " · $year" else year,
+                    maxLines = 1,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+        val genreAndRuntime = listOfNotNull(
+            item.genres.firstOrNull()?.let(::genreDisplayName),
+            posterRuntimeLabel(item.runtimeMinutes)
+        ).joinToString(" · ")
+        if (genreAndRuntime.isNotEmpty()) {
+            Text(
+                genreAndRuntime,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+private fun posterRuntimeLabel(minutes: Int?): String? {
+    val value = minutes?.takeIf { it > 0 } ?: return null
+    return when {
+        value < 60 -> "$value мин"
+        value % 60 == 0 -> "${value / 60} ч"
+        else -> "${value / 60} ч ${value % 60} мин"
     }
 }
 

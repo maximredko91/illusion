@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.calculateEndPadding
@@ -278,9 +279,21 @@ fun LibraryScreen(
                     categoryTitle(category),
                     style = MaterialTheme.typography.titleLarge,
                     maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f)
+                    overflow = TextOverflow.Ellipsis
                 )
+                // Сколько всего в разделе и - что важнее - сколько осталось после фильтров:
+                // без этого выбранный жанр/год мог оставить три карточки, и понять это можно было
+                // только прокрутив список до конца.
+                if (!isLoading) {
+                    Text(
+                        items.size.toString(),
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        modifier = Modifier.padding(start = 8.dp)
+                    )
+                }
+                Spacer(modifier = Modifier.weight(1f))
                 // Same split the Home header already uses: two frequent actions stay out, the rest
                 // move into "Ещё". Five equal-weight icons competed with each other and with the
                 // category title, and left the two screens looking like different apps.
@@ -482,7 +495,9 @@ fun LibraryScreen(
                     // "the grid got heavy, I have to swipe hard to get anywhere" rather
                     // than smoother. Platform default fling is the correct baseline here.
                     modifier = Modifier.fillMaxSize().focusGroup(),
-                    contentPadding = PaddingValues(bottom = 8.dp, start = gridStartPadding, end = gridEndPadding)
+                    // 8.dp снизу прижимали последний ряд вплотную к панели навигации, а кнопка
+                    // «наверх» лежала прямо на его подписях.
+                    contentPadding = PaddingValues(bottom = 88.dp, start = gridStartPadding, end = gridEndPadding)
                 ) {
                     // The header rides away with the rest of the scroll (see this function's
                     // top comment) - full-width span so it doesn't get squeezed into one column.
