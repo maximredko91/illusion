@@ -74,6 +74,7 @@ fun HomeScreen(
     continueWatching: List<ContinueWatchingItem>,
     randomPicks: List<MediaItemEntity>,
     collections: List<com.illusion.app.data.repository.LibraryRepository.CollectionSummary>,
+    onOpenCollection: (String) -> Unit,
     onRefreshRandomPicks: () -> Unit,
     onOpenSettings: () -> Unit,
     onOpenFavorites: () -> Unit,
@@ -243,7 +244,7 @@ fun HomeScreen(
                 showRatingBadge = true
             )
             if (collections.isNotEmpty()) {
-                CollectionCarousel(collections = collections, onOpenItem = onOpenItem)
+                CollectionCarousel(collections = collections, onOpenCollection = onOpenCollection)
             }
         }
     }
@@ -294,7 +295,7 @@ private fun NewContentBanner(onRescanNow: () -> Unit, onDismiss: () -> Unit, mod
 @Composable
 private fun CollectionCarousel(
     collections: List<com.illusion.app.data.repository.LibraryRepository.CollectionSummary>,
-    onOpenItem: (String) -> Unit
+    onOpenCollection: (String) -> Unit
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         SectionTitle(stringResource(R.string.home_collections), modifier = Modifier.fillMaxWidth())
@@ -311,9 +312,11 @@ private fun CollectionCarousel(
                         // showCaption = false: внутри карточки печатались название, год и жанр
                         // одного конкретного фильма коллекции, а под ней ещё раз - название самой
                         // коллекции. Для коллекции достаточно постера, счётчика и подписи снизу.
+                        // Тап открывает саму коллекцию плитками, а не карточку её первого фильма:
+                        // раньше, чтобы увидеть остальные части, надо было листать ряд «Коллекция» внутри неё.
                         PosterCard(
                             item = collection.representative,
-                            onClick = { onOpenItem(collection.representative.stableId) },
+                            onClick = { onOpenCollection(collection.name) },
                             modifier = Modifier.width(posterCardMinWidth()),
                             showCaption = false
                         )

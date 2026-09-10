@@ -52,6 +52,7 @@
     <string name="home_new_content_banner_action">Обновить библиотеку</string>
     <string name="home_new_content_banner_dismiss">Скрыть</string>
     <string name="home_collections">Коллекции</string>
+    <string name="collection_movie_count">Фильмы: %1$d</string>
     <string name="home_collection_item_count">%1$d</string>
     <string name="home_random_picks_refresh">Обновить подборку</string>
     <string name="home_more_actions">Ещё</string>
@@ -168,8 +169,8 @@
     <string name="sort_rating_desc">Рейтинг: сначала высокий</string>
     <string name="sort_title_asc">Название: А→Я</string>
     <string name="sort_title_desc">Название: Я→А</string>
-    <string name="library_count_total">Всего %1$d</string>
-    <string name="library_count_filtered">Найдено %1$d из %2$d</string>
+    <string name="library_count_total">%1$s: %2$d</string>
+    <string name="library_count_filtered">%1$s: %2$d из %3$d</string>
     <string name="library_filter_all">Все</string>
     <string name="library_empty">Здесь пока ничего нет</string>
     <string name="library_scroll_to_top">Наверх</string>
@@ -264,6 +265,7 @@
     <string name="settings_theme_mode_black">Чёрная (AMOLED)</string>
     <string name="poster_load_failed">Не удалось загрузить</string>
     <string name="poster_load_failed_offline">Нет Wi-Fi</string>
+    <string name="details_offline_warning_download">Нет подключения к домашней сети — скачать файл с NAS сейчас не получится. Подключитесь к Wi-Fi и попробуйте снова.</string>
     <string name="details_offline_warning">Нет подключения к Wi-Fi — файл на NAS сейчас недоступен. Подключитесь к домашней сети или посмотрите уже скачанное.</string>
     <string name="settings_library_section">Библиотека</string>
     <string name="settings_default_sort_order">Сортировка по умолчанию</string>

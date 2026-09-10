@@ -24,6 +24,7 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -40,6 +41,8 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.filled.HighQuality
+import androidx.compose.material.icons.filled.MovieCreation
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
@@ -185,6 +188,7 @@ fun DetailsScreen(
     val watchProgress by viewModel.watchProgress.collectAsState()
     val context = LocalContext.current
     val offlineWarning = stringResource(R.string.details_offline_warning)
+    val downloadOfflineWarning = stringResource(R.string.details_offline_warning_download)
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     // See TvFocus.bridgeFocusDown's own KDoc - back/home float outside the scrollable content
@@ -213,10 +217,32 @@ fun DetailsScreen(
                 totalDurationMs = watchProgress?.durationMs ?: 0L,
                 download = download,
                 downloads = downloads,
-                onStartDownload = { viewModel.startDownload(context) },
+                // Скачивание тянет файл с того же NAS, что и воспроизведение, поэтому без
+                // домашней сети оно так же бессмысленно - раньше проверка стояла только на
+                // «Смотреть» и «Трейлер», а загрузка молча ставилась в очередь и падала уже
+                // внутри воркера, где пользователь её не видит.
+                onStartDownload = {
+                    if (com.illusion.app.ui.common.isOnLocalNetwork(context)) {
+                        viewModel.startDownload(context)
+                    } else {
+                        scope.launch { snackbarHostState.showSnackbar(downloadOfflineWarning) }
+                    }
+                },
                 onRemoveDownload = { viewModel.removeDownload(context) },
-                onDownloadSeason = { ids -> viewModel.startSeasonDownload(context, ids) },
-                onDownloadEpisode = { id -> viewModel.startDownload(context, id) },
+                onDownloadSeason = { ids ->
+                    if (com.illusion.app.ui.common.isOnLocalNetwork(context)) {
+                        viewModel.startSeasonDownload(context, ids)
+                    } else {
+                        scope.launch { snackbarHostState.showSnackbar(downloadOfflineWarning) }
+                    }
+                },
+                onDownloadEpisode = { id ->
+                    if (com.illusion.app.ui.common.isOnLocalNetwork(context)) {
+                        viewModel.startDownload(context, id)
+                    } else {
+                        scope.launch { snackbarHostState.showSnackbar(downloadOfflineWarning) }
+                    }
+                },
                 onRemoveEpisodeDownload = { id -> viewModel.removeDownload(context, id) },
                 onRemoveSeasonDownloads = { ids -> viewModel.removeSeasonDownloads(context, ids) },
                 onDownloadError = { message -> scope.launch { snackbarHostState.showSnackbar(message) } },
@@ -613,19 +639,24 @@ private fun DetailsContent(
                 // версия»). Раньше издание стояло среди жанров, а качество было доступно только
                 // в блоке фактов далеко внизу. Здесь они и не путаются с жанрами, и заполняют
                 // пустоту, которая оставалась под постером рядом с более высокой колонкой справа.
-                val techTags = listOfNotNull(item.videoQualityLabel, item.editionLabel)
-                techTags.forEach { tag ->
-                    Text(
-                        tag,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(50))
-                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                //
+                // Были просто текстом в тонкой рамке и не читались как что-то значащее - теперь у
+                // каждого своя тональная заливка и значок: качество акцентом (это главное свойство
+                // файла), издание - вторичным цветом.
+                item.videoQualityLabel?.let { quality ->
+                    TechTagChip(
+                        text = quality,
+                        icon = Icons.Default.HighQuality,
+                        container = MaterialTheme.colorScheme.primaryContainer,
+                        content = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                }
+                item.editionLabel?.let { edition ->
+                    TechTagChip(
+                        text = edition,
+                        icon = Icons.Default.MovieCreation,
+                        container = MaterialTheme.colorScheme.tertiaryContainer,
+                        content = MaterialTheme.colorScheme.onTertiaryContainer
                     )
                 }
                 }
@@ -852,12 +883,36 @@ private fun DetailsContent(
         val seriesStatus = item.statusLabel
         val collectionName = item.collectionName?.takeIf { it.isNotBlank() }
         tagline?.let {
-            Text(
-                it,
-                style = MaterialTheme.typography.titleSmall.copy(fontStyle = FontStyle.Italic),
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 2.dp)
-            )
+            // Слоган шёл вплотную над «Описанием» одной строкой курсивом - было непонятно,
+            // что это за фраза и почему она там. Теперь это явная цитата: подписана, отбита
+            // вертикальной линией слева и отделена от описания воздухом.
+            Row(
+                modifier = Modifier
+                    .padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 12.dp)
+                    .fillMaxWidth()
+                    .height(IntrinsicSize.Min)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .width(3.dp)
+                        .fillMaxHeight()
+                        .clip(RoundedCornerShape(2.dp))
+                        .background(MaterialTheme.colorScheme.primary)
+                )
+                Column(modifier = Modifier.padding(start = 10.dp)) {
+                    Text(
+                        stringResource(R.string.details_tagline_label),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        it,
+                        style = MaterialTheme.typography.titleSmall.copy(fontStyle = FontStyle.Italic),
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(top = 2.dp)
+                    )
+                }
+            }
         }
 
         val plot = item.plot?.takeIf { it.isNotBlank() } ?: stringResource(R.string.details_no_description)
@@ -1372,6 +1427,35 @@ private fun ActionButtonsRowFailedPreview() {
  * подпись фиксированной ширины - тогда весь блок читается как таблица, а не как два
  * независимых столбца, разогнанных по разным краям карточки.
  */
+/** Свойство самого файла (качество, издание) под постером - с заливкой и значком, чтобы не теряться рядом с жанрами. */
+@Composable
+private fun TechTagChip(
+    text: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    container: Color,
+    content: Color
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.Center,
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(container, RoundedCornerShape(50))
+            .padding(horizontal = 8.dp, vertical = 5.dp)
+    ) {
+        Icon(icon, contentDescription = null, tint = content, modifier = Modifier.size(14.dp))
+        Text(
+            text,
+            style = MaterialTheme.typography.labelSmall,
+            color = content,
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(start = 4.dp)
+        )
+    }
+}
+
 @Composable
 private fun MetaRow(label: String, value: @Composable () -> Unit) {
     Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {

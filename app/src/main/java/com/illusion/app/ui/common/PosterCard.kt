@@ -363,18 +363,33 @@ private fun CaptionMetaRow(item: MediaItemEntity) {
                 )
             }
         }
-        val genreAndRuntime = listOfNotNull(
-            item.genres.firstOrNull()?.let(::genreDisplayName),
-            posterRuntimeLabel(item.runtimeMinutes)
-        ).joinToString(" · ")
-        if (genreAndRuntime.isNotEmpty()) {
-            Text(
-                genreAndRuntime,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+        // Жанр и длительность были одной строкой, и при длинном жанре («Приключения»)
+        // обрезалась именно длительность: «Приключения · 2 ч 24 …». Теперь урезается жанр,
+        // а длительность всегда видна целиком.
+        val genre = item.genres.firstOrNull()?.let(::genreDisplayName)
+        val runtime = posterRuntimeLabel(item.runtimeMinutes)
+        if (genre != null || runtime != null) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (genre != null) {
+                    Text(
+                        genre,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.weight(1f, fill = false)
+                    )
+                }
+                if (runtime != null) {
+                    Text(
+                        if (genre != null) " · $runtime" else runtime,
+                        maxLines = 1,
+                        softWrap = false,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
         }
     }
 }

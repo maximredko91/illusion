@@ -295,10 +295,12 @@ fun LibraryScreen(
                     if (!isLoading) {
                         val filtered = genreFilter != null || yearFilter != null || countryFilter != null
                         Text(
+                            // Название раздела в самой подписи («Фильмы: 1005»): без него число не
+                            // говорит, что именно считается.
                             if (filtered) {
-                                stringResource(R.string.library_count_filtered, items.size, totalCount)
+                                stringResource(R.string.library_count_filtered, categoryTitle(category), items.size, totalCount)
                             } else {
-                                stringResource(R.string.library_count_total, items.size)
+                                stringResource(R.string.library_count_total, categoryTitle(category), items.size)
                             },
                             style = MaterialTheme.typography.bodySmall,
                             color = if (filtered) {

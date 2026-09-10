@@ -89,6 +89,7 @@ import com.illusion.app.ui.common.LocalUiMode
 import com.illusion.app.ui.common.focusHighlight
 import com.illusion.app.ui.common.segmentTick
 import com.illusion.app.ui.addmedia.AddMediaScreen
+import com.illusion.app.ui.collection.CollectionScreen
 import com.illusion.app.ui.details.DetailsScreen
 import com.illusion.app.ui.downloads.DownloadsScreen
 import com.illusion.app.ui.favorites.FavoritesScreen
@@ -508,6 +509,16 @@ private fun IllusionNavGraph(app: IllusionApplication, navController: NavHostCon
                     )
                 }
             }
+            composable<Destination.Collection> { entry ->
+                val collection = entry.toRoute<Destination.Collection>()
+                CollectionScreen(
+                    name = collection.name,
+                    libraryRepository = app.libraryRepository,
+                    onOpenItem = { stableId -> navController.navigate(Destination.Details(stableId)) },
+                    onBack = { navController.popBackStack() }
+                )
+            }
+
             composable<Destination.Person> { entry ->
                 CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides this) {
                     val person = entry.toRoute<Destination.Person>()
@@ -701,6 +712,7 @@ private fun TabsHost(
                 onOpenHistory = { navController.navigate(Destination.History) },
                 onOpenDownloads = { navController.navigate(Destination.Downloads) },
                 onOpenSearch = { navController.navigate(Destination.Search()) },
+                onOpenCollection = { name -> navController.navigate(Destination.Collection(name)) },
                 onOpenItem = { stableId -> navController.navigate(Destination.Details(stableId)) },
                 onResumeItem = { stableId -> navController.navigate(Destination.Player(stableId)) { launchSingleTop = true } },
                 hasNewContent = hasNewContent,

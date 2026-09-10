@@ -257,8 +257,19 @@ class PlayerViewModel(
                 // error.message is often ExoPlayer's generic per-errorCode text (e.g. "Source error") -
                 // the actual IOException from SmbDataSource is one level down in .cause and is what
                 // actually explains the failure (reconnect exhausted, auth issue, etc).
-                val detail = error.cause?.message ?: error.message ?: "Ошибка воспроизведения"
-                _state.update { it.copy(error = detail, isLoading = false) }
+                //
+                // Раньше эта строка уходила на экран как есть, и пользователь видел
+                // «STATUS_BAD_NETWORK_NAME» или «Connection reset by peer» - техническую запись,
+                // которая ничего ему не говорит. humanPlaybackError превращает узнаваемые причины
+                // в обычные фразы с подсказкой, что делать; сама техническая строка остаётся
+                // только в логах.
+                android.util.Log.w("PlayerViewModel", "Playback error", error)
+                _state.update {
+                    it.copy(
+                        error = humanPlaybackError(error.cause, error.message),
+                        isLoading = false
+                    )
+                }
             }
 
             override fun onTracksChanged(tracks: Tracks) {

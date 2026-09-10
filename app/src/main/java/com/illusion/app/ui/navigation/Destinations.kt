@@ -32,6 +32,10 @@ sealed interface Destination {
     @Serializable
     data class Person(val name: String) : Destination
 
+    /** Плиточный список одной папочной коллекции - открывается тапом по её карточке на главной. */
+    @Serializable
+    data class Collection(val name: String) : Destination
+
     @Serializable
     data object Favorites : Destination
 
