@@ -28,6 +28,9 @@ class LibraryScanWorker(
     override suspend fun doWork(): Result {
         setForeground(getForegroundInfo())
         val force = inputData.getBoolean(KEY_FORCE, false)
+        // Итоговый экран показывал только общее число видео - по нему нельзя было понять,
+        // что именно дал перескан: сколько добавилось и сколько это заняло.
+        val startedAt = System.currentTimeMillis()
         val result = scanner.scanAll(force = force) { progress ->
             setProgress(progress.toData())
             setForeground(ScanNotifications.progressForegroundInfo(applicationContext, progress.toNotificationText(applicationContext)))
@@ -73,7 +76,10 @@ class LibraryScanWorker(
                 // 64-char SHA-256 hex string; a huge first-ever scan (thousands of new items)
                 // would blow past that anyway and doesn't need this "что добавилось" summary as
                 // much as a routine incremental rescan (a handful of new episodes/movies) does.
-                KEY_NEWLY_ADDED to result.newlyAddedStableIds.take(MAX_REPORTED_NEWLY_ADDED).toTypedArray()
+                KEY_NEWLY_ADDED to result.newlyAddedStableIds.take(MAX_REPORTED_NEWLY_ADDED).toTypedArray(),
+                // Полное число новых, а не длина обрезанного выше списка.
+                KEY_NEWLY_ADDED_COUNT to result.newlyAddedStableIds.size,
+                KEY_DURATION_MS to (System.currentTimeMillis() - startedAt)
             )
         )
     }
@@ -83,6 +89,8 @@ class LibraryScanWorker(
         const val KEY_ERROR = "error"
         const val KEY_PARTIAL_ERROR = "partial_error"
         const val KEY_NEWLY_ADDED = "newly_added"
+        const val KEY_NEWLY_ADDED_COUNT = "newly_added_count"
+        const val KEY_DURATION_MS = "duration_ms"
         /** Input key - see LibraryScanner.scanAll's own KDoc for what this actually does and why it exists. */
         const val KEY_FORCE = "force"
         private const val MAX_REPORTED_NEWLY_ADDED = 100

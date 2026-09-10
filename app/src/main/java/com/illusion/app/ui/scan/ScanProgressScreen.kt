@@ -10,6 +10,7 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.Arrangement
@@ -41,6 +42,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -108,6 +110,19 @@ fun ScanProgressScreen(
     }
     val isScanning = phase != ScanPhase.SUCCEEDED && phase != ScanPhase.FAILED
 
+    // Тикающее «идёт N» на фазе индексирования: WorkInfo не сообщает время старта, поэтому
+    // отсчёт ведётся с момента, когда этот экран впервые увидел работающий скан.
+    var scanStartedAtMs by remember { mutableStateOf<Long?>(null) }
+    var elapsedScanMs by remember { mutableLongStateOf(0L) }
+    LaunchedEffect(isScanning) {
+        if (!isScanning) return@LaunchedEffect
+        if (scanStartedAtMs == null) scanStartedAtMs = System.currentTimeMillis()
+        while (isActive) {
+            elapsedScanMs = System.currentTimeMillis() - (scanStartedAtMs ?: System.currentTimeMillis())
+            delay(1000)
+        }
+    }
+
     // "Что добавилось" row - resolved from the worker's own output (a capped list of stableIds,
     // see LibraryScanWorker's own KDoc on why it's capped) once the scan actually succeeds, not
     // fetched eagerly on every recomposition.
@@ -138,9 +153,9 @@ fun ScanProgressScreen(
                 verticalArrangement = Arrangement.Center,
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                if (isScanning) {
-                    ScanIllustration()
-                }
+                // Раньше иллюстрация исчезала на финале, и экран схлопывался в три элемента
+                // по центру - завершение читалось как «всё пропало», а не как результат.
+                ScanIllustration()
 
             Text(stringResource(R.string.scan_progress_title))
 
@@ -215,9 +230,34 @@ fun ScanProgressScreen(
                                 textAlign = TextAlign.Center,
                                 modifier = Modifier.fillMaxWidth()
                             )
+                            // Сколько уже идёт и сколько примерно осталось: на большой библиотеке эта
+                            // фаза идёт долго, а экран не давал никакого ощущения времени. Оценка
+                            // линейная по уже обработанным файлам и показывается только когда ей есть на чём
+                            // держаться (прошло больше пяти секунд и обработано хотя бы 20 файлов).
+                            val elapsedMs = elapsedScanMs
+                            val remainingMs = if (p.filesScanned >= 20 && elapsedMs > 5_000 && p.filesTotal > p.filesScanned) {
+                                elapsedMs * (p.filesTotal - p.filesScanned) / p.filesScanned
+                            } else {
+                                null
+                            }
+                            val timing = if (remainingMs != null) {
+                                stringResource(R.string.scan_progress_elapsed, formatScanDuration(elapsedMs)) +
+                                    ", " + stringResource(R.string.scan_progress_remaining, formatScanDuration(remainingMs))
+                            } else {
+                                stringResource(R.string.scan_progress_elapsed, formatScanDuration(elapsedMs))
+                            }
+                            Text(
+                                timing,
+                                textAlign = TextAlign.Center,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.fillMaxWidth().padding(top = 4.dp)
+                            )
                         }
                         ScanPhase.SUCCEEDED -> {
                             val total = workInfo?.outputData?.getInt(LibraryScanWorker.KEY_TOTAL_INDEXED, 0) ?: 0
+                            val addedCount = workInfo?.outputData?.getInt(LibraryScanWorker.KEY_NEWLY_ADDED_COUNT, 0) ?: 0
+                            val durationMs = workInfo?.outputData?.getLong(LibraryScanWorker.KEY_DURATION_MS, 0L) ?: 0L
                             // fillMaxWidth + textAlign (not just the Column's own
                             // horizontalAlignment) - the enclosing Crossfade's animateContentSize
                             // animates the container's width from the previous phase's (narrower)
@@ -231,11 +271,65 @@ fun ScanProgressScreen(
                                 textAlign = TextAlign.Center,
                                 modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
                             )
-                            workInfo?.outputData?.getString(LibraryScanWorker.KEY_PARTIAL_ERROR)?.let { partialError ->
+                            // Раньше была одна цифра «Найдено видео: N» - по ней нельзя было понять,
+                            // что изменилось после перескана и сколько он занял.
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(top = 12.dp)
+                                    .background(
+                                        MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.7f),
+                                        RoundedCornerShape(16.dp)
+                                    )
+                                    .padding(horizontal = 16.dp, vertical = 12.dp)
+                            ) {
                                 Text(
-                                    stringResource(R.string.scan_progress_partial_error, partialError),
+                                    stringResource(R.string.scan_progress_summary_total, total),
                                     textAlign = TextAlign.Center,
-                                    modifier = Modifier.fillMaxWidth().padding(top = 4.dp)
+                                    style = MaterialTheme.typography.titleMedium
+                                )
+                                Text(
+                                    if (addedCount > 0) {
+                                        stringResource(R.string.scan_progress_summary_added, addedCount)
+                                    } else {
+                                        stringResource(R.string.scan_progress_summary_nothing_new)
+                                    },
+                                    textAlign = TextAlign.Center,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = if (addedCount > 0) {
+                                        MaterialTheme.colorScheme.primary
+                                    } else {
+                                        MaterialTheme.colorScheme.onSurfaceVariant
+                                    },
+                                    modifier = Modifier.padding(top = 4.dp)
+                                )
+                                if (durationMs > 0) {
+                                    Text(
+                                        stringResource(R.string.scan_progress_summary_duration, formatScanDuration(durationMs)),
+                                        textAlign = TextAlign.Center,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.padding(top = 2.dp)
+                                    )
+                                }
+                                val partialError = workInfo?.outputData?.getString(LibraryScanWorker.KEY_PARTIAL_ERROR)
+                                Text(
+                                    if (partialError != null) {
+                                        stringResource(R.string.scan_progress_partial_error, partialError)
+                                    } else {
+                                        // Раньше об отсутствии ошибок не говорилось ничего - отсутствие
+                                        // строки не то же, что явное «всё прочитано».
+                                        stringResource(R.string.scan_progress_summary_no_errors)
+                                    },
+                                    textAlign = TextAlign.Center,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = if (partialError != null) {
+                                        MaterialTheme.colorScheme.error
+                                    } else {
+                                        MaterialTheme.colorScheme.onSurfaceVariant
+                                    },
+                                    modifier = Modifier.padding(top = 6.dp)
                                 )
                             }
                             if (newlyAddedItems.isNotEmpty()) {
@@ -264,19 +358,40 @@ fun ScanProgressScreen(
                             ) {
                                 Text(stringResource(R.string.scan_progress_continue))
                             }
+                            // На случай неожиданного результата - повторить без возврата в настройки.
+                            val rescanSource = remember { MutableInteractionSource() }
+                            TextButton(
+                                onClick = { com.illusion.app.work.WorkScheduler.enqueueOneTimeScan(context) },
+                                interactionSource = rescanSource,
+                                modifier = Modifier.focusHighlight(rescanSource)
+                            ) {
+                                Text(stringResource(R.string.scan_progress_rescan))
+                            }
                         }
                         ScanPhase.FAILED -> {
                             val errorMessage = workInfo?.outputData?.getString(LibraryScanWorker.KEY_ERROR)
                             Text(
                                 errorMessage ?: stringResource(R.string.scan_progress_failed),
                                 textAlign = TextAlign.Center,
+                                color = MaterialTheme.colorScheme.error,
                                 modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
                             )
+                            // На экране ошибки единственной кнопкой было «Открыть библиотеку» - странное
+                            // предложение после неудачного скана, и не было способа повторить попытку, не
+                            // возвращаясь в настройки (а чаще всего причина временная: NAS выключен, сеть легла).
                             com.illusion.app.ui.common.TvAwareButton(
-                                onClick = onComplete,
+                                onClick = { com.illusion.app.work.WorkScheduler.enqueueOneTimeScan(context) },
                                 modifier = Modifier.padding(top = 16.dp)
                             ) {
-                                Text(stringResource(R.string.scan_progress_continue))
+                                Text(stringResource(R.string.scan_progress_retry))
+                            }
+                            val backSource = remember { MutableInteractionSource() }
+                            TextButton(
+                                onClick = onComplete,
+                                interactionSource = backSource,
+                                modifier = Modifier.focusHighlight(backSource)
+                            ) {
+                                Text(stringResource(R.string.scan_progress_back))
                             }
                         }
                     }
@@ -285,12 +400,30 @@ fun ScanProgressScreen(
 
             if (isScanning) {
                 ScanTipsCarousel(modifier = Modifier.padding(top = 32.dp))
-                Row(modifier = Modifier.padding(top = 16.dp)) {
+                // В одну строку две кнопки не помещались: «Остановить» переносилось на две строки
+                // («Останов / ить»). В столбик иерархия читается ещё яснее.
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.padding(top = 16.dp)
+                ) {
                     // Distinct from "уйти" (below) - that leaves the scan running in the background,
                     // this actually cancels the WorkManager job. Sources already fully scanned
                     // earlier in this same run keep whatever they already persisted (see
                     // LibraryScanner's own per-source upsertAll timing) - nothing to roll back,
                     // same end state as the app being killed mid-scan.
+                    // Обе кнопки были одинаковыми текстовыми: главное действие (уйти смотреть, скан
+                    // продолжится фоном) ничем не выделялось, а прерывание скана выглядело так же
+                    // безобидно.
+                    if (allowDismiss) {
+                        val dismissSource = remember { MutableInteractionSource() }
+                        androidx.compose.material3.FilledTonalButton(
+                            onClick = onDismiss,
+                            interactionSource = dismissSource,
+                            modifier = Modifier.focusHighlight(dismissSource)
+                        ) {
+                            Text(stringResource(R.string.scan_progress_dismiss), maxLines = 1)
+                        }
+                    }
                     val stopSource = remember { MutableInteractionSource() }
                     TextButton(
                         onClick = {
@@ -298,19 +431,12 @@ fun ScanProgressScreen(
                             onDismiss()
                         },
                         interactionSource = stopSource,
+                        colors = androidx.compose.material3.ButtonDefaults.textButtonColors(
+                            contentColor = MaterialTheme.colorScheme.error
+                        ),
                         modifier = Modifier.focusHighlight(stopSource)
                     ) {
-                        Text(stringResource(R.string.scan_progress_stop))
-                    }
-                    if (allowDismiss) {
-                        val dismissSource = remember { MutableInteractionSource() }
-                        TextButton(
-                            onClick = onDismiss,
-                            interactionSource = dismissSource,
-                            modifier = Modifier.focusHighlight(dismissSource)
-                        ) {
-                            Text(stringResource(R.string.scan_progress_dismiss))
-                        }
+                        Text(stringResource(R.string.scan_progress_stop), maxLines = 1)
                     }
                 }
             }
@@ -444,7 +570,17 @@ private fun ScanTipsCarousel(modifier: Modifier = Modifier) {
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(horizontal = 4.dp)
-                    .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(16.dp))
+                    // surfaceVariant давал серо-фиолетовую плашку, не связанную ни с фоном-градиентом,
+                    // ни с акцентом - карточка выглядела вставленной из другого экрана.
+                    .background(
+                        MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.55f),
+                        RoundedCornerShape(16.dp)
+                    )
+                    .border(
+                        1.dp,
+                        MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
+                        RoundedCornerShape(16.dp)
+                    )
                     .padding(16.dp),
                 contentAlignment = Alignment.Center
             ) {
@@ -456,15 +592,25 @@ private fun ScanTipsCarousel(modifier: Modifier = Modifier) {
                 )
             }
         }
+        // Точек было столько же, сколько советов (25) - они занимали всю ширину и читались
+        // как мусор: среди двадцати пяти точек своё место всё равно не найти. Окно из пяти
+        // вокруг текущей страницы даёт ощущение движения, не превращаясь в полоску.
+        val windowSize = 5
+        val firstDot = (pagerState.currentPage - windowSize / 2)
+            .coerceIn(0, maxOf(0, tips.size - windowSize))
         Row(
             horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.padding(top = 12.dp)
         ) {
-            repeat(tips.size) { page ->
+            repeat(minOf(windowSize, tips.size)) { offset ->
+                val page = firstDot + offset
                 val isCurrent = page == pagerState.currentPage
+                // Крайние точки окна мельче - видно, что список продолжается за ними.
+                val isEdge = (offset == 0 && page > 0) || (offset == windowSize - 1 && page < tips.size - 1)
                 Box(
                     modifier = Modifier
-                        .size(if (isCurrent) 8.dp else 6.dp)
+                        .size(if (isCurrent) 8.dp else if (isEdge) 4.dp else 6.dp)
                         .clip(CircleShape)
                         .background(
                             if (isCurrent) MaterialTheme.colorScheme.primary
@@ -473,5 +619,17 @@ private fun ScanTipsCarousel(modifier: Modifier = Modifier) {
                 )
             }
         }
+    }
+}
+
+/** «2 мин 15 с» / «45 с» - короткий человекочитаемый формат для строки о времени сканирования. */
+private fun formatScanDuration(ms: Long): String {
+    val totalSeconds = (ms / 1000).coerceAtLeast(0)
+    val minutes = totalSeconds / 60
+    val seconds = totalSeconds % 60
+    return when {
+        minutes >= 60 -> "${minutes / 60} ч ${minutes % 60} мин"
+        minutes > 0 -> "$minutes мин $seconds с"
+        else -> "$seconds с"
     }
 }

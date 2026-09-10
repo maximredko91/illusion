@@ -328,13 +328,23 @@
     <string name="scan_progress_dismiss">Смотреть, пока сканируется</string>
     <string name="scan_progress_stop">Остановить</string>
     <string name="scan_progress_source">Источник %1$d из %2$d: %3$s</string>
-    <string name="scan_progress_listing">Поиск файлов… найдено %1$d</string>
-    <string name="scan_progress_files">Найдено файлов: %1$d из %2$d</string>
-    <string name="scan_progress_done_count">Готово! Найдено видео: %1$d</string>
+    <string name="scan_progress_listing">Просмотрено файлов: %1$d</string>
+    <string name="scan_progress_files">Обработано %1$d из %2$d</string>
+    <string name="scan_progress_done_count">Готово</string>
     <string name="scan_progress_newly_added_title">Добавлено новое</string>
     <string name="scan_progress_failed">Не удалось выполнить сканирование. Проверьте соединение с источником в настройках</string>
     <string name="scan_progress_partial_error">Не всё удалось просканировать: %1$s</string>
-    <string name="scan_progress_continue">Продолжить</string>
+    <string name="scan_progress_summary_total">В библиотеке %1$d видео</string>
+    <string name="scan_progress_summary_added">Добавлено новых: %1$d</string>
+    <string name="scan_progress_summary_nothing_new">Новых файлов нет</string>
+    <string name="scan_progress_summary_duration">Заняло %1$s</string>
+    <string name="scan_progress_summary_no_errors">Все источники прочитаны без ошибок</string>
+    <string name="scan_progress_rescan">Сканировать ещё раз</string>
+    <string name="scan_progress_retry">Повторить</string>
+    <string name="scan_progress_back">Назад</string>
+    <string name="scan_progress_elapsed">Идёт %1$s</string>
+    <string name="scan_progress_remaining">осталось примерно %1$s</string>
+    <string name="scan_progress_continue">Открыть библиотеку</string>
 
     <string name="scan_notification_channel_name">Сканирование библиотеки</string>
     <string name="scan_notification_result_success_title">Библиотека обновлена</string>
