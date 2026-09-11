@@ -64,7 +64,8 @@ class LibraryRepository(private val dao: MediaItemDao) {
 
     /** Random pick for the Home screen's "Случайная подборка" row - one card per series (its earliest episode, retitled to the show's name), not one per individual episode, same collapsing as the library grids. */
     suspend fun getRandom(limit: Int = 20): List<MediaItemEntity> =
-        collapseSeriesToRepresentatives(dao.getAll()).shuffled().take(limit)
+        // Без постера карточка в подборке - серая заглушка («Деревня дураков (Коллекция)»): случайный ряд не место для неё.
+        collapseSeriesToRepresentatives(dao.getAll()).filter { it.posterPath != null }.shuffled().take(limit)
 
     fun observeEpisodes(seriesStableId: String): Flow<List<MediaItemEntity>> =
         dao.observeEpisodes(seriesStableId)

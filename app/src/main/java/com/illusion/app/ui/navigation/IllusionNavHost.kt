@@ -60,6 +60,9 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.focusProperties
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.foundation.focusGroup
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.hapticfeedback.HapticFeedback
@@ -866,15 +869,39 @@ private fun TabsHost(
         // for. They pick up the same margin themselves via tvSafeContentWindowInsets() on their
         // own Scaffold's contentWindowInsets instead - see HomeScreen.kt/LibraryScreen.kt.
         val tvSafeMarginDp = com.illusion.app.ui.common.LocalTvSafeMarginDp.current
+        // Стрелка из меню в сторону контента: обычный поиск фокуса брал ближайший по высоте
+        // элемент - с «Главной» это была иконка «Поиск» в шапке, через весь экран. Теперь фокус
+        // входит в контент как в группу - на ближайший к меню элемент.
+        val contentFocus = remember { androidx.compose.ui.focus.FocusRequester() }
+        val railScope = androidx.compose.runtime.rememberCoroutineScope()
+        val railExitToContent = Modifier.focusProperties {
+            onExit = {
+                val towardContent = if (railOnLeft) androidx.compose.ui.focus.FocusDirection.Right else androidx.compose.ui.focus.FocusDirection.Left
+                if (requestedFocusDirection == towardContent) {
+                    // Запрос прямо здесь, внутри текущего перехода фокуса, отменялся вместе с
+                    // ним - первое нажатие пропадало (проверено на TV Box). Поэтому - после.
+                    cancelFocusChange()
+                    railScope.launch { contentFocus.requestFocus(towardContent) }
+                }
+            }
+        }
+        // Начальный фокус на TV: без него первое нажатие пульта после запуска уходило лишь на то,
+        // чтобы фокус вообще появился, и терялось. Ставим сразу на первую карточку контента.
+        if (uiMode == UiMode.TV) {
+            androidx.compose.runtime.LaunchedEffect(Unit) {
+                kotlinx.coroutines.delay(500)
+                contentFocus.requestFocus(if (railOnLeft) androidx.compose.ui.focus.FocusDirection.Right else androidx.compose.ui.focus.FocusDirection.Left)
+            }
+        }
         Row(modifier = Modifier.fillMaxSize()) {
             if (railOnLeft) {
-                NavigationRail(content = railItems, modifier = Modifier.padding(start = tvSafeMarginDp, top = tvSafeMarginDp, bottom = tvSafeMarginDp))
+                NavigationRail(content = railItems, modifier = railExitToContent.padding(start = tvSafeMarginDp, top = tvSafeMarginDp, bottom = tvSafeMarginDp))
             }
-            Box(modifier = Modifier.weight(1f)) {
+            Box(modifier = Modifier.weight(1f).focusRequester(contentFocus).focusGroup()) {
                 content(PaddingValues())
             }
             if (!railOnLeft) {
-                NavigationRail(content = railItems, modifier = Modifier.padding(end = tvSafeMarginDp, top = tvSafeMarginDp, bottom = tvSafeMarginDp))
+                NavigationRail(content = railItems, modifier = railExitToContent.padding(end = tvSafeMarginDp, top = tvSafeMarginDp, bottom = tvSafeMarginDp))
             }
         }
     } else {

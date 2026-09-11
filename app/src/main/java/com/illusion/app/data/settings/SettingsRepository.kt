@@ -134,7 +134,7 @@ class SettingsRepository(private val context: Context) {
      * fit every device, so this is user-adjustable instead (Settings, TV mode only) rather than
      * re-guessed in code every time a new device is tested. Default 0 - safest starting point for
      * an unknown device is no margin at all rather than assuming a crop that isn't really there. */
-    val tvOverscanMarginPercent: Flow<Int> = context.dataStore.data.map { it[Keys.TV_OVERSCAN_MARGIN_PERCENT] ?: 0 }
+    val tvOverscanMarginPercent: Flow<Int> = context.dataStore.data.map { it[Keys.TV_OVERSCAN_MARGIN_PERCENT] ?: 3 } // при 0 меню и рамка фокуса упирались в край экрана TV Box
 
     suspend fun setTvOverscanMarginPercent(percent: Int) {
         context.dataStore.edit { it[Keys.TV_OVERSCAN_MARGIN_PERCENT] = percent.coerceIn(0, 10) }

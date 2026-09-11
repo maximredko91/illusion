@@ -97,6 +97,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.luminance
@@ -308,7 +309,9 @@ fun DetailsScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .windowInsetsPadding(com.illusion.app.ui.common.rememberLatchedStatusBarsInsets())
-                .padding(horizontal = 4.dp),
+                // На TV кнопки и их рамка фокуса упирались в угол экрана.
+                .padding(horizontal = 4.dp + com.illusion.app.ui.common.LocalTvSafeMarginDp.current)
+                .padding(top = com.illusion.app.ui.common.LocalTvSafeMarginDp.current),
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             val backSource = remember { MutableInteractionSource() }
@@ -489,7 +492,8 @@ private fun DetailsContent(
             // DetailsScreen's own overlay), but the dead zone here still needs to line up with
             // where a near-miss on one of them actually lands.
             val cornerButtonSize = 48.dp
-            val fanartHeight = if (isTv) 400.dp else 188.dp
+            // TV Box - 540dp в высоту: при 400dp кнопки уезжали за нижний край экрана.
+            val fanartHeight = if (isTv) 160.dp else 188.dp
             // Кадр ничем не заливается, только скруглён снизу - в обеих темах одинаково.
             //
             // Раньше верх и низ растворялись в цвет фона градиентом. В тёмной теме это читалось
@@ -551,6 +555,18 @@ private fun DetailsContent(
                     // space-under-a-short-title spacing) for no real benefit; a title shown twice
                     // is harmless, a broken layout isn't.
                     if (isTv) {
+                        // Затемнение под названием - на светлом кадре белый текст не читался.
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.BottomCenter)
+                                .fillMaxWidth()
+                                .height(120.dp)
+                                .background(
+                                    androidx.compose.ui.graphics.Brush.verticalGradient(
+                                        listOf(Color.Transparent, Color.Black.copy(alpha = 0.7f))
+                                    )
+                                )
+                        )
                         Text(
                             item.title,
                             color = Color.White,
@@ -608,7 +624,8 @@ private fun DetailsContent(
                 // lines, which grows the column taller still. The title itself is now capped at 4
                 // lines below instead, which keeps the column from running away in the first place.
                 val posterSource = remember { MutableInteractionSource() }
-                val posterWidth = if (isTv) 184.dp else 120.dp
+                // 184dp на TV давало постер ~550px в высоту - кнопки уезжали за экран.
+                val posterWidth = if (isTv) 110.dp else 120.dp
                 Column(
                     modifier = Modifier.width(posterWidth),
                     verticalArrangement = Arrangement.spacedBy(6.dp)
@@ -1113,7 +1130,8 @@ private fun ActionButtonsRow(
         com.illusion.app.ui.common.TvAwareButton(
             onClick = onPlay,
             contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
-            modifier = Modifier.fillMaxWidth()
+            // На TV во всю ширину экрана кнопка превращалась в полосу через весь экран.
+            modifier = if (LocalUiMode.current == UiMode.TV) Modifier.widthIn(min = 240.dp, max = 360.dp) else Modifier.fillMaxWidth()
         ) {
             Icon(Icons.Default.PlayArrow, contentDescription = null)
             val playLabel = stringResource(

@@ -15,7 +15,7 @@ import com.illusion.app.domain.model.UiMode
  * UI" needs meaningfully bigger cards.
  */
 @Composable
-fun posterCardMinWidth(): Dp = if (LocalUiMode.current == UiMode.TV) 176.dp else 120.dp
+fun posterCardMinWidth(): Dp = if (LocalUiMode.current == UiMode.TV) 136.dp else 120.dp // TV Box = 960x540dp: при 176dp ряд влезал в экран целиком и подписи обрезались
 
 /**
  * Column strategy for poster grids (Library/Search/Favorites/Person). `GridCells.Fixed(2)` was
