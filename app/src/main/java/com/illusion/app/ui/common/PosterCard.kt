@@ -8,6 +8,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
@@ -85,17 +86,22 @@ fun PosterCard(
     // TV mode on a touchscreen phone will look completely broken (tv-material's click handling
     // requires D-pad focus first, see TvAwareControls.kt's own KDoc), that is expected, not a bug.
     if (LocalUiMode.current == UiMode.TV) {
+        var focused by remember { mutableStateOf(false) }
         androidx.tv.material3.Card(
             onClick = { haptics.tick(); onClick() },
             // Default focused scale is 1.1f (verified via javap on CardDefaults.scale$default) -
             // a poster card at the edge of a dense grid zooms 10% on focus with no reserved room
             // for it, so it visibly overflows the screen edge (confirmed on the real TV Box).
-            // 1.05f keeps a real, visible "this is focused" zoom without needing to also rework
-            // every grid's edge padding just to make room for the library default.
-            scale = androidx.tv.material3.CardDefaults.scale(focusedScale = 1.05f),
-            modifier = modifier
+            // 1.08f - same as focusHighlight() everywhere else, within the grid's own spacing.
+            scale = androidx.tv.material3.CardDefaults.scale(focusedScale = 1.08f),
+            // Без рамки: карточка в фокусе выделяется сама - увеличением и осветлением постера
+            // (focusLift ниже). Рамка читалась как обводка поверх интерфейса - просьба пользователя.
+            border = androidx.tv.material3.CardDefaults.border(focusedBorder = androidx.tv.material3.Border.None),
+            modifier = modifier.onFocusChanged { focused = it.hasFocus }
         ) {
-            PosterCardContent(item, showRatingBadge, posterAspectRatio, isCurrent, progressFraction, subtitleOverride, showCaption)
+            Box(Modifier.focusLift(focused)) {
+                PosterCardContent(item, showRatingBadge, posterAspectRatio, isCurrent, progressFraction, subtitleOverride, showCaption)
+            }
         }
         return
     }

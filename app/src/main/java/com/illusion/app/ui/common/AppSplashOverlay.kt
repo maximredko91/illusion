@@ -21,6 +21,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -50,14 +52,40 @@ fun AppSplashOverlay(app: IllusionApplication) {
         val economical = performance == PerformanceMode.ECONOMICAL ||
             (performance == PerformanceMode.AUTO && DevicePerformance.isLowEndDevice(app))
         animate = !economical && ValueAnimator.areAnimatorsEnabled()
-        if (animate) progress.animateTo(1f, tween(560, easing = LinearEasing))
+        if (animate) {
+            progress.animateTo(1f, tween(560, easing = LinearEasing))
+        } else {
+            // Экономичный режим (TV Box в «Авто» попадает сюда как слабое устройство): без анимации
+            // сплэш закрывался в тот же кадр, и его не было видно вовсе. Показываем статично.
+            progress.snapTo(0.3f)
+            // Отсчёт - от первого показанного кадра: на медленном TV Box 650 мс успевали пройти,
+            // пока окно ещё открывалось, и экран с названием не был виден ни разу.
+            withFrameNanos { }
+            kotlinx.coroutines.delay(if (isTv) 1200 else 650)
+        }
         finished = true
     }
     if (finished) return
 
-    val splashBackground = colorResource(R.color.splash_bg)
     val destinationBackground = MaterialTheme.colorScheme.background
-    val ink = colorResource(R.color.illusion_ink_on_bg)
+    // Цвета сплэша - по теме приложения, а не системы: colorResource() брал splash_bg по системной
+    // теме, и на TV Box (система светлая, в настройках тёмная) сплэш был белым. Ночные/дневные
+    // ресурсы берутся из отдельного контекста только здесь - конфигурацию активности не трогаем
+    // (подмена её в attachBaseContext пересоздавала активность при запуске).
+    val appDark = destinationBackground.luminance() < 0.5f
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val themedContext = remember(appDark) {
+        val config = android.content.res.Configuration(context.resources.configuration).apply {
+            uiMode = (uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK.inv()) or
+                if (appDark) android.content.res.Configuration.UI_MODE_NIGHT_YES else android.content.res.Configuration.UI_MODE_NIGHT_NO
+        }
+        context.createConfigurationContext(config)
+    }
+    val splashBackground = Color(themedContext.getColor(R.color.splash_bg))
+    val ink = Color(themedContext.getColor(R.color.illusion_ink_on_bg))
+    val mark = remember(themedContext) {
+        androidx.compose.ui.graphics.vector.ImageVector.vectorResource(themedContext.theme, themedContext.resources, R.drawable.ic_mark_splash)
+    }
     val exit = ((progress.value - 0.66f) / 0.34f).coerceIn(0f, 1f)
     val background = lerp(splashBackground, destinationBackground, exit)
     BoxWithConstraints(
@@ -66,7 +94,7 @@ fun AppSplashOverlay(app: IllusionApplication) {
     ) {
         // Keep the native 288dp canvas even on ATV: enlarging it at handoff causes a jump.
         Image(
-            painterResource(R.drawable.ic_mark_splash), contentDescription = null,
+            androidx.compose.ui.graphics.vector.rememberVectorPainter(mark), contentDescription = null,
             modifier = Modifier.size(288.dp)
                 .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
                 .drawWithContent {

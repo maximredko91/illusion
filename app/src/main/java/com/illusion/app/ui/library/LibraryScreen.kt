@@ -192,17 +192,30 @@ fun LibraryScreen(
         // Sorting and filtering used to sit in one undifferentiated wrap of identical chips, where
         // the long "Рейтинг: сначала высокий" pushed the filters onto a ragged second line and
         // read as just another filter. Own row for the sort, own row for the filters.
-        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        val sort: @Composable () -> Unit = {
             SortMenu(
                 sortOrder,
                 onSortOrderChange = { scrollToTop(); onSortOrderChange(it) },
                 ascending = sortAscending,
                 onAscendingChange = { scrollToTop(); onSortAscendingChange(it) }
             )
+        }
+        if (isTv) {
+            // TV Box - всего 540dp в высоту: два отдельных ряда вместе с заголовком и
+            // переключателем занимали полэкрана, и первая карточка начиналась только с середины.
+            // В ширину места хватает - сортировка и фильтры в одну строку.
             androidx.compose.foundation.layout.FlowRow(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalArrangement = Arrangement.spacedBy(4.dp)
-            ) { filters() }
+            ) { sort(); filters() }
+        } else {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                sort()
+                androidx.compose.foundation.layout.FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) { filters() }
+            }
         }
     }
 

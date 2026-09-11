@@ -301,6 +301,7 @@ private fun CollectionCarousel(
         SectionTitle(stringResource(R.string.home_collections), modifier = Modifier.fillMaxWidth())
         LazyRow(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
+            contentPadding = PaddingValues(horizontal = if (com.illusion.app.ui.common.LocalUiMode.current == com.illusion.app.domain.model.UiMode.TV) 12.dp else 0.dp),
             modifier = Modifier.focusGroup()
         ) {
             items(collections, key = { it.name }) { collection ->
@@ -390,6 +391,9 @@ private fun MediaCarousel(
         LazyRow(
             state = listState,
             horizontalArrangement = Arrangement.spacedBy(8.dp),
+            // На TV элемент в фокусе увеличивается - у крайнего в ряду увеличенный край обрезался
+            // границей ряда (кнопка «Продолжить» подрезана с боков). Запас по краям под это.
+            contentPadding = PaddingValues(horizontal = if (com.illusion.app.ui.common.LocalUiMode.current == com.illusion.app.domain.model.UiMode.TV) 12.dp else 0.dp),
             modifier = Modifier.focusGroup()
         ) {
             items(items, key = { it.stableId }) { item ->

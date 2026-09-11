@@ -33,7 +33,7 @@ fun posterCardMinWidth(): Dp = if (LocalUiMode.current == UiMode.TV) 136.dp else
  */
 @Composable
 fun posterGridColumns(): GridCells {
-    if (LocalUiMode.current == UiMode.TV) return GridCells.Adaptive(minSize = 176.dp)
+    if (LocalUiMode.current == UiMode.TV) return GridCells.Adaptive(minSize = posterCardMinWidth())
     val isLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
     return GridCells.Adaptive(minSize = if (isLandscape) 100.dp else 150.dp)
 }

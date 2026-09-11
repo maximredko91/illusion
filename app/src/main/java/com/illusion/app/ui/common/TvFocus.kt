@@ -9,7 +9,12 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.scale
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.drawOutline
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.graphics.Color
@@ -52,12 +57,53 @@ fun Modifier.focusHighlight(
 ): Modifier {
     if (LocalUiMode.current != UiMode.TV) return this
     val isFocused by interactionSource.collectIsFocusedAsState()
-    val scale by animateFloatAsState(if (isFocused && scaleOnFocus) 1.08f else 1f, label = "tvFocusScale")
+    // Не рамка вокруг, а сам элемент «выходит вперёд»: чуть увеличивается, приподнимается с тенью
+    // цвета акцента и светлеет. Рамка читалась как обводка поверх интерфейса, а не как выбор
+    // (просьба пользователя после теста на TV Box).
+    val progress by animateFloatAsState(if (isFocused) 1f else 0f, label = "tvFocus")
     return this
-        .scale(scale)
+        // Мелкие элементы у края (иконки шапки) не увеличиваются - им мягкая заливка под собой.
         .then(
-            if (isFocused) Modifier.border(3.dp, color, shape) else Modifier
+            if (!scaleOnFocus) {
+                Modifier.drawBehind {
+                    if (progress > 0f) {
+                        drawOutline(shape.createOutline(size, layoutDirection, this), color.copy(alpha = 0.28f * progress))
+                    }
+                }
+            } else {
+                Modifier
+            }
         )
+        .graphicsLayer {
+            val s = if (scaleOnFocus) 1f + 0.08f * progress else 1f
+            scaleX = s
+            scaleY = s
+        }
+        .focusLift(isFocused)
+}
+
+/**
+ * Осветление элемента в фокусе - по его собственным пикселям, без рамки и плашки. Отдельно от
+ * [focusHighlight] - для компонентов со своим увеличением (TV-карточка постера).
+ */
+@Composable
+fun Modifier.focusLift(isFocused: Boolean): Modifier {
+    if (LocalUiMode.current != UiMode.TV) return this
+    val progress by animateFloatAsState(if (isFocused) 1f else 0f, label = "tvFocusLift")
+    return this
+        .graphicsLayer {
+            // Отдельный слой - только пока элемент в фокусе: на слабом TV Box держать его
+            // у каждой карточки сетки дорого.
+            compositingStrategy = if (progress > 0f) CompositingStrategy.Offscreen else CompositingStrategy.Auto
+        }
+        .drawWithContent {
+            drawContent()
+            if (progress > 0f) {
+                // SrcAtop - осветляются только уже нарисованные пиксели самого элемента, по его
+                // настоящей форме (пилюля кнопки, постер, значок меню), без прямоугольной плашки.
+                drawRect(Color.White.copy(alpha = 0.2f * progress), blendMode = BlendMode.SrcAtop)
+            }
+        }
 }
 
 /**
