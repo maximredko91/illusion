@@ -9,11 +9,11 @@
          values-night) - the OS splash's own fade/scale-in animation had no guaranteed way to
          finish before Compose's AppSplashOverlay took over (the OS dismisses on first frame
          drawn, which can land mid-animation), and the two sides re-animating independently read
-         as the icon visibly jumping in size - per feedback. A static icon on both sides removes
-         the animation entirely, so there's nothing left to fall out of sync. No
+         as the icon visibly jumping in size - per feedback. Both sides retain the same geometry;
+         only Compose adds a single light sweep and the exit fade. No
          windowSplashScreenBrandingImage - vector drawables can't render text, and a rasterized
          wordmark PNG would go soft at higher densities; "ИЛЛЮЗИОН" is shown as real Compose Text
-         instead, right as this hands off (see AppSplashOverlay in MainActivity). -->
+         instead, right as this hands off (see ui/common/AppSplashOverlay.kt). -->
     <style name="Theme.Illusion.Splash" parent="Theme.SplashScreen">
         <item name="windowSplashScreenBackground">@color/splash_bg</item>
         <item name="windowSplashScreenAnimatedIcon">@drawable/ic_mark_splash</item>

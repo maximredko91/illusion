@@ -467,243 +467,137 @@ fun SettingsScreen(
                     }
 
                     "about" -> {
-                        val aboutContext = LocalContext.current
-                        fun openUrl(url: String) {
-                            runCatching { aboutContext.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, url.toUri())) }
-                        }
-                        SettingsGroup {
-                            ListItem(
-                                headlineContent = { Text(stringResource(R.string.app_name)) },
-                                supportingContent = { Text(stringResource(R.string.settings_about_tagline)) },
-                                leadingContent = {
-                                    // R.mipmap.ic_launcher is Android Studio's stock template
-                                    // placeholder (never updated after the real icon redesign,
-                                    // see README's own icon-fix commit) - the actual mark lives in
-                                    // the adaptive icon's own layers (mipmap-anydpi/ic_launcher.xml:
-                                    // ic_mark foreground on an icon_bg background), reassembled
-                                    // here the same way rather than pointing at the stale bitmap.
-                                    Box(
-                                        modifier = Modifier
-                                            .size(40.dp)
-                                            .clip(androidx.compose.foundation.shape.CircleShape)
-                                            .background(colorResource(R.color.icon_bg)),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Icon(
-                                            painterResource(R.drawable.ic_mark),
-                                            contentDescription = null,
-                                            tint = Color.Unspecified,
-                                            modifier = Modifier.size(28.dp)
-                                        )
-                                    }
-                                },
-                                colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-                                modifier = Modifier.fillMaxWidth()
-                            )
-                            SettingsDivider()
-                            ListItem(
-                                headlineContent = { Text(stringResource(R.string.settings_version, com.illusion.app.BuildConfig.VERSION_NAME)) },
-                                colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-                                modifier = Modifier.fillMaxWidth()
-                            )
-                            SettingsDivider()
-                            // A separate row (not the version's own supportingContent line) so it's
-                            // its own tap target - tapping it 7 times triggers a small easter egg,
-                            // the same "tap the build number" joke stock Android's own Settings has
-                            // (there it unlocks Developer Options; this app's real dev-tools unlock
-                            // is a normal visible menu entry elsewhere, per the user's own earlier
-                            // preference against gating it behind tap-counting obscurity - this is
-                            // purely for fun, no functional side effect).
-                            var buildNumberTapCount by remember { mutableStateOf(0) }
-                            var lastBuildNumberTapAt by remember { mutableStateOf(0L) }
-                            val eggContext = LocalContext.current
-                            val eggResources = androidx.compose.ui.platform.LocalResources.current
-                            // A fresh Toast.makeText().show() per tap QUEUES on Android instead of
-                            // replacing the previous one - confirmed on-device: tapping through the
-                            // 4/5/6 countdown fired 3 separate ~2s toasts back to back, so the real
-                            // punchline on tap 7 only appeared after several seconds of stacked
-                            // wait, and the system's rapid-toast rate limiting on top of that
-                            // visibly truncated/overlapped the text. Cancelling the previous Toast
-                            // before showing the next one collapses that into a single, instantly-
-                            // updating toast, same as a live countdown should look.
-                            var activeEggToast by remember { mutableStateOf<android.widget.Toast?>(null) }
-                            // The punchline (unlike the short countdown hints) is a full sentence -
-                            // MIUI's own Toast rendering (this device's OEM skin) truncates longer
-                            // toast text to one line with an ellipsis rather than wrapping it, no
-                            // matter LENGTH_LONG - confirmed on-device even after fixing the
-                            // queueing above. A real dialog is never OEM-truncated like that.
-                            var showEggDialog by remember { mutableStateOf(false) }
-                            val buildNumberSource = remember { MutableInteractionSource() }
-                            ListItem(
-                                headlineContent = { Text(stringResource(R.string.settings_build_number, com.illusion.app.BuildConfig.VERSION_CODE)) },
-                                colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .focusHighlight(buildNumberSource)
-                                    .clickable(interactionSource = buildNumberSource, indication = LocalIndication.current) {
-                                        val now = System.currentTimeMillis()
-                                        buildNumberTapCount = if (now - lastBuildNumberTapAt > 1500) 1 else buildNumberTapCount + 1
-                                        lastBuildNumberTapAt = now
-                                        when {
-                                            buildNumberTapCount in 4..6 -> {
-                                                haptics.segmentTick()
-                                                activeEggToast?.cancel()
-                                                activeEggToast = android.widget.Toast.makeText(
-                                                    eggContext,
-                                                    eggResources.getString(R.string.settings_easter_egg_countdown, 7 - buildNumberTapCount),
-                                                    android.widget.Toast.LENGTH_SHORT
-                                                ).also { it.show() }
-                                            }
-                                            buildNumberTapCount >= 7 -> {
-                                                haptics.tick()
-                                                buildNumberTapCount = 0
-                                                activeEggToast?.cancel()
-                                                showEggDialog = true
+                        AboutLayout(
+                            header = {
+                                AboutBrandHeader()
+                                var buildNumberTapCount by remember { mutableStateOf(0) }
+                                var lastBuildNumberTapAt by remember { mutableStateOf(0L) }
+                                val eggContext = LocalContext.current
+                                val eggResources = androidx.compose.ui.platform.LocalResources.current
+                                // A fresh Toast.makeText().show() per tap QUEUES on Android instead of
+                                // replacing the previous one - confirmed on-device: tapping through the
+                                // 4/5/6 countdown fired 3 separate ~2s toasts back to back, so the real
+                                // punchline on tap 7 only appeared after several seconds of stacked
+                                // wait, and the system's rapid-toast rate limiting on top of that
+                                // visibly truncated/overlapped the text. Cancelling the previous Toast
+                                // before showing the next one collapses that into a single, instantly-
+                                // updating toast, same as a live countdown should look.
+                                var activeEggToast by remember { mutableStateOf<android.widget.Toast?>(null) }
+                                // The punchline (unlike the short countdown hints) is a full sentence -
+                                // MIUI's own Toast rendering (this device's OEM skin) truncates longer
+                                // toast text to one line with an ellipsis rather than wrapping it, no
+                                // matter LENGTH_LONG - confirmed on-device even after fixing the
+                                // queueing above. A real dialog is never OEM-truncated like that.
+                                var showEggDialog by remember { mutableStateOf(false) }
+                                val buildNumberSource = remember { MutableInteractionSource() }
+                                ListItem(
+                                    headlineContent = { Text(stringResource(R.string.settings_about_build, com.illusion.app.BuildConfig.VERSION_NAME, com.illusion.app.BuildConfig.VERSION_CODE), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = androidx.compose.ui.text.style.TextAlign.Center, modifier = Modifier.fillMaxWidth()) },
+                                    colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .focusHighlight(buildNumberSource)
+                                        .clickable(interactionSource = buildNumberSource, indication = LocalIndication.current) {
+                                            val now = System.currentTimeMillis()
+                                            buildNumberTapCount = if (now - lastBuildNumberTapAt > 1500) 1 else buildNumberTapCount + 1
+                                            lastBuildNumberTapAt = now
+                                            when {
+                                                buildNumberTapCount in 4..6 -> {
+                                                    haptics.segmentTick()
+                                                    activeEggToast?.cancel()
+                                                    activeEggToast = android.widget.Toast.makeText(
+                                                        eggContext,
+                                                        eggResources.getString(R.string.settings_easter_egg_countdown, 7 - buildNumberTapCount),
+                                                        android.widget.Toast.LENGTH_SHORT
+                                                    ).also { it.show() }
+                                                }
+                                                buildNumberTapCount >= 7 -> {
+                                                    haptics.tick()
+                                                    buildNumberTapCount = 0
+                                                    activeEggToast?.cancel()
+                                                    showEggDialog = true
+                                                }
                                             }
                                         }
-                                    }
-                            )
-                            if (showEggDialog) {
-                                AlertDialog(
-                                    onDismissRequest = { showEggDialog = false },
-                                    confirmButton = {
-                                        TextButton(onClick = { showEggDialog = false }) {
-                                            Text(stringResource(R.string.player_close))
-                                        }
-                                    },
-                                    text = { Text(stringResource(R.string.settings_easter_egg_message)) }
                                 )
-                            }
-                            SettingsDivider()
-                            // Card style, not ListItem(trailingContent = button) - see
-                            // SettingsActionCard's own KDoc for why that pattern breaks (badly, on
-                            // TV especially - confirmed from on-device photos: TvAwareOutlinedButton
-                            // squeezed this row's whole headline into a vertical one-letter-per-line
-                            // column). Kept as a hand-built Column (not SettingsActionCard itself)
-                            // only because of the pill-styled dynamic up-to-date/error message,
-                            // which doesn't fit SettingsActionCard's plain-String description param.
-                            Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp)) {
-                                Text(stringResource(R.string.settings_check_updates), style = MaterialTheme.typography.bodyLarge)
-                                if (upToDateMessage != null) {
-                                    LaunchedEffect(upToDateMessage) {
-                                        kotlinx.coroutines.delay(4000)
-                                        onDismissUpToDateMessage()
-                                    }
-                                    // Only the "already up to date" success message gets the
-                                    // green pill treatment - a failure message (no internet,
-                                    // manifest not found, ...) shares this same slot and should
-                                    // never look like a success by association.
-                                    val successPrefix = "У вас последняя версия!"
-                                    if (upToDateMessage.startsWith(successPrefix)) {
-                                        Box(
-                                            modifier = Modifier
-                                                .padding(top = 4.dp)
-                                                .clip(RoundedCornerShape(50))
-                                                .background(Color(0xFF2E7D32).copy(alpha = 0.15f))
-                                                .padding(horizontal = 10.dp, vertical = 4.dp)
-                                        ) {
-                                            Text(
-                                                upToDateMessage,
-                                                color = Color(0xFF2E7D32),
-                                                style = MaterialTheme.typography.labelMedium
-                                            )
+                                if (showEggDialog) {
+                                    SecretCinemaDialog(onDismiss = { showEggDialog = false })
+                                }
+                            },
+                            content = {
+                                SettingsSectionLabel(stringResource(R.string.settings_about_updates))
+                                SettingsGroup {
+                                    Column(Modifier.fillMaxWidth().padding(16.dp)) {
+                                        TvAwareButton(
+                                            onClick = { onDismissUpToDateMessage(); onCheckForUpdates() },
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) { Text(stringResource(R.string.settings_about_check_updates)) }
+                                        if (upToDateMessage != null) {
+                                            AboutUpdateStatus(upToDateMessage, effectiveDarkTheme)
                                         }
-                                    } else {
-                                        Text(
-                                            upToDateMessage,
-                                            style = MaterialTheme.typography.bodyMedium,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            modifier = Modifier.padding(top = 2.dp)
-                                        )
+                                    }
+                                    SettingsDivider()
+                                    val currentUpdateCheckIntervalHours by updateCheckIntervalHours.collectAsState(initial = 720)
+                                    SettingsActionCard(title = stringResource(R.string.settings_update_check_interval)) {
+                                        UpdateCheckIntervalMenu(currentUpdateCheckIntervalHours, onUpdateCheckIntervalChange, modifier = Modifier.fillMaxWidth())
+                                    }
+                                    SettingsDivider()
+                                    val currentUpdateSource by updateSource.collectAsState(initial = com.illusion.app.domain.model.UpdateSource.GITHUB)
+                                    SettingsActionCard(
+                                        title = stringResource(R.string.settings_update_source),
+                                        description = stringResource(R.string.settings_update_source_hint)
+                                    ) {
+                                        UpdateSourceMenu(currentUpdateSource, onUpdateSourceChange, modifier = Modifier.fillMaxWidth())
+                                    }
+                                    if (currentUpdateSource == com.illusion.app.domain.model.UpdateSource.LOCAL) {
+                                        SettingsDivider()
+                                        val currentLocalUpdateSourceId by localUpdateSourceId.collectAsState(initial = null)
+                                        // Switching the row above to "Локально" without also picking a
+                                        // specific source here (an easy thing to miss - two separate
+                                        // dropdowns, only the first one is obviously "the switch") left
+                                        // localUpdateSourceId null, and the actual check silently failed
+                                        // with "не выбран источник" - confirmed on-device. Auto-picks the
+                                        // first configured source instead of requiring that second tap
+                                        // whenever there's an unambiguous default (exactly one, or none
+                                        // chosen yet) to pick.
+                                        LaunchedEffect(currentUpdateSource, sources) {
+                                            if (currentLocalUpdateSourceId == null && sources.isNotEmpty()) {
+                                                onLocalUpdateSourceIdChange(sources.first().id)
+                                            }
+                                        }
+                                        SettingsActionCard(
+                                            title = stringResource(R.string.settings_local_update_source),
+                                            description = if (sources.isEmpty()) {
+                                                stringResource(R.string.settings_local_update_source_none)
+                                            } else {
+                                                stringResource(R.string.settings_local_update_source_path_hint)
+                                            }
+                                        ) {
+                                            if (sources.isNotEmpty()) {
+                                                LocalUpdateSourceMenu(sources, currentLocalUpdateSourceId, onLocalUpdateSourceIdChange, modifier = Modifier.fillMaxWidth())
+                                            }
+                                        }
                                     }
                                 }
-                                TvAwareButton(onClick = onCheckForUpdates, modifier = Modifier.fillMaxWidth().padding(top = 12.dp)) {
-                                    Text(stringResource(R.string.action_check))
+                                SettingsSectionLabel(stringResource(R.string.settings_about_project))
+                                SettingsGroup {
+                                    AboutLinkRow(stringResource(R.string.settings_about_developer), "maximredko91",
+                                        url = "https://github.com/maximredko91")
+                                    SettingsDivider()
+                                    AboutLinkRow(stringResource(R.string.settings_about_source_code), "GitHub · Illusion",
+                                        url = "https://github.com/maximredko91/illusion")
+                                    SettingsDivider()
+                                    AboutLinkRow(stringResource(R.string.settings_about_license), stringResource(R.string.settings_about_license_value),
+                                        url = "https://github.com/maximredko91/illusion/blob/main/LICENSE")
+                                    SettingsDivider()
+                                    AboutLinkRow(stringResource(R.string.settings_about_libraries),
+                                        stringResource(R.string.settings_about_libraries_hint),
+                                        onClick = { onOpenCategory("libraries") })
                                 }
                             }
-                            SettingsDivider()
-                            val currentUpdateCheckIntervalHours by updateCheckIntervalHours.collectAsState(initial = 720)
-                            SettingsActionCard(title = stringResource(R.string.settings_update_check_interval)) {
-                                UpdateCheckIntervalMenu(currentUpdateCheckIntervalHours, onUpdateCheckIntervalChange, modifier = Modifier.fillMaxWidth())
-                            }
-                            SettingsDivider()
-                            val currentUpdateSource by updateSource.collectAsState(initial = com.illusion.app.domain.model.UpdateSource.GITHUB)
-                            SettingsActionCard(
-                                title = stringResource(R.string.settings_update_source),
-                                description = stringResource(R.string.settings_update_source_hint)
-                            ) {
-                                UpdateSourceMenu(currentUpdateSource, onUpdateSourceChange, modifier = Modifier.fillMaxWidth())
-                            }
-                            if (currentUpdateSource == com.illusion.app.domain.model.UpdateSource.LOCAL) {
-                                SettingsDivider()
-                                val currentLocalUpdateSourceId by localUpdateSourceId.collectAsState(initial = null)
-                                // Switching the row above to "Локально" without also picking a
-                                // specific source here (an easy thing to miss - two separate
-                                // dropdowns, only the first one is obviously "the switch") left
-                                // localUpdateSourceId null, and the actual check silently failed
-                                // with "не выбран источник" - confirmed on-device. Auto-picks the
-                                // first configured source instead of requiring that second tap
-                                // whenever there's an unambiguous default (exactly one, or none
-                                // chosen yet) to pick.
-                                LaunchedEffect(currentUpdateSource, sources) {
-                                    if (currentLocalUpdateSourceId == null && sources.isNotEmpty()) {
-                                        onLocalUpdateSourceIdChange(sources.first().id)
-                                    }
-                                }
-                                SettingsActionCard(
-                                    title = stringResource(R.string.settings_local_update_source),
-                                    description = if (sources.isEmpty()) {
-                                        stringResource(R.string.settings_local_update_source_none)
-                                    } else {
-                                        stringResource(R.string.settings_local_update_source_path_hint)
-                                    }
-                                ) {
-                                    if (sources.isNotEmpty()) {
-                                        LocalUpdateSourceMenu(sources, currentLocalUpdateSourceId, onLocalUpdateSourceIdChange, modifier = Modifier.fillMaxWidth())
-                                    }
-                                }
-                            }
-                            SettingsDivider()
-                            val developerSource = remember { MutableInteractionSource() }
-                            ListItem(
-                                headlineContent = { Text(stringResource(R.string.settings_about_developer)) },
-                                supportingContent = { Text("github.com/maximredko91") },
-                                colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-                                modifier = Modifier.fillMaxWidth()
-                                    .clickable(interactionSource = developerSource, indication = LocalIndication.current) {
-                                        openUrl("https://github.com/maximredko91")
-                                    }
-                            )
-                            SettingsDivider()
-                            val sourceCodeSource = remember { MutableInteractionSource() }
-                            ListItem(
-                                headlineContent = { Text(stringResource(R.string.settings_about_source_code)) },
-                                supportingContent = { Text("github.com/maximredko91/illusion") },
-                                colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-                                modifier = Modifier.fillMaxWidth()
-                                    .clickable(interactionSource = sourceCodeSource, indication = LocalIndication.current) {
-                                        openUrl("https://github.com/maximredko91/illusion")
-                                    }
-                            )
-                            SettingsDivider()
-                            val licenseSource = remember { MutableInteractionSource() }
-                            ListItem(
-                                headlineContent = { Text(stringResource(R.string.settings_about_license)) },
-                                supportingContent = { Text(stringResource(R.string.settings_about_license_value)) },
-                                colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-                                modifier = Modifier.fillMaxWidth()
-                                    .clickable(interactionSource = licenseSource, indication = LocalIndication.current) {
-                                        openUrl("https://github.com/maximredko91/illusion/blob/main/LICENSE")
-                                    }
-                            )
-                            SettingsDivider()
-                            ListItem(
-                                headlineContent = { Text(stringResource(R.string.settings_about_libraries)) },
-                                supportingContent = { Text(stringResource(R.string.settings_about_libraries_value)) },
-                                colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-                                modifier = Modifier.fillMaxWidth()
-                            )
-                        }
+                        )
+                    }
+                    "libraries" -> {
+                        AboutLibraries()
                     }
 
                     "smb_sources" -> {
@@ -1514,6 +1408,7 @@ private fun categoryTitle(key: String): String = when (key) {
     "feedback" -> stringResource(R.string.settings_feedback)
     "reset" -> stringResource(R.string.settings_reset_section)
     "about" -> stringResource(R.string.settings_about_section)
+    "libraries" -> stringResource(R.string.settings_about_libraries)
     else -> stringResource(R.string.settings_title)
 }
 

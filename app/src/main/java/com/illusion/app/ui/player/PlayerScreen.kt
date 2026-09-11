@@ -441,6 +441,40 @@ fun PlayerScreen(
     }
     val isInPip = PipController.isInPipMode
 
+    // Пульт Android TV. Устройство без тачскрина не может «тапнуть по экрану», а запасной путь
+    // через фокусируемый корневой узел на реальном TV Box не срабатывал - нажатия до плеера не
+    // доходили, панель управления не появлялась вовсе (проверено на Xiaomi MiTV-AFKR0). Перехват
+    // на уровне активности от фокуса не зависит: первое нажатие любой навигационной кнопки
+    // показывает панель и дальше не идёт, следующие обрабатываются обычным образом.
+    DisposableEffect(isLocked, isInPip) {
+        PlayerKeyEvents.handler = handler@{ event ->
+            if (event.action != android.view.KeyEvent.ACTION_DOWN) return@handler false
+            if (isInPip || isLocked) return@handler false
+            val isNavKey = when (event.keyCode) {
+                android.view.KeyEvent.KEYCODE_DPAD_CENTER,
+                android.view.KeyEvent.KEYCODE_ENTER,
+                android.view.KeyEvent.KEYCODE_NUMPAD_ENTER,
+                android.view.KeyEvent.KEYCODE_DPAD_UP,
+                android.view.KeyEvent.KEYCODE_DPAD_DOWN,
+                android.view.KeyEvent.KEYCODE_DPAD_LEFT,
+                android.view.KeyEvent.KEYCODE_DPAD_RIGHT -> true
+                else -> false
+            }
+            if (!isNavKey) return@handler false
+            if (!controlsVisible) {
+                // Первое нажатие только показывает панель - иначе та же кнопка сразу же
+                // перескакивала бы фокус внутри неё, не дав увидеть, где он оказался.
+                controlsVisible = true
+                bumpInteraction()
+                true
+            } else {
+                bumpInteraction()
+                false
+            }
+        }
+        onDispose { PlayerKeyEvents.handler = null }
+    }
+
     // Offered once per playback: this device's only video/mp4v-es decoder mangles ASP streams
     // (see PlayerUiState.videoCodecPoorlySupported), so the picture is watchable but visibly
     // broken up - better to say so and offer the app that can actually decode it.
