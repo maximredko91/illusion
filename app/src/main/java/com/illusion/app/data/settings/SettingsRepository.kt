@@ -60,6 +60,7 @@ class SettingsRepository(private val context: Context) {
         val UPDATE_SOURCE = stringPreferencesKey("update_source")
         val LOCAL_UPDATE_SOURCE_ID = longPreferencesKey("local_update_source_id")
         val PLAYER_BUFFER_SIZE = stringPreferencesKey("player_buffer_size")
+        val DECODER_MODE = stringPreferencesKey("decoder_mode")
         val CUES_SEEK_WORKAROUND_STABLE_IDS = stringPreferencesKey("cues_seek_workaround_stable_ids")
         val PERFORMANCE_MODE = stringPreferencesKey("performance_mode")
     }
@@ -208,6 +209,26 @@ class SettingsRepository(private val context: Context) {
     /** Starts the background collector backing [playerBufferSizeSnapshot] - call once, on an application-scoped [scope] that outlives any single screen (see [com.illusion.app.IllusionApplication]). */
     fun startPlayerBufferSizeCache(scope: kotlinx.coroutines.CoroutineScope) {
         scope.launch { playerBufferSize.collect { playerBufferSizeSnapshot = it } }
+    }
+
+    /** Defaults to AUTO - the platform's own decoder order, which is what every build before this setting existed used. */
+    val decoderMode: Flow<com.illusion.app.domain.model.DecoderMode> = context.dataStore.data.map {
+        it[Keys.DECODER_MODE]?.let { name -> runCatching { com.illusion.app.domain.model.DecoderMode.valueOf(name) }.getOrNull() }
+            ?: com.illusion.app.domain.model.DecoderMode.AUTO
+    }
+
+    suspend fun setDecoderMode(mode: com.illusion.app.domain.model.DecoderMode) {
+        context.dataStore.edit { it[Keys.DECODER_MODE] = mode.name }
+    }
+
+    /** Snapshot of [decoderMode] for the same reason [playerBufferSizeSnapshot] exists - PlayerViewModel.createPlayer() needs it synchronously, off the DataStore disk read. */
+    @Volatile
+    var decoderModeSnapshot: com.illusion.app.domain.model.DecoderMode = com.illusion.app.domain.model.DecoderMode.AUTO
+        private set
+
+    /** Starts the background collector backing [decoderModeSnapshot] - same call site as [startPlayerBufferSizeCache]. */
+    fun startDecoderModeCache(scope: kotlinx.coroutines.CoroutineScope) {
+        scope.launch { decoderMode.collect { decoderModeSnapshot = it } }
     }
 
     /** Defaults to AUTO - see [com.illusion.app.domain.model.PerformanceMode]'s own KDoc for what this drives and how AUTO resolves. */
@@ -378,6 +399,7 @@ class SettingsRepository(private val context: Context) {
             it.remove(Keys.SUBTITLE_TEXT_SIZE_PERCENT)
             it.remove(Keys.TV_OVERSCAN_MARGIN_PERCENT)
             it.remove(Keys.PLAYER_BUFFER_SIZE)
+            it.remove(Keys.DECODER_MODE)
             it.remove(Keys.PERFORMANCE_MODE)
             it.remove(Keys.UPDATE_SOURCE)
         }

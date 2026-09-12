@@ -16,6 +16,11 @@
     <string name="settings_player_buffer_size_auto">Авто — рекомендуется</string>
     <string name="settings_player_buffer_size_increased">Увеличенный — для нестабильной сети</string>
     <string name="settings_player_buffer_size_maximum">Максимальный — самый долгий запуск</string>
+    <string name="settings_decoder_mode">Декодер</string>
+    <string name="settings_decoder_mode_description">Если картинка рассыпается или зеленеет — попробуйте программный</string>
+    <string name="settings_decoder_mode_auto">Авто — рекомендуется</string>
+    <string name="settings_decoder_mode_hardware">Аппаратный — быстрее</string>
+    <string name="settings_decoder_mode_software">Программный — надёжнее</string>
     <string name="settings_check_updates">Проверить обновления</string>
     <string name="settings_update_check_interval">Автопроверка обновлений</string>
     <string name="settings_about_section">О программе</string>

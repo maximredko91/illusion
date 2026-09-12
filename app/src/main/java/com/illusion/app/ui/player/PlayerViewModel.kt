@@ -158,7 +158,12 @@ class PlayerViewModel(
         // EXTENSION_RENDERER_MODE_ON: falls back to the FFmpeg extension (DTS/AC3/TrueHD) only when no
         // platform decoder handles the format - a no-op today since the extension isn't on the classpath
         // yet (see scripts/build_ffmpeg_extension.sh), but no code change will be needed once it is.
-        DefaultRenderersFactory(appContext).setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON)
+        DefaultRenderersFactory(appContext)
+            // Reorders (never shortens) the platform decoder list per the Settings decoder-mode
+            // choice - see DecoderMode's own KDoc. AUTO hands back MediaCodecSelector.DEFAULT, so
+            // the default path is byte-for-byte what it was before this setting existed.
+            .setMediaCodecSelector(com.illusion.app.data.player.decoderSelector(decoderModeForCurrentPlayer))
+            .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON)
     )
         // DefaultDataSource routes file:// URIs (a completed offline download) to Media3's built-in
         // FileDataSource and everything else to dataSourceFactory - so smb-item:// keeps streaming
@@ -180,6 +185,20 @@ class PlayerViewModel(
         )
         .build()
         .apply { setWakeMode(C.WAKE_MODE_NETWORK) }
+
+    /**
+     * Decoder mode the CURRENT [player] instance was built with. Read by [createPlayer], so it has
+     * to be declared (and initialised) above [_player] - Kotlin initialises properties in
+     * declaration order, and a `lateinit`/later-declared field would still be null when the first
+     * createPlayer() call runs. Kept as a field rather than read from the repository inside
+     * createPlayer() so a mid-playback change can be detected in [init] and reloaded exactly once.
+     */
+    private var decoderModeForCurrentPlayer: com.illusion.app.domain.model.DecoderMode =
+        settingsRepository.decoderModeSnapshot
+
+    /** Name of the decoder MediaCodec actually instantiated for the current video/audio track, for the diagnostic overlay - null until the renderer reports one. */
+    private var videoDecoderName: String? = null
+    private var audioDecoderName: String? = null
 
     // Backed by a StateFlow (not a plain val) so it can be swapped out entirely - reloadPlayer()
     // needs a truly fresh ExoPlayer instance to reset the sharpen effects pipeline (see its own
@@ -232,6 +251,27 @@ class PlayerViewModel(
     }
 
     private fun attachListeners(target: ExoPlayer) {
+        // Player.Listener never exposes which decoder was chosen - only AnalyticsListener does, and
+        // only as a bare name string (no MediaCodecInfo), hence isHardwareDecoder()'s lookup.
+        target.addAnalyticsListener(object : androidx.media3.exoplayer.analytics.AnalyticsListener {
+            override fun onVideoDecoderInitialized(
+                eventTime: androidx.media3.exoplayer.analytics.AnalyticsListener.EventTime,
+                decoderName: String,
+                initializedTimestampMs: Long,
+                initializationDurationMs: Long
+            ) {
+                videoDecoderName = decoderName
+            }
+
+            override fun onAudioDecoderInitialized(
+                eventTime: androidx.media3.exoplayer.analytics.AnalyticsListener.EventTime,
+                decoderName: String,
+                initializedTimestampMs: Long,
+                initializationDurationMs: Long
+            ) {
+                audioDecoderName = decoderName
+            }
+        })
         target.addListener(object : Player.Listener {
             override fun onIsPlayingChanged(isPlaying: Boolean) {
                 _state.update { it.copy(isPlaying = isPlaying) }
@@ -316,6 +356,19 @@ class PlayerViewModel(
 
     init {
         attachListeners(player)
+
+        // Changing the decoder mode while a file is open should take effect on that file - that's
+        // the whole point of the setting (a picture breaking up on the hardware decoder is exactly
+        // when you reach for it). The mode is fixed at RenderersFactory construction, so applying
+        // it means a full reload; reloadPlayer() already preserves position and playing state.
+        // drop(1)-equivalent: the first emission always matches what createPlayer() just used.
+        viewModelScope.launch {
+            settingsRepository.decoderMode.collect { mode ->
+                if (mode == decoderModeForCurrentPlayer) return@collect
+                decoderModeForCurrentPlayer = mode
+                reloadPlayer()
+            }
+        }
 
         viewModelScope.launch {
             // Calling setVideoEffects() at all - even with an empty list - permanently switches
@@ -692,6 +745,8 @@ class PlayerViewModel(
         // Preserves whichever mode (normal / Cues-seek-disabled) the player was already in -
         // reloadPlayer() exists for the sharpen-effects pipeline, unrelated to Cues workaround
         // status, so this must not silently reset a file back to the mode that was hanging it.
+        videoDecoderName = null
+        audioDecoderName = null
         val fresh = createPlayer(disableCuesSeek = cuesSeekDisabledForCurrentPlayer)
         attachListeners(fresh)
         _player.value = fresh
@@ -995,6 +1050,9 @@ class PlayerViewModel(
      * phone or the Xiaomi TV box, regardless of that box's decoder chip. Profile 7 still plays -
      * MediaCodec decodes the base layer like any other HEVC track - just without the EL detail.
      */
+    private fun decoderKindLabel(decoderName: String): String =
+        if (com.illusion.app.data.player.isHardwareDecoder(decoderName)) "аппаратный" else "программный"
+
     fun currentVideoFormatSummary(): String {
         val format = player.videoFormat
         val item = currentItem ?: currentTrailerItem
@@ -1046,6 +1104,7 @@ class PlayerViewModel(
                 appendLine()
                 appendLine("Видео")
                 appendLine("Кодек: ${format.sampleMimeType ?: "—"} (${format.codecs ?: "—"})")
+                videoDecoderName?.let { appendLine("Декодер: $it (${decoderKindLabel(it)})") }
                 appendLine("Разрешение: ${format.width}x${format.height}")
                 if (format.frameRate > 0) appendLine("Частота кадров: ${"%.2f".format(format.frameRate)} fps")
                 if (format.bitrate > 0) appendLine("Битрейт: ${format.bitrate / 1000} кбит/с")
@@ -1063,6 +1122,7 @@ class PlayerViewModel(
                 appendLine()
                 appendLine("Аудио")
                 appendLine("Кодек: ${audio.sampleMimeType ?: "—"} (${audio.codecs ?: "—"})")
+                audioDecoderName?.let { appendLine("Декодер: $it (${decoderKindLabel(it)})") }
                 if (audio.channelCount != androidx.media3.common.Format.NO_VALUE) appendLine("Каналы: ${audio.channelCount}")
                 if (audio.sampleRate != androidx.media3.common.Format.NO_VALUE) appendLine("Частота дискретизации: ${audio.sampleRate} Гц")
                 if (audio.bitrate > 0) appendLine("Битрейт: ${audio.bitrate / 1000} кбит/с")

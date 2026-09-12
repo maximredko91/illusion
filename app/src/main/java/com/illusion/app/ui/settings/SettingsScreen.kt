@@ -137,6 +137,8 @@ fun SettingsScreen(
     onExternalPlayerPackageChange: (String?) -> Unit,
     playerBufferSize: Flow<com.illusion.app.domain.model.PlayerBufferSize>,
     onPlayerBufferSizeChange: (com.illusion.app.domain.model.PlayerBufferSize) -> Unit,
+    decoderMode: Flow<com.illusion.app.domain.model.DecoderMode>,
+    onDecoderModeChange: (com.illusion.app.domain.model.DecoderMode) -> Unit,
     performanceMode: Flow<com.illusion.app.domain.model.PerformanceMode>,
     onPerformanceModeChange: (com.illusion.app.domain.model.PerformanceMode) -> Unit,
     cacheSizeBytes: Long?,
@@ -208,6 +210,7 @@ fun SettingsScreen(
     val currentPlayerMode by playerMode.collectAsState(initial = com.illusion.app.domain.model.PlayerMode.INTERNAL)
     val currentExternalPlayerPackage by externalPlayerPackage.collectAsState(initial = null)
     val currentPlayerBufferSize by playerBufferSize.collectAsState(initial = com.illusion.app.domain.model.PlayerBufferSize.INCREASED)
+    val currentDecoderMode by decoderMode.collectAsState(initial = com.illusion.app.domain.model.DecoderMode.AUTO)
     val currentPerformanceMode by performanceMode.collectAsState(initial = com.illusion.app.domain.model.PerformanceMode.AUTO)
     val hapticsOn by hapticsEnabled.collectAsState(initial = true)
     val predictiveBackOn by predictiveBackEnabled.collectAsState(initial = true)
@@ -1141,6 +1144,18 @@ fun SettingsScreen(
                                     description = stringResource(R.string.settings_player_buffer_size_description)
                                 ) {
                                     PlayerBufferSizeMenu(currentPlayerBufferSize, onPlayerBufferSizeChange, modifier = Modifier.fillMaxWidth())
+                                }
+                            }
+                            AnimatedVisibility(
+                                visible = currentPlayerMode != com.illusion.app.domain.model.PlayerMode.EXTERNAL,
+                                enter = fadeIn() + expandVertically(),
+                                exit = fadeOut() + shrinkVertically()
+                            ) {
+                                SettingsActionCard(
+                                    title = stringResource(R.string.settings_decoder_mode),
+                                    description = stringResource(R.string.settings_decoder_mode_description)
+                                ) {
+                                    DecoderModeMenu(currentDecoderMode, onDecoderModeChange, modifier = Modifier.fillMaxWidth())
                                 }
                             }
                         }
@@ -2111,6 +2126,64 @@ private fun PlayerBufferSizeMenu(current: com.illusion.app.domain.model.PlayerBu
             }
         }
     }
+}
+
+@Composable
+private fun DecoderModeMenu(current: com.illusion.app.domain.model.DecoderMode, onChange: (com.illusion.app.domain.model.DecoderMode) -> Unit, modifier: Modifier = Modifier) {
+    var expanded by remember { mutableStateOf(false) }
+    val haptics = LocalHapticFeedback.current
+    val menuDensity = LocalDensity.current
+    var menuWidth by remember { mutableStateOf(0.dp) }
+    Box(
+        modifier = modifier.onSizeChanged {
+            menuWidth = with(menuDensity) { it.width.toDp() }
+        }
+    ) {
+        TvAwareOutlinedButton(onClick = { expanded = true }, modifier = Modifier.fillMaxWidth()) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(decoderModeLabel(current))
+                Icon(
+                    Icons.Default.ArrowDropDown,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+            shape = MenuShape,
+            modifier = if (menuWidth > 0.dp) Modifier.width(menuWidth) else Modifier
+        ) {
+            com.illusion.app.domain.model.DecoderMode.entries.forEach { mode ->
+                val itemSource = remember { MutableInteractionSource() }
+                DropdownMenuItem(
+                    text = { Text(decoderModeLabel(mode)) },
+                    trailingIcon = {
+                        if (mode == current) Icon(Icons.Default.Check, contentDescription = null)
+                    },
+                    onClick = {
+                        haptics.segmentTick()
+                        onChange(mode)
+                        expanded = false
+                    },
+                    interactionSource = itemSource,
+                    modifier = Modifier.focusHighlight(itemSource)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun decoderModeLabel(mode: com.illusion.app.domain.model.DecoderMode): String = when (mode) {
+    com.illusion.app.domain.model.DecoderMode.AUTO -> stringResource(R.string.settings_decoder_mode_auto)
+    com.illusion.app.domain.model.DecoderMode.HARDWARE -> stringResource(R.string.settings_decoder_mode_hardware)
+    com.illusion.app.domain.model.DecoderMode.SOFTWARE -> stringResource(R.string.settings_decoder_mode_software)
 }
 
 @Composable

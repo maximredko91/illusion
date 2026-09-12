@@ -122,6 +122,7 @@ class IllusionApplication : Application(), Configuration.Provider, SingletonImag
         // SettingsRepository.playerBufferSizeSnapshot's own KDoc for why this needs to run early
         // and keep running for the whole process lifetime, not just once.
         settingsRepository.startPlayerBufferSizeCache(applicationScope)
+        settingsRepository.startDecoderModeCache(applicationScope)
         // One-time cleanup: downloads used to live in this app-private dir before moving to public
         // Downloads/Illusion (content Uris) - those old files are now orphaned dead weight.
         java.io.File(filesDir, "downloads").let { if (it.exists()) it.deleteRecursively() }
