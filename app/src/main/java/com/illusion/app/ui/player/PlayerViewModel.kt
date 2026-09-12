@@ -1262,7 +1262,13 @@ class PlayerViewModel(
 
     private fun persistProgress(position: Long, duration: Long) {
         val item = currentItem ?: return
-        val watched = duration > 0 && position >= duration - 5000
+        // Ничего не записываем, пока воспроизведение не началось: длительность ещё неизвестна, а
+        // позиция нулевая. Раньше такая пустая запись затирала реальный прогресс - достаточно было
+        // открыть фильм, файл которого сейчас не читается с сервера, и сохранённые «38%» менялись
+        // на ноль без длительности. Карточка в «Продолжить просмотр» после этого теряла и полоску,
+        // и подпись с остатком времени, потому что и то и другое считается от длительности.
+        if (duration <= 0 || position <= 0) return
+        val watched = position >= duration - 5000
         viewModelScope.launch {
             watchProgressRepository.updateProgress(item.stableId, position, duration, watched, System.currentTimeMillis())
         }
@@ -1274,8 +1280,12 @@ class PlayerViewModel(
         if (item != null) {
             val position = player.currentPosition.coerceAtLeast(0)
             val duration = player.duration.takeIf { it != C.TIME_UNSET }?.coerceAtLeast(0) ?: 0L
-            val watched = duration > 0 && position >= duration - 5000
-            persistFinalWatchProgress(item.stableId, position, duration, watched, System.currentTimeMillis())
+            // Та же защита, что и в persistProgress - выход из плеера, который так и не начал
+            // играть (ошибка чтения файла, закрытие на буферизации), не должен стирать прогресс.
+            if (duration > 0 && position > 0) {
+                val watched = position >= duration - 5000
+                persistFinalWatchProgress(item.stableId, position, duration, watched, System.currentTimeMillis())
+            }
         }
         if (playbackServiceStarted) {
             playbackService?.detachPlayer()
