@@ -704,6 +704,8 @@ fun PlayerScreen(
                         onOpenAudioTracks = { bumpInteraction(); showAudioDialog = true },
                         onCycleAspectRatio = { bumpInteraction(); cycleResizeMode() },
                         onOpenSettings = { bumpInteraction(); showSpeedDialog = true },
+                        decoderMode = uiState.decoderMode,
+                        onDecoderModeChange = { mode -> bumpInteraction(); viewModel.setDecoderMode(mode) },
                         sharpenEnabled = uiState.sharpenEnabled,
                         onToggleSharpen = {
                             bumpInteraction()
@@ -841,6 +843,8 @@ fun PlayerScreen(
             visible = showSpeedDialog && !isInPip,
             currentSpeed = uiState.playbackSpeed,
             videoFormatSummary = viewModel.currentVideoFormatSummary(),
+            decoderMode = uiState.decoderMode,
+            onDecoderModeChange = viewModel::setDecoderMode,
             sharpenEnabled = uiState.sharpenEnabled,
             onSharpenEnabledChange = viewModel::setSharpenEnabled,
             sharpenAmount = uiState.sharpenAmount,

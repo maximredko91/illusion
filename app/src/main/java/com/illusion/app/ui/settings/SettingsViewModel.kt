@@ -102,12 +102,6 @@ class SettingsViewModel(
         viewModelScope.launch { settingsRepository.setPlayerBufferSize(size) }
     }
 
-    val decoderMode: Flow<com.illusion.app.domain.model.DecoderMode> = settingsRepository.decoderMode
-
-    fun setDecoderMode(mode: com.illusion.app.domain.model.DecoderMode) {
-        viewModelScope.launch { settingsRepository.setDecoderMode(mode) }
-    }
-
     val performanceMode: Flow<com.illusion.app.domain.model.PerformanceMode> = settingsRepository.performanceMode
 
     fun setPerformanceMode(mode: com.illusion.app.domain.model.PerformanceMode) {

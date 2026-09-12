@@ -115,6 +115,8 @@ data class PlayerUiState(
     val playbackSpeed: Float = 1f,
     val thumbnailFrames: ThumbnailFrames? = null,
     val videoAspectRatio: Float = 16f / 9f,
+    /** Mirrors the persisted decoder-mode setting so the player's own controls can show and change it without reading DataStore themselves. */
+    val decoderMode: com.illusion.app.domain.model.DecoderMode = com.illusion.app.domain.model.DecoderMode.AUTO,
     val sharpenEnabled: Boolean = false,
     val sharpenAmount: Float = 0.4f,
     val seekDurationMs: Long = 10_000L,
@@ -364,6 +366,7 @@ class PlayerViewModel(
         // drop(1)-equivalent: the first emission always matches what createPlayer() just used.
         viewModelScope.launch {
             settingsRepository.decoderMode.collect { mode ->
+                _state.update { it.copy(decoderMode = mode) }
                 if (mode == decoderModeForCurrentPlayer) return@collect
                 decoderModeForCurrentPlayer = mode
                 reloadPlayer()
@@ -677,6 +680,10 @@ class PlayerViewModel(
                 currentPositionMs = startPositionMs,
                 durationMs = it.durationMs,
                 subtitlesEnabled = it.subtitlesEnabled,
+                // Carried forward like every other setting-backed field here: this reconstruction
+                // runs on the reload that a decoder-mode change itself triggers, so dropping it
+                // snapped the UI straight back to AUTO the instant the user picked another mode.
+                decoderMode = it.decoderMode,
                 sharpenEnabled = it.sharpenEnabled,
                 sharpenAmount = it.sharpenAmount,
                 seekDurationMs = it.seekDurationMs,
@@ -805,6 +812,10 @@ class PlayerViewModel(
                 isLoading = true,
                 title = "${item.title} — трейлер",
                 subtitlesEnabled = it.subtitlesEnabled,
+                // Carried forward like every other setting-backed field here: this reconstruction
+                // runs on the reload that a decoder-mode change itself triggers, so dropping it
+                // snapped the UI straight back to AUTO the instant the user picked another mode.
+                decoderMode = it.decoderMode,
                 sharpenEnabled = it.sharpenEnabled,
                 sharpenAmount = it.sharpenAmount,
                 seekDurationMs = it.seekDurationMs,
@@ -1050,6 +1061,10 @@ class PlayerViewModel(
      * phone or the Xiaomi TV box, regardless of that box's decoder chip. Profile 7 still plays -
      * MediaCodec decodes the base layer like any other HEVC track - just without the EL detail.
      */
+    fun setDecoderMode(mode: com.illusion.app.domain.model.DecoderMode) {
+        viewModelScope.launch { settingsRepository.setDecoderMode(mode) }
+    }
+
     private fun decoderKindLabel(decoderName: String): String =
         if (com.illusion.app.data.player.isHardwareDecoder(decoderName)) "аппаратный" else "программный"
 

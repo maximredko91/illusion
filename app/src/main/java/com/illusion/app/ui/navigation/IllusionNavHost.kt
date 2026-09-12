@@ -986,8 +986,6 @@ private fun SettingsRoute(
         onExternalPlayerPackageChange = settingsViewModel::setExternalPlayerPackage,
         playerBufferSize = settingsViewModel.playerBufferSize,
         onPlayerBufferSizeChange = settingsViewModel::setPlayerBufferSize,
-        decoderMode = settingsViewModel.decoderMode,
-        onDecoderModeChange = settingsViewModel::setDecoderMode,
         performanceMode = settingsViewModel.performanceMode,
         onPerformanceModeChange = settingsViewModel::setPerformanceMode,
         cacheSizeBytes = cacheSizeBytes,

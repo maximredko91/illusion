@@ -51,10 +51,15 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.ui.unit.Dp
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.material3.LocalMinimumInteractiveComponentSize
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Audiotrack
 import androidx.compose.material.icons.filled.BlurOff
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.BlurOn
+import androidx.compose.material.icons.filled.Memory
 import androidx.compose.material.icons.filled.Cast
 import androidx.compose.material.icons.filled.Deblur
 import androidx.compose.material.icons.filled.Close
@@ -148,6 +153,8 @@ fun TopGradientBar(
     onCycleAspectRatio: () -> Unit,
     onOpenSettings: () -> Unit,
     sharpenEnabled: Boolean,
+    decoderMode: com.illusion.app.domain.model.DecoderMode,
+    onDecoderModeChange: (com.illusion.app.domain.model.DecoderMode) -> Unit,
     onToggleSharpen: () -> Unit,
     sleepTimerRemainingMs: Long?,
     onSetSleepTimer: (Long) -> Unit,
@@ -175,6 +182,16 @@ fun TopGradientBar(
         // controls instead of competing with them for the same row.
         val compact = maxWidth < 560.dp
         Column(modifier = Modifier.fillMaxWidth()) {
+            // Nine icon buttons at Material's 48dp minimum touch target come to 432dp, which is
+            // wider than a portrait phone's ~427dp of usable width - the row overflowed and the
+            // last button (settings) was clipped off the right edge entirely, confirmed on-device
+            // when the decoder button was added. Dropping the enforced minimum in compact mode
+            // leaves each button at IconButton's own 40dp visual size (360dp total, comfortable
+            // margin); the wide layout keeps the full 48dp targets.
+            CompositionLocalProvider(
+                LocalMinimumInteractiveComponentSize provides
+                    if (compact) Dp.Unspecified else LocalMinimumInteractiveComponentSize.current
+            ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
             val backSource = remember { MutableInteractionSource() }
             IconButton(onClick = onBack, interactionSource = backSource, modifier = Modifier.focusHighlight(backSource, color = Color.White)) {
@@ -286,6 +303,45 @@ fun TopGradientBar(
                     }
                 }
             }
+            // Quick decoder switch. Three states, so a one-tap cycle would make the user guess the
+            // order - a dropdown (same shape as the sleep timer's, right next to it) says what the
+            // current mode is and what the alternatives are in one tap. The icon carries the accent
+            // tint whenever the mode is NOT Авто, so a forced decoder is visible at a glance without
+            // opening anything.
+            var decoderMenuExpanded by remember { mutableStateOf(false) }
+            Box {
+                val decoderSource = remember { MutableInteractionSource() }
+                IconButton(
+                    onClick = { decoderMenuExpanded = true },
+                    interactionSource = decoderSource,
+                    modifier = Modifier.focusHighlight(decoderSource, color = Color.White)
+                ) {
+                    Icon(
+                        Icons.Default.Memory,
+                        contentDescription = stringResource(R.string.player_decoder_button),
+                        tint = if (decoderMode == com.illusion.app.domain.model.DecoderMode.AUTO) {
+                            Color.White
+                        } else {
+                            MaterialTheme.colorScheme.primary
+                        }
+                    )
+                }
+                DropdownMenu(expanded = decoderMenuExpanded, onDismissRequest = { decoderMenuExpanded = false }, shape = MenuShape) {
+                    com.illusion.app.domain.model.DecoderMode.entries.forEach { mode ->
+                        DropdownMenuItem(
+                            text = { Text(decoderModeLabel(mode)) },
+                            trailingIcon = {
+                                if (mode == decoderMode) Icon(Icons.Default.Check, contentDescription = null)
+                            },
+                            onClick = {
+                                onDecoderModeChange(mode)
+                                decoderMenuExpanded = false
+                            },
+                            modifier = Modifier.width(220.dp)
+                        )
+                    }
+                }
+            }
             // Deliberately enabled = false, not just a dimmed tint on a live button: it looked
             // identical in weight to the working controls next to it, and tapping it did nothing with
             // no explanation. Disabled it also stops taking D-pad focus on the way to Settings.
@@ -299,6 +355,7 @@ fun TopGradientBar(
             val settingsSource = remember { MutableInteractionSource() }
             IconButton(onClick = onOpenSettings, interactionSource = settingsSource, modifier = Modifier.focusHighlight(settingsSource, color = Color.White)) {
                 Icon(Icons.Default.Settings, contentDescription = stringResource(R.string.player_settings), tint = Color.White)
+            }
             }
             }
             if (compact) {
@@ -692,6 +749,8 @@ fun PlayerSettingsPanel(
     visible: Boolean,
     currentSpeed: Float,
     videoFormatSummary: String,
+    decoderMode: com.illusion.app.domain.model.DecoderMode,
+    onDecoderModeChange: (com.illusion.app.domain.model.DecoderMode) -> Unit,
     sharpenEnabled: Boolean,
     onSharpenEnabledChange: (Boolean) -> Unit,
     sharpenAmount: Float,
@@ -974,6 +1033,42 @@ fun PlayerSettingsPanel(
                 }
                 }
 
+                // Sits right above the video-info section, which is where the resulting decoder
+                // name shows up - pick a mode here, expand that to see what it actually selected.
+                CollapsiblePanelSection(stringResource(R.string.player_settings_section_decoder)) {
+                Text(
+                    stringResource(R.string.player_decoder_hint),
+                    color = Color.White.copy(alpha = 0.7f),
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+                // One chip per row rather than three across, as the speed section does: the panel
+                // is only ~270dp wide, so "Аппаратный"/"Программный" were clipped mid-word to
+                // "Аппарат"/"Програм" at a third of that each (seen on-device).
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                    com.illusion.app.domain.model.DecoderMode.entries.forEach { mode ->
+                        FilterChip(
+                            selected = mode == decoderMode,
+                            onClick = { onDecoderModeChange(mode) },
+                            label = {
+                                Text(
+                                    decoderModeLabel(mode),
+                                    maxLines = 1,
+                                    textAlign = TextAlign.Center,
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                            },
+                            colors = FilterChipDefaults.filterChipColors(
+                                labelColor = Color.White,
+                                selectedContainerColor = MaterialTheme.colorScheme.primary,
+                                selectedLabelColor = Color.White
+                            ),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                }
+                }
+
                 // The section itself is collapsed by default (CollapsiblePanelSection), which
                 // already gates visibility - an inner switch on top of that was a redundant second
                 // gate the user had to also flip after expanding the section.
@@ -1175,3 +1270,11 @@ fun formatTime(ms: Long): String {
         String.format(Locale.getDefault(), "%d:%02d", minutes, seconds)
     }
 }
+
+@Composable
+private fun decoderModeLabel(mode: com.illusion.app.domain.model.DecoderMode): String = when (mode) {
+    com.illusion.app.domain.model.DecoderMode.AUTO -> stringResource(R.string.decoder_mode_auto)
+    com.illusion.app.domain.model.DecoderMode.HARDWARE -> stringResource(R.string.decoder_mode_hardware)
+    com.illusion.app.domain.model.DecoderMode.SOFTWARE -> stringResource(R.string.decoder_mode_software)
+}
+
