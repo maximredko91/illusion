@@ -1,6 +1,7 @@
 package com.illusion.app.ui.settings
 
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -13,6 +14,8 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -87,7 +90,7 @@ fun CacheScreen(
                     },
                     interactionSource = confirmSource,
                     modifier = Modifier.focusHighlight(confirmSource)
-                ) { Text(stringResource(R.string.settings_cache_clear)) }
+                ) { Text(stringResource(R.string.settings_poster_cache_clear)) }
             },
             dismissButton = {
                 val cancelSource = remember { MutableInteractionSource() }
@@ -147,7 +150,7 @@ fun CacheScreen(
                     },
                     interactionSource = confirmSource,
                     modifier = Modifier.focusHighlight(confirmSource)
-                ) { Text(stringResource(R.string.settings_cache_clear)) }
+                ) { Text(stringResource(R.string.settings_fanart_cache_clear)) }
             },
             dismissButton = {
                 val cancelSource = remember { MutableInteractionSource() }
@@ -191,9 +194,13 @@ fun CacheScreen(
                         stringResource(R.string.settings_cache_size_unknown)
                     }
                 ) {
-                    com.illusion.app.ui.common.TvAwareButton(
+                    val clearAllSource = remember { MutableInteractionSource() }
+                    OutlinedButton(
                         onClick = { showClearCacheConfirm = true },
-                        modifier = Modifier.fillMaxWidth()
+                        interactionSource = clearAllSource,
+                        colors = androidx.compose.material3.ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.error),
+                        modifier = Modifier.fillMaxWidth().focusHighlight(clearAllSource)
                     ) {
                         Text(stringResource(R.string.settings_cache_clear))
                     }
@@ -219,11 +226,11 @@ fun CacheScreen(
                         else -> stringResource(R.string.settings_poster_cache_description)
                     }
                 ) {
-                    com.illusion.app.ui.common.TvAwareButton(
+                    com.illusion.app.ui.common.TvAwareOutlinedButton(
                         onClick = { showClearPosterCacheConfirm = true },
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Text(stringResource(R.string.settings_cache_clear))
+                        Text(stringResource(R.string.settings_poster_cache_clear))
                     }
                 }
                 SettingsDivider()
@@ -235,11 +242,11 @@ fun CacheScreen(
                     },
                     description = stringResource(R.string.settings_fanart_cache_description)
                 ) {
-                    com.illusion.app.ui.common.TvAwareButton(
+                    com.illusion.app.ui.common.TvAwareOutlinedButton(
                         onClick = { showClearFanartCacheConfirm = true },
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Text(stringResource(R.string.settings_cache_clear))
+                        Text(stringResource(R.string.settings_fanart_cache_clear))
                     }
                 }
                 SettingsDivider()

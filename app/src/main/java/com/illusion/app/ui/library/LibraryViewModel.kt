@@ -130,8 +130,10 @@ class LibraryViewModel(
     // category) - otherwise picking "Вестерн" then opening the year menu still listed every year
     // in the whole category, including years with zero westerns in them, a dead end that looked
     // like a real option but always emptied the list.
-    val availableGenres: StateFlow<List<String>> = combine(allItems, _yearFilter) { items, year ->
-        items.filter { year == null || it.year == year }
+    val availableGenres: StateFlow<List<String>> = combine(allItems, _yearFilter, _countryFilter) { items, year, country ->
+        items.filter { item ->
+            (year == null || item.year == year) && (country == null || item.country == country)
+        }
             .flatMap { it.genres }.map(::genreDisplayName).distinct().sorted()
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 

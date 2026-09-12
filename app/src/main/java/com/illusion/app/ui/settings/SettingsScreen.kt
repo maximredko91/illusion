@@ -5,6 +5,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -71,6 +72,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Button
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
@@ -82,6 +85,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -96,6 +100,12 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.launch
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
 import androidx.core.net.toUri
 import com.illusion.app.R
 import com.illusion.app.data.backup.BackupSource
@@ -302,10 +312,15 @@ fun SettingsScreen(
     var devPasswordError by remember { mutableStateOf(false) }
     var showResetConfirm by remember { mutableStateOf(false) }
     var showFactoryResetConfirm by remember { mutableStateOf(false) }
+    var showClearDownloadsConfirm by remember { mutableStateOf(false) }
+    var showForceScanConfirm by remember { mutableStateOf(false) }
     var showTvModeWarning by remember { mutableStateOf(false) }
+    val snackbarHostState = remember { SnackbarHostState() }
+    val coroutineScope = rememberCoroutineScope()
 
     Scaffold(
         modifier = modifier,
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         contentWindowInsets = com.illusion.app.ui.common.tvSafeContentWindowInsets(WindowInsets.safeDrawing),
         topBar = {
             TopAppBar(
@@ -431,18 +446,6 @@ fun SettingsScreen(
                         )
 
                         SettingsSectionLabel(stringResource(R.string.settings_section_group_other))
-                        // Developer-only flow (TMDB scrape + SMB upload) built phone-first - its own
-                        // screen isn't wired for D-pad focus at all (see CLAUDE.md), so on a TV Box
-                        // this row would open an unusable dead end rather than a real feature.
-                        if (currentUiMode != UiMode.TV) {
-                            CategoryRow(
-                                title = stringResource(R.string.settings_add_media),
-                                description = stringResource(R.string.settings_add_media_description),
-                                icon = Icons.Default.LibraryAdd,
-                                onClick = { onOpenCategory("add_media") }
-                            )
-                            SettingsDivider(indented = true)
-                        }
                         CategoryRow(
                             title = stringResource(R.string.settings_feedback),
                             description = stringResource(R.string.settings_feedback_description),
@@ -463,6 +466,17 @@ fun SettingsScreen(
                             icon = Icons.Default.Info,
                             onClick = { onOpenCategory("about") }
                         )
+                        // Developer-only flow stays visually separate from ordinary settings and
+                        // remains hidden on TV, where its own screen isn't D-pad enabled.
+                        if (currentUiMode != UiMode.TV) {
+                            SettingsSectionLabel(stringResource(R.string.settings_section_group_developer))
+                            CategoryRow(
+                                title = stringResource(R.string.settings_add_media),
+                                description = stringResource(R.string.settings_add_media_description),
+                                icon = Icons.Default.LibraryAdd,
+                                onClick = { onOpenCategory("add_media") }
+                            )
+                        }
                         Spacer(modifier = Modifier.height(16.dp))
                     }
 
@@ -603,7 +617,14 @@ fun SettingsScreen(
                     "smb_sources" -> {
                         SettingsGroup {
                             if (sources.isEmpty()) {
-                                ListItem(headlineContent = { Text(stringResource(R.string.settings_no_sources)) })
+                                Column(Modifier.fillMaxWidth().padding(16.dp)) {
+                                    Text(stringResource(R.string.settings_no_sources))
+                                    Spacer(Modifier.height(12.dp))
+                                    TvAwareButton(onClick = onAddSource, modifier = Modifier.fillMaxWidth()) {
+                                        Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.padding(end = 8.dp))
+                                        Text(stringResource(R.string.settings_add_source_action))
+                                    }
+                                }
                             } else {
                                 sources.forEachIndexed { index, source ->
                                     if (index > 0) SettingsDivider()
@@ -612,11 +633,24 @@ fun SettingsScreen(
                                         headlineContent = { Text(source.displayName) },
                                         supportingContent = {
                                             Column {
-                                                Text("\\\\${source.host}\\${source.share}")
+                                                val root = source.rootPath.trim('\\', '/')
+                                                Text(
+                                                    if (root.isBlank()) "\\\\${source.host}\\${source.share}"
+                                                    else "\\\\${source.host}\\${source.share}\\$root"
+                                                )
                                                 if (source.id in sourcesMissingPassword) {
                                                     Text(
                                                         stringResource(R.string.settings_source_missing_password),
                                                         color = MaterialTheme.colorScheme.error
+                                                    )
+                                                } else {
+                                                    Text(
+                                                        stringResource(
+                                                            if (source.enabled) R.string.settings_source_connected
+                                                            else R.string.settings_source_disabled
+                                                        ),
+                                                        color = if (source.enabled) MaterialTheme.colorScheme.primary
+                                                        else MaterialTheme.colorScheme.onSurfaceVariant
                                                     )
                                                 }
                                             }
@@ -649,6 +683,11 @@ fun SettingsScreen(
                                                         contentDescription = stringResource(R.string.settings_delete_source)
                                                     )
                                                 }
+                                                Icon(
+                                                    Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                                                    contentDescription = null,
+                                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                                )
                                             }
                                         },
                                         colors = ListItemDefaults.colors(containerColor = Color.Transparent),
@@ -741,7 +780,7 @@ fun SettingsScreen(
                         // Accent color merged in here (was its own top-level category) per user
                         // feedback - it's another interface-level appearance choice, same as the
                         // theme/haptics/predictive-back switches above. Phone/TV mode used to live
-                        // in this same screen too but moved out to its own "Режим экрана" category -
+                        // in this same screen too but moved out to its own "Тип устройства" category -
                         // it's a structural/functional choice (which whole layout the app uses),
                         // not an appearance one like everything else here.
                         var accentColorExpanded by remember { mutableStateOf(false) }
@@ -960,22 +999,41 @@ fun SettingsScreen(
                                 title = stringResource(R.string.settings_performance_mode),
                                 description = stringResource(R.string.settings_performance_mode_description)
                             ) {
-                                PerformanceModeMenu(currentPerformanceMode, onPerformanceModeChange, modifier = Modifier.fillMaxWidth())
-                                // Shows what AUTO actually resolved to on this specific device, not
-                                // just the abstract rule - per feedback, "Авто" alone left the user
-                                // with no way to tell which class their device landed in without
-                                // guessing from how smooth/janky things felt.
+                                com.illusion.app.domain.model.PerformanceMode.entries.forEach { mode ->
+                                    PerformanceModeOptionRow(
+                                        mode = mode,
+                                        selected = currentPerformanceMode == mode,
+                                        onClick = { onPerformanceModeChange(mode) }
+                                    )
+                                }
                                 val deviceClass = remember { com.illusion.app.data.settings.DevicePerformance.classify(context) }
-                                Text(
-                                    if (deviceClass.isLowEnd) {
-                                        stringResource(R.string.settings_performance_device_class_low, deviceClass.totalRamMb)
-                                    } else {
-                                        stringResource(R.string.settings_performance_device_class_normal, deviceClass.totalRamMb)
-                                    },
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.padding(top = 8.dp)
-                                )
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                    verticalAlignment = Alignment.Top,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(top = 12.dp)
+                                        .clip(RoundedCornerShape(16.dp))
+                                        .background(MaterialTheme.colorScheme.secondaryContainer)
+                                        .padding(16.dp)
+                                ) {
+                                    Icon(Icons.Default.Info, contentDescription = null, tint = MaterialTheme.colorScheme.onSecondaryContainer)
+                                    Column {
+                                        Text(
+                                            stringResource(
+                                                if (deviceClass.isLowEnd) R.string.settings_performance_device_class_low
+                                                else R.string.settings_performance_device_class_normal
+                                            ),
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = MaterialTheme.colorScheme.onSecondaryContainer
+                                        )
+                                        Text(
+                                            stringResource(R.string.settings_performance_device_ram, deviceClass.totalRamMb),
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.72f)
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
@@ -1021,12 +1079,12 @@ fun SettingsScreen(
                                     title = stringResource(R.string.settings_rescan_force_now),
                                     description = stringResource(R.string.settings_rescan_force_now_description)
                                 ) {
-                                    TvAwareButton(
-                                        onClick = onRescanForceNow,
+                                    TvAwareOutlinedButton(
+                                        onClick = { showForceScanConfirm = true },
                                         enabled = sources.isNotEmpty(),
                                         modifier = Modifier.fillMaxWidth()
                                     ) {
-                                        Text(stringResource(R.string.settings_rescan_now_action))
+                                        Text(stringResource(R.string.settings_rescan_force_now_action))
                                     }
                                 }
                             }
@@ -1061,7 +1119,11 @@ fun SettingsScreen(
                             // Only relevant once external playback can actually happen - hidden for
                             // PlayerMode.INTERNAL rather than shown-but-disabled, since it has no
                             // effect at all in that mode.
-                            if (currentPlayerMode != com.illusion.app.domain.model.PlayerMode.INTERNAL) {
+                            AnimatedVisibility(
+                                visible = currentPlayerMode != com.illusion.app.domain.model.PlayerMode.INTERNAL,
+                                enter = fadeIn() + expandVertically(),
+                                exit = fadeOut() + shrinkVertically()
+                            ) {
                                 SettingsActionCard(
                                     title = stringResource(R.string.settings_external_player_app),
                                     description = stringResource(R.string.settings_external_player_app_description)
@@ -1069,11 +1131,17 @@ fun SettingsScreen(
                                     ExternalPlayerAppMenu(currentExternalPlayerPackage, onExternalPlayerPackageChange, modifier = Modifier.fillMaxWidth())
                                 }
                             }
-                            SettingsActionCard(
-                                title = stringResource(R.string.settings_player_buffer_size),
-                                description = stringResource(R.string.settings_player_buffer_size_description)
+                            AnimatedVisibility(
+                                visible = currentPlayerMode != com.illusion.app.domain.model.PlayerMode.EXTERNAL,
+                                enter = fadeIn() + expandVertically(),
+                                exit = fadeOut() + shrinkVertically()
                             ) {
-                                PlayerBufferSizeMenu(currentPlayerBufferSize, onPlayerBufferSizeChange, modifier = Modifier.fillMaxWidth())
+                                SettingsActionCard(
+                                    title = stringResource(R.string.settings_player_buffer_size),
+                                    description = stringResource(R.string.settings_player_buffer_size_description)
+                                ) {
+                                    PlayerBufferSizeMenu(currentPlayerBufferSize, onPlayerBufferSizeChange, modifier = Modifier.fillMaxWidth())
+                                }
                             }
                         }
                     }
@@ -1084,7 +1152,7 @@ fun SettingsScreen(
                                 title = stringResource(R.string.settings_downloads_folder),
                                 description = DownloadStorage.folderDisplayName(context, downloadsFolder)
                             ) {
-                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                                Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                                     TvAwareButton(
                                         onClick = {
                                             val intent = DownloadStorage.openFolderIntent(context, downloadsFolder)
@@ -1098,14 +1166,14 @@ fun SettingsScreen(
                                                 android.widget.Toast.makeText(context, noFileAppMessage, android.widget.Toast.LENGTH_SHORT).show()
                                             }
                                         },
-                                        modifier = Modifier.weight(1f)
+                                        modifier = Modifier.fillMaxWidth()
                                     ) {
                                         Icon(Icons.Default.Folder, contentDescription = null, modifier = Modifier.padding(end = 6.dp))
                                         Text(stringResource(R.string.settings_downloads_open_folder))
                                     }
-                                    TvAwareButton(
+                                    TvAwareOutlinedButton(
                                         onClick = { folderPicker.launch(DownloadStorage.pickerInitialUri()) },
-                                        modifier = Modifier.weight(1f)
+                                        modifier = Modifier.fillMaxWidth()
                                     ) {
                                         // Was text-only next to "Открыть папку"'s icon+text - same
                                         // weight(1f) width, but the missing icon still read as a
@@ -1124,7 +1192,14 @@ fun SettingsScreen(
                                     stringResource(R.string.settings_cache_size_unknown)
                                 }
                             ) {
-                                TvAwareButton(onClick = onClearDownloads, modifier = Modifier.fillMaxWidth()) {
+                                val clearDownloadsSource = remember { MutableInteractionSource() }
+                                OutlinedButton(
+                                    onClick = { showClearDownloadsConfirm = true },
+                                    interactionSource = clearDownloadsSource,
+                                    colors = androidx.compose.material3.ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
+                                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.error),
+                                    modifier = Modifier.fillMaxWidth().focusHighlight(clearDownloadsSource)
+                                ) {
                                     Text(stringResource(R.string.settings_downloads_clear))
                                 }
                             }
@@ -1167,20 +1242,22 @@ fun SettingsScreen(
                     "backup" -> {
                         SettingsGroup(modifier = Modifier.padding(bottom = 24.dp)) {
                             SettingsActionCard(
-                                title = stringResource(R.string.settings_backup),
-                                description = stringResource(R.string.settings_backup_description)
+                                title = stringResource(R.string.settings_backup_contents_title),
+                                description = stringResource(R.string.settings_backup_contents)
                             ) {
-                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                                Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                                     TvAwareButton(
                                         onClick = { exportLauncher.launch("illusion-backup.json") },
-                                        modifier = Modifier.weight(1f)
+                                        modifier = Modifier.fillMaxWidth()
                                     ) {
+                                        Icon(Icons.Default.Backup, contentDescription = null, modifier = Modifier.padding(end = 8.dp))
                                         Text(stringResource(R.string.settings_backup_export))
                                     }
-                                    TvAwareButton(
+                                    TvAwareOutlinedButton(
                                         onClick = { importLauncher.launch(arrayOf("application/json")) },
-                                        modifier = Modifier.weight(1f)
+                                        modifier = Modifier.fillMaxWidth()
                                     ) {
+                                        Icon(Icons.Default.Download, contentDescription = null, modifier = Modifier.padding(end = 8.dp))
                                         Text(stringResource(R.string.settings_backup_import))
                                     }
                                 }
@@ -1220,21 +1297,34 @@ fun SettingsScreen(
                     "feedback" -> {
                         SettingsGroup(modifier = Modifier.padding(bottom = 24.dp)) {
                             SettingsActionCard(
-                                title = stringResource(R.string.settings_feedback),
+                                title = stringResource(R.string.settings_feedback_contact_title),
                                 description = stringResource(R.string.settings_feedback_description)
                             ) {
-                                TvAwareButton(
-                                    onClick = { context.startActivity(android.content.Intent.createChooser(com.illusion.app.data.crash.CrashReporter.feedbackIntent(), null)) },
+                                Text(
+                                    stringResource(R.string.settings_feedback_privacy),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(bottom = 12.dp)
+                                )
+                                TvAwareOutlinedButton(
+                                    onClick = { context.startActivity(com.illusion.app.data.crash.CrashReporter.feedbackIntent("bug")) },
                                     modifier = Modifier.fillMaxWidth()
                                 ) {
-                                    Text(stringResource(R.string.settings_feedback_action))
+                                    Text(stringResource(R.string.settings_feedback_bug_action))
+                                }
+                                Spacer(Modifier.height(8.dp))
+                                TvAwareOutlinedButton(
+                                    onClick = { context.startActivity(com.illusion.app.data.crash.CrashReporter.feedbackIntent("idea")) },
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text(stringResource(R.string.settings_feedback_idea_action))
                                 }
                             }
                         }
                     }
 
                     "reset" -> {
-                        SettingsGroup(modifier = Modifier.padding(bottom = 24.dp)) {
+                        SettingsGroup {
                             SettingsActionCard(
                                 title = stringResource(R.string.settings_reset_to_defaults),
                                 description = stringResource(R.string.settings_reset_to_defaults_description)
@@ -1254,6 +1344,7 @@ fun SettingsScreen(
                                     onClick = { showFactoryResetConfirm = true },
                                     interactionSource = factoryResetSource,
                                     colors = androidx.compose.material3.ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
+                                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.error),
                                     modifier = Modifier.fillMaxWidth().focusHighlight(factoryResetSource)
                                 ) {
                                     Text(stringResource(R.string.settings_factory_reset_action))
@@ -1284,6 +1375,55 @@ fun SettingsScreen(
         )
     }
 
+    if (showForceScanConfirm) {
+        AlertDialog(
+            onDismissRequest = { showForceScanConfirm = false },
+            title = { Text(stringResource(R.string.settings_rescan_force_confirm_title)) },
+            text = { Text(stringResource(R.string.settings_rescan_force_confirm_message)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    onRescanForceNow()
+                    showForceScanConfirm = false
+                }) { Text(stringResource(R.string.settings_rescan_force_now_action)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showForceScanConfirm = false }) {
+                    Text(stringResource(R.string.action_cancel))
+                }
+            }
+        )
+    }
+
+    if (showClearDownloadsConfirm) {
+        AlertDialog(
+            onDismissRequest = { showClearDownloadsConfirm = false },
+            title = {
+                Text(
+                    stringResource(
+                        R.string.settings_downloads_clear_confirm_title,
+                        formatBytes(downloadsSizeBytes ?: 0L)
+                    )
+                )
+            },
+            text = { Text(stringResource(R.string.settings_downloads_clear_confirm_message)) },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        haptics.reject()
+                        onClearDownloads()
+                        showClearDownloadsConfirm = false
+                    },
+                    colors = androidx.compose.material3.ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
+                ) { Text(stringResource(R.string.settings_downloads_clear)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showClearDownloadsConfirm = false }) {
+                    Text(stringResource(R.string.action_cancel))
+                }
+            }
+        )
+    }
+
     if (showResetConfirm) {
         AlertDialog(
             onDismissRequest = { showResetConfirm = false },
@@ -1294,6 +1434,7 @@ fun SettingsScreen(
                     haptics.reject()
                     onResetToDefaults()
                     showResetConfirm = false
+                    coroutineScope.launch { snackbarHostState.showSnackbar(context.getString(R.string.settings_reset_done)) }
                 }) { Text(stringResource(R.string.settings_reset_to_defaults_action)) }
             },
             dismissButton = {
@@ -1330,7 +1471,9 @@ fun SettingsScreen(
                     haptics.reject()
                     onFactoryReset()
                     showFactoryResetConfirm = false
-                }) { Text(stringResource(R.string.settings_factory_reset_action)) }
+                }, colors = androidx.compose.material3.ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)) {
+                    Text(stringResource(R.string.settings_factory_reset_action))
+                }
             },
             dismissButton = {
                 TextButton(onClick = { showFactoryResetConfirm = false }) { Text(stringResource(R.string.action_cancel)) }
@@ -1412,7 +1555,7 @@ private fun categoryTitle(key: String): String = when (key) {
     else -> stringResource(R.string.settings_title)
 }
 
-/** One radio-selectable Phone/TV option on "Режим экрана" - same leading tonal-icon-container look as [CategoryRow], own card per option like "Сброс"'s two cards, plus a one-line description (neither existed before, per feedback). */
+/** One radio-selectable Phone/TV option on "Тип устройства" - same leading tonal-icon-container look as [CategoryRow], own card per option like "Сброс"'s two cards, plus a one-line description (neither existed before, per feedback). */
 @Composable
 private fun ScreenModeOptionRow(
     title: String,
@@ -1440,10 +1583,23 @@ private fun ScreenModeOptionRow(
                 Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimaryContainer, modifier = Modifier.size(22.dp))
             }
         },
-        trailingContent = { RadioButton(selected = selected, onClick = onClick) },
-        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+        trailingContent = { RadioButton(selected = selected, onClick = null) },
+        colors = ListItemDefaults.colors(
+            containerColor = if (selected) {
+                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.28f)
+            } else {
+                Color.Transparent
+            }
+        ),
         modifier = Modifier
             .fillMaxWidth()
+            .then(
+                if (selected) {
+                    Modifier.border(1.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(12.dp))
+                } else {
+                    Modifier
+                }
+            )
             .focusHighlight(interactionSource)
             .clickable(interactionSource = interactionSource, indication = LocalIndication.current, onClick = onClick)
     )
@@ -1886,6 +2042,9 @@ private fun PlayerModeMenu(current: com.illusion.app.domain.model.PlayerMode, on
                 val itemSource = remember { MutableInteractionSource() }
                 DropdownMenuItem(
                     text = { Text(playerModeLabel(mode)) },
+                    trailingIcon = {
+                        if (mode == current) Icon(Icons.Default.Check, contentDescription = null)
+                    },
                     onClick = {
                         haptics.segmentTick()
                         onChange(mode)
@@ -1938,6 +2097,9 @@ private fun PlayerBufferSizeMenu(current: com.illusion.app.domain.model.PlayerBu
                 val itemSource = remember { MutableInteractionSource() }
                 DropdownMenuItem(
                     text = { Text(playerBufferSizeLabel(size)) },
+                    trailingIcon = {
+                        if (size == current) Icon(Icons.Default.Check, contentDescription = null)
+                    },
                     onClick = {
                         haptics.segmentTick()
                         onChange(size)
@@ -1959,55 +2121,54 @@ private fun playerBufferSizeLabel(size: com.illusion.app.domain.model.PlayerBuff
 }
 
 @Composable
-private fun PerformanceModeMenu(current: com.illusion.app.domain.model.PerformanceMode, onChange: (com.illusion.app.domain.model.PerformanceMode) -> Unit, modifier: Modifier = Modifier) {
-    var expanded by remember { mutableStateOf(false) }
+private fun PerformanceModeOptionRow(
+    mode: com.illusion.app.domain.model.PerformanceMode,
+    selected: Boolean,
+    onClick: () -> Unit
+) {
     val haptics = LocalHapticFeedback.current
-    // Ширина выпадающего списка привязана к ширине самой кнопки: по умолчанию
-    // DropdownMenu сжимается по самому длинному пункту и выглядит как огрызок посреди
-    // широкой капсулы, а не как её раскрытие.
-    val menuDensity = LocalDensity.current
-    var menuWidth by remember { mutableStateOf(0.dp) }
-    Box(
-        modifier = modifier.onSizeChanged {
-            menuWidth = with(menuDensity) { it.width.toDp() }
-        }
+    val interactionSource = remember { MutableInteractionSource() }
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 8.dp)
+            .clip(RoundedCornerShape(16.dp))
+            .background(
+                if (selected) MaterialTheme.colorScheme.primaryContainer
+                else MaterialTheme.colorScheme.surfaceContainerHigh
+            )
+            .focusHighlight(interactionSource)
+            .clickable(interactionSource = interactionSource, indication = LocalIndication.current) {
+                haptics.segmentTick()
+                onClick()
+            }
+            .padding(horizontal = 12.dp, vertical = 10.dp)
     ) {
-        val triggerSource = remember { MutableInteractionSource() }
-        TvAwareOutlinedButton(onClick = { expanded = true }, modifier = Modifier.fillMaxWidth()) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text(performanceModeLabel(current))
-                Icon(
-                    Icons.Default.ArrowDropDown,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
+        Column(modifier = Modifier.weight(1f)) {
+            Text(performanceModeLabel(mode), style = MaterialTheme.typography.titleMedium)
+            Text(
+                performanceModeDescription(mode),
+                style = MaterialTheme.typography.bodyMedium,
+                color = if (selected) MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.78f)
+                else MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
-        DropdownMenu(
-            expanded = expanded,
-            onDismissRequest = { expanded = false },
-            shape = MenuShape,
-            modifier = if (menuWidth > 0.dp) Modifier.width(menuWidth) else Modifier
-        ) {
-            com.illusion.app.domain.model.PerformanceMode.entries.forEach { mode ->
-                val itemSource = remember { MutableInteractionSource() }
-                DropdownMenuItem(
-                    text = { Text(performanceModeLabel(mode)) },
-                    onClick = {
-                        haptics.segmentTick()
-                        onChange(mode)
-                        expanded = false
-                    },
-                    interactionSource = itemSource,
-                    modifier = Modifier.focusHighlight(itemSource)
-                )
+        RadioButton(
+            selected = selected,
+            onClick = {
+                haptics.segmentTick()
+                onClick()
             }
-        }
+        )
     }
+}
+
+@Composable
+private fun performanceModeDescription(mode: com.illusion.app.domain.model.PerformanceMode): String = when (mode) {
+    com.illusion.app.domain.model.PerformanceMode.AUTO -> stringResource(R.string.settings_performance_mode_auto_description)
+    com.illusion.app.domain.model.PerformanceMode.MAXIMUM -> stringResource(R.string.settings_performance_mode_maximum_description)
+    com.illusion.app.domain.model.PerformanceMode.ECONOMICAL -> stringResource(R.string.settings_performance_mode_economical_description)
 }
 
 @Composable

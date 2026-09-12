@@ -167,6 +167,7 @@ fun LibraryScreen(
             if (availableGenres.isNotEmpty()) {
                 FilterMenu(
                     label = stringResource(R.string.library_genre),
+                    allLabel = stringResource(R.string.library_filter_all_genres),
                     selected = genreFilter,
                     options = availableGenres,
                     onSelected = { scrollToTop(); onGenreFilterChange(it) }
@@ -175,6 +176,7 @@ fun LibraryScreen(
             if (availableYears.isNotEmpty()) {
                 FilterMenu(
                     label = stringResource(R.string.library_year),
+                    allLabel = stringResource(R.string.library_filter_all_years),
                     selected = yearFilter?.toString(),
                     options = availableYears.map { it.toString() },
                     onSelected = { scrollToTop(); onYearFilterChange(it?.toIntOrNull()) }
@@ -183,6 +185,7 @@ fun LibraryScreen(
             if (availableCountries.isNotEmpty()) {
                 FilterMenu(
                     label = stringResource(R.string.library_country),
+                    allLabel = stringResource(R.string.library_filter_all_countries),
                     selected = countryFilter,
                     options = availableCountries,
                     onSelected = { scrollToTop(); onCountryFilterChange(it) }
@@ -497,7 +500,7 @@ fun LibraryScreen(
                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         Text(
                             stringResource(
-                                if (genreFilter != null || yearFilter != null) {
+                                if (genreFilter != null || yearFilter != null || countryFilter != null) {
                                     R.string.library_empty_filtered
                                 } else {
                                     R.string.library_empty
@@ -686,17 +689,19 @@ private fun sortDirectionLabel(order: SortOrder, ascending: Boolean): String {
 @Composable
 private fun FilterMenu(
     label: String,
+    allLabel: String,
     selected: String?,
     options: List<String>,
     onSelected: (String?) -> Unit
 ) {
     var expanded by remember { mutableStateOf(false) }
-    val allLabel = stringResource(R.string.library_filter_all)
     val haptics = LocalHapticFeedback.current
     Box {
         TvAwareAssistChip(
             onClick = { expanded = true },
-            label = { Text(selected ?: label) },
+            // Значение без названия параметра неоднозначно: «2017» ещё угадывается, а «США»
+            // рядом с другими чипами уже выглядит самостоятельным тегом, не фильтром страны.
+            label = { Text(selected?.let { "$label: $it" } ?: label) },
             selected = selected != null,
             // Сбросить фильтр можно было только через пункт «Все» внутри списка - крестик
             // на самом чипе делает это в одно касание.
@@ -704,7 +709,7 @@ private fun FilterMenu(
                 {
                     Icon(
                         Icons.Default.Close,
-                        contentDescription = stringResource(R.string.library_filter_all),
+                        contentDescription = allLabel,
                         modifier = Modifier
                             .size(18.dp)
                             .clickable {

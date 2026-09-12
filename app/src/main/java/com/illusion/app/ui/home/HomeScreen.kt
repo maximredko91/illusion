@@ -35,9 +35,9 @@ import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -226,19 +226,23 @@ fun HomeScreen(
                 MediaCarousel(
                     title = stringResource(R.string.home_continue_watching),
                     items = continueWatching.map { it.item },
-                    onOpenItem = onOpenItem,
+                    // Карточка сама продолжает просмотр: отдельная широкая кнопка под каждым
+                    // постером дублировала действие и почти вдвое увеличивала высоту ряда.
+                    onOpenItem = onResumeItem,
                     progressByStableId = remember(continueWatching) {
                         continueWatching.mapNotNull { entry -> entry.progressFraction?.let { entry.item.stableId to it } }.toMap()
                     },
-                    subtitleByStableId = continueSubtitles,
-                    onResumeItem = onResumeItem
+                    subtitleByStableId = continueSubtitles
                 )
             }
             // Рейтинг показываем только здесь: в подборке попадаются незнакомые фильмы, и он
             // помогает выбрать. В «Продолжить просмотр» и коллекциях выбор уже сделан.
             MediaCarousel(
                 title = stringResource(R.string.home_random_picks),
-                items = randomPicks,
+                items = remember(randomPicks, continueWatching) {
+                    val continuedIds = continueWatching.mapTo(HashSet()) { it.item.stableId }
+                    randomPicks.filterNot { it.stableId in continuedIds }
+                },
                 onOpenItem = onOpenItem,
                 onRefresh = onRefreshRandomPicks,
                 showRatingBadge = true
@@ -297,6 +301,7 @@ private fun CollectionCarousel(
     collections: List<com.illusion.app.data.repository.LibraryRepository.CollectionSummary>,
     onOpenCollection: (String) -> Unit
 ) {
+    val cardWidth = homePosterWidth()
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         SectionTitle(stringResource(R.string.home_collections), modifier = Modifier.fillMaxWidth())
         LazyRow(
@@ -307,7 +312,7 @@ private fun CollectionCarousel(
             items(collections, key = { it.name }) { collection ->
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
-                    modifier = Modifier.width(posterCardMinWidth())
+                    modifier = Modifier.width(cardWidth)
                 ) {
                     androidx.compose.foundation.layout.Box {
                         // showCaption = false: внутри карточки печатались название, год и жанр
@@ -318,7 +323,7 @@ private fun CollectionCarousel(
                         PosterCard(
                             item = collection.representative,
                             onClick = { onOpenCollection(collection.name) },
-                            modifier = Modifier.width(posterCardMinWidth()),
+                            modifier = Modifier.width(cardWidth),
                             showCaption = false
                         )
                         Text(
@@ -357,8 +362,7 @@ private fun MediaCarousel(
     onRefresh: (() -> Unit)? = null,
     progressByStableId: Map<String, Float> = emptyMap(),
     subtitleByStableId: Map<String, String> = emptyMap(),
-    showRatingBadge: Boolean = false,
-    onResumeItem: ((String) -> Unit)? = null
+    showRatingBadge: Boolean = false
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(
@@ -371,7 +375,7 @@ private fun MediaCarousel(
                 // Тональный круглый фон даёт ей границу и вес, не перетягивая внимание с постеров.
                 com.illusion.app.ui.common.TooltipIconButton(
                     stringResource(R.string.home_random_picks_refresh),
-                    Icons.Default.Refresh,
+                    Icons.Default.Shuffle,
                     onRefresh,
                     tonal = true
                 )
@@ -385,6 +389,7 @@ private fun MediaCarousel(
         // that same index in the new list. Per feedback, only refreshable rows reset to the start
         // on every new list.
         val listState = rememberLazyListState()
+        val cardWidth = homePosterWidth()
         if (onRefresh != null) {
             LaunchedEffect(items) { listState.scrollToItem(0) }
         }
@@ -398,7 +403,7 @@ private fun MediaCarousel(
         ) {
             items(items, key = { it.stableId }) { item ->
                 Column(
-                    modifier = Modifier.width(posterCardMinWidth()),
+                    modifier = Modifier.width(cardWidth),
                     verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     PosterCard(
@@ -409,33 +414,15 @@ private fun MediaCarousel(
                         subtitleOverride = subtitleByStableId[item.stableId],
                         showRatingBadge = showRatingBadge
                     )
-                    if (onResumeItem != null) {
-                        com.illusion.app.ui.common.TvAwareButton(
-                            onClick = { onResumeItem(item.stableId) },
-                            modifier = Modifier.fillMaxWidth(),
-                            contentPadding = PaddingValues(horizontal = 6.dp, vertical = 10.dp)
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(4.dp)
-                            ) {
-                                Icon(
-                                    Icons.Default.PlayArrow,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                                Text(
-                                    stringResource(R.string.details_continue_watching),
-                                    style = MaterialTheme.typography.labelMedium
-                                )
-                            }
-                        }
-                    }
                 }
             }
         }
     }
 }
+
+@Composable
+private fun homePosterWidth() =
+    if (com.illusion.app.ui.common.LocalUiMode.current == UiMode.TV) posterCardMinWidth() else 144.dp
 
 /**
  * Заголовок ряда на главной. Отдельный composable, чтобы «Продолжить просмотр», «Случайная

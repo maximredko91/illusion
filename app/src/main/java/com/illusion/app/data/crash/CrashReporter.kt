@@ -79,14 +79,16 @@ object CrashReporter {
             putExtra(Intent.EXTRA_TEXT, file.readText())
         }
 
-    /** Same free-choice share sheet, for the Settings "обратная связь" entry - general feedback/bug/suggestion, not tied to a crash. Prefills version/device context so the tester doesn't have to type it. */
-    fun feedbackIntent(): Intent {
+    /** Opens a prefilled GitHub issue instead of an undirected Android share sheet. */
+    fun feedbackIntent(kind: String): Intent {
         val header = "Illusion ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})\n" +
             "Android ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT}), ${Build.MANUFACTURER} ${Build.MODEL}\n\n"
-        return Intent(Intent.ACTION_SEND).apply {
-            type = "text/plain"
-            putExtra(Intent.EXTRA_SUBJECT, "Illusion — отзыв")
-            putExtra(Intent.EXTRA_TEXT, header)
-        }
+        val title = if (kind == "bug") "Ошибка: " else "Предложение: "
+        val uri = android.net.Uri.parse("https://github.com/maximredko91/illusion/issues/new").buildUpon()
+            .appendQueryParameter("title", title)
+            .appendQueryParameter("body", header)
+            .apply { if (kind == "bug") appendQueryParameter("labels", "bug") }
+            .build()
+        return Intent(Intent.ACTION_VIEW, uri)
     }
 }
