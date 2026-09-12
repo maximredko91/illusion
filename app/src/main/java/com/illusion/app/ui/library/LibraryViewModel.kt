@@ -111,7 +111,7 @@ class LibraryViewModel(
 
     val items: StateFlow<List<MediaItemEntity>> = combine(allItems, _genreFilter, _yearFilter, _countryFilter) { items, genre, year, country ->
         val filtered = items.filter { item ->
-            (genre == null || item.genres.any { it.equals(genre, ignoreCase = true) }) && (year == null || item.year == year) && (country == null || item.country == country)
+            (genre == null || item.genres.any { genreDisplayName(it).equals(genre, ignoreCase = true) }) && (year == null || item.year == year) && (country == null || item.country == country)
         }
         // Filtering by a genre also brings along items where it's a minor/secondary tag (e.g. a
         // "Драма" filter matching a movie whose genres are [Боевик, Триллер, Драма]) - those used
@@ -120,7 +120,7 @@ class LibraryViewModel(
         // (rating/year/title/dateAdded, whichever _sortOrder is active) as the tiebreak within each
         // of the two groups, rather than replacing it.
         if (genre != null) {
-            filtered.sortedByDescending { it.genres.firstOrNull()?.equals(genre, ignoreCase = true) == true }
+            filtered.sortedByDescending { it.genres.firstOrNull()?.let { g -> genreDisplayName(g).equals(genre, ignoreCase = true) } == true }
         } else {
             filtered
         }
@@ -138,12 +138,12 @@ class LibraryViewModel(
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val availableYears: StateFlow<List<Int>> = combine(allItems, _genreFilter, _countryFilter) { items, genre, country ->
-        items.filter { item -> (genre == null || item.genres.any { it.equals(genre, ignoreCase = true) }) && (country == null || item.country == country) }
+        items.filter { item -> (genre == null || item.genres.any { genreDisplayName(it).equals(genre, ignoreCase = true) }) && (country == null || item.country == country) }
             .mapNotNull { it.year }.distinct().sortedDescending()
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val availableCountries: StateFlow<List<String>> = combine(allItems, _genreFilter, _yearFilter) { items, genre, year ->
-        items.filter { item -> (genre == null || item.genres.any { it.equals(genre, ignoreCase = true) }) && (year == null || item.year == year) }
+        items.filter { item -> (genre == null || item.genres.any { genreDisplayName(it).equals(genre, ignoreCase = true) }) && (year == null || item.year == year) }
             .mapNotNull { it.country }.distinct().sorted()
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 

@@ -34,6 +34,9 @@ private val RU_TO_EN_GENRES: Map<String, String> = mapOf(
     "мелодрама" to "Romance",
     "романтика" to "Romance",
     "фантастика" to "Science Fiction",
+    "научная фантастика" to "Science Fiction",
+    "sci-fi" to "Science Fiction",
+    "мистика" to "Mystery",
     "телефильм" to "TV Movie",
     "триллер" to "Thriller",
     "военный" to "War",
@@ -52,8 +55,23 @@ private val EN_TO_RU_GENRES: Map<String, List<String>> = RU_TO_EN_GENRES.entries
  * side by side in the same poster grid. Applied at render time rather than normalized into Room,
  * so nothing depends on a rescan and the stored value still matches the file verbatim.
  */
-fun genreDisplayName(name: String): String =
-    name.trim().replaceFirstChar { it.titlecase() }
+fun genreDisplayName(name: String): String {
+    val trimmed = name.trim()
+    return DISPLAY_ALIASES[trimmed.lowercase()] ?: trimmed.replaceFirstChar { it.titlecase() }
+}
+
+/**
+ * Короткое название для жанров, которые в .nfo записаны длиннее, чем помещается в подпись под
+ * постером. «Научная фантастика» - тот же жанр, что TMDB называет Science Fiction, и в списке
+ * фильтров его длинное имя вытесняло всё остальное. Только отображение: в базе и в самих .nfo
+ * строка остаётся прежней, поэтому пересканирование не нужно. Сравнение в фильтрах идёт тоже по
+ * этому имени (см. LibraryViewModel), иначе выбранный «Фантастика» ничего бы не нашёл.
+ */
+private val DISPLAY_ALIASES: Map<String, String> = mapOf(
+    "научная фантастика" to "Фантастика",
+    "science fiction" to "Фантастика",
+    "sci-fi" to "Фантастика"
+)
 
 /**
  * Normalizes a genre string to its canonical (TMDB English) name if it's a known synonym in
