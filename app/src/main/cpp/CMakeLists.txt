@@ -12,7 +12,7 @@ foreach(lib avutil swscale avcodec)
     set_target_properties(${lib} PROPERTIES IMPORTED_LOCATION ${FFMPEG_DIR}/lib/lib${lib}.so)
 endforeach()
 
-add_library(illusion_ffmpeg SHARED ffmpeg_video_jni.cc)
+add_library(illusion_ffmpeg SHARED ffmpeg_video_jni.cc ffmpeg_audio_jni.cc)
 target_include_directories(illusion_ffmpeg PRIVATE ${FFMPEG_DIR}/include)
 target_compile_options(illusion_ffmpeg PRIVATE -O2 -Wall)
 # 16 KB page alignment - devices shipping 16 KB kernels refuse to load 4 KB-aligned libraries.

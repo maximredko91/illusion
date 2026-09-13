@@ -26,7 +26,6 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
-import androidx.media3.extractor.DefaultExtractorsFactory
 import androidx.media3.extractor.mkv.MatroskaExtractor
 import com.illusion.app.data.download.DownloadStorage
 import com.illusion.app.data.local.entity.DownloadEntity
@@ -164,15 +163,11 @@ class PlayerViewModel(
         // FileDataSource and everything else to dataSourceFactory - so smb-item:// keeps streaming
         // over SMB exactly as before, with no branching needed at the MediaItem-building call site.
         .setMediaSourceFactory(
-            (
-                if (disableCuesSeek) {
-                    DefaultMediaSourceFactory(
-                        appContext,
-                        DefaultExtractorsFactory().setMatroskaExtractorFlags(MatroskaExtractor.FLAG_DISABLE_SEEK_FOR_CUES)
-                    )
-                } else {
-                    DefaultMediaSourceFactory(appContext)
-                }
+            // Media3's own extractors (with the Cues workaround flag when this file needs it) plus the
+            // app's ASF extractor for .wmv - see IllusionExtractorsFactory.
+            DefaultMediaSourceFactory(
+                appContext,
+                com.illusion.app.data.player.IllusionExtractorsFactory(disableCuesSeek)
             ).setDataSourceFactory(DefaultDataSource.Factory(appContext, dataSourceFactory))
         )
         .setLoadControl(

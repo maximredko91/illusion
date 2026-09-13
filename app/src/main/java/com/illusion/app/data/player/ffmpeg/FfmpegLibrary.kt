@@ -2,6 +2,7 @@ package com.illusion.app.data.player.ffmpeg
 
 import android.util.Log
 import androidx.media3.common.MimeTypes
+import com.illusion.app.data.player.asf.WindowsMediaMimeTypes
 
 /**
  * The app's own LGPL FFmpeg build (see scripts/build_ffmpeg_android.sh) - a software video decoder
@@ -11,6 +12,7 @@ import androidx.media3.common.MimeTypes
  * which is Simple Profile only, so DivX/XviD (Advanced Simple Profile) breaks up into macroblocks;
  * MS-MPEG4 (DivX 3) and VC-1/WMV have no decoder at all; MPEG-2 and H.263 do have working software
  * platform decoders and only go through FFmpeg when the user explicitly picks «Программный».
+ * WMV1-3 and WMA (from .wmv, see AsfExtractor) have no platform decoder either.
  */
 object FfmpegLibrary {
     private const val TAG = "FfmpegLibrary"
@@ -36,6 +38,12 @@ object FfmpegLibrary {
         MimeTypes.VIDEO_VC1 -> "vc1"
         MimeTypes.VIDEO_MPEG2 -> "mpeg2video"
         MimeTypes.VIDEO_MPEG -> "mpeg1video"
+        WindowsMediaMimeTypes.VIDEO_WMV1 -> "wmv1"
+        WindowsMediaMimeTypes.VIDEO_WMV2 -> "wmv2"
+        WindowsMediaMimeTypes.VIDEO_WMV3 -> "wmv3"
+        WindowsMediaMimeTypes.AUDIO_WMA_V1 -> "wmav1"
+        WindowsMediaMimeTypes.AUDIO_WMA_V2 -> "wmav2"
+        WindowsMediaMimeTypes.AUDIO_WMA_PRO -> "wmapro"
         else -> null
     }
 
@@ -46,7 +54,8 @@ object FfmpegLibrary {
      */
     fun isPreferredOverPlatform(mimeType: String?): Boolean = when (mimeType) {
         MimeTypes.VIDEO_MP4V, MimeTypes.VIDEO_DIVX, MimeTypes.VIDEO_MP42, MimeTypes.VIDEO_MP43,
-        MimeTypes.VIDEO_VC1 -> true
+        MimeTypes.VIDEO_VC1, WindowsMediaMimeTypes.VIDEO_WMV1, WindowsMediaMimeTypes.VIDEO_WMV2,
+        WindowsMediaMimeTypes.VIDEO_WMV3 -> true
         else -> false
     }
 
