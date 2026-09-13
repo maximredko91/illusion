@@ -8,7 +8,7 @@ data class SmbFileRef(
 )
 
 val VIDEO_EXTENSIONS = setOf(
-    "mkv", "mp4", "avi", "mov", "m4v", "ts", "wmv"
+    "mkv", "mp4", "avi", "mov", "m4v", "ts", "wmv", "mpg", "mpeg", "vob"
 )
 
 val SUBTITLE_EXTENSIONS = setOf("srt", "ass", "vtt")

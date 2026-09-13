@@ -125,5 +125,6 @@ internal fun mimeTypeForExtension(extension: String): String = when (extension.l
     "webm" -> "video/webm"
     "ts" -> "video/mp2t"
     "wmv" -> "video/x-ms-wmv"
+    "mpg", "mpeg", "vob" -> "video/mpeg"
     else -> "video/*"
 }

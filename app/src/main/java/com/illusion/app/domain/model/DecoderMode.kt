@@ -4,10 +4,11 @@ package com.illusion.app.domain.model
  * Which video/audio decoder the player prefers when the device offers more than one for a codec -
  * chosen in Settings, applied when the player is (re)created.
  *
- * Only ever *reorders* the platform's own decoder list (see
- * [com.illusion.app.data.player.decoderSelector]); nothing is ever removed, so a format with only
- * one decoder still plays in every mode. That matters for MPEG-4 ASP (DivX/XviD), where
- * `c2.android.mpeg4.decoder` is the only decoder on this device either way.
+ * Only ever *reorders* decoders, never removes one, so a format with a single decoder still plays in
+ * every mode: the platform's own list via [com.illusion.app.data.player.decoderSelector], plus the
+ * app's FFmpeg video renderer, which goes first in Авто/Программный and last in Аппаратный (see
+ * [com.illusion.app.data.player.IllusionRenderersFactory]). In Авто FFmpeg only takes formats whose
+ * platform decoder is broken or missing (DivX/XviD, DivX 3, VC-1).
  */
 enum class DecoderMode {
     /** Platform order - hardware first for anything the SoC can decode. */

@@ -212,3 +212,8 @@ SMB-источников (папка `IllusionUpdates/`), вместо инте�
 ## Лицензия
 
 [GPL-3.0](LICENSE).
+
+Программный видеодекодер использует [FFmpeg](https://ffmpeg.org) под лицензией
+[LGPL 2.1+](app/src/main/cpp/ffmpeg/COPYING.LGPLv2.1): библиотеки подключены динамически
+отдельными `.so` и собираются из исходников скриптом
+[`scripts/build_ffmpeg_android.sh`](scripts/build_ffmpeg_android.sh) в GitHub Actions.

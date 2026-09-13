@@ -20,3 +20,14 @@
 -dontwarn org.ietf.jgss.GSSManager
 -dontwarn org.ietf.jgss.GSSName
 -dontwarn org.ietf.jgss.Oid
+
+# FFmpeg video decoder JNI (src/main/cpp/ffmpeg_video_jni.cc) reaches these by name via
+# GetMethodID/GetFieldID - invisible to R8, which removed initForYuvFrame/initForPrivateFrame in the
+# first release build and crashed playback of every DivX file. Media3's own decoder extensions ship
+# the same rule as a consumer rule; this app doesn't depend on those artifacts, so it needs its own.
+-keep class androidx.media3.decoder.VideoDecoderOutputBuffer {
+    boolean initForYuvFrame(int, int, int, int, int);
+    void initForPrivateFrame(int, int);
+    java.nio.ByteBuffer data;
+    long decoderPrivate;
+}

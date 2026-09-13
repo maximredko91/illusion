@@ -57,6 +57,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -178,6 +179,7 @@ fun PlayerScreen(
     // actually recomposes when reloadPlayer() swaps in a fresh ExoPlayer instance - a plain
     // property read wouldn't be observed by Compose's snapshot system.
     val currentPlayer by viewModel.playerState.collectAsState()
+    val videoSurfaceGeneration by viewModel.videoSurfaceGeneration.collectAsState()
     val noExternalAppMessage = stringResource(R.string.player_open_external_no_app)
 
     // Settings' "external player" choice (see SettingsRepository.playerMode) is applied once by
@@ -387,8 +389,12 @@ fun PlayerScreen(
     // swipe gestures even though it never called .consume() itself.
     var interactionTick by remember { mutableIntStateOf(0) }
     fun bumpInteraction() { interactionTick++ }
-    LaunchedEffect(controlsVisible, uiState.isPlaying, interactionTick) {
-        if (controlsVisible && uiState.isPlaying) {
+    // True while one of the top bar's dropdowns (sleep timer, decoder) is open - see TopGradientBar's
+    // onMenuOpenChange. The countdown can't just be bumped once on open: a user reading the options
+    // for longer than the delay would still lose the menu.
+    var topBarMenuOpen by remember { mutableStateOf(false) }
+    LaunchedEffect(controlsVisible, uiState.isPlaying, interactionTick, topBarMenuOpen) {
+        if (controlsVisible && uiState.isPlaying && !topBarMenuOpen) {
             delay(3500)
             controlsVisible = false
         }
@@ -555,8 +561,15 @@ fun PlayerScreen(
         // brief async window before load() hands off to the external app, visibly flashing as if
         // internal playback had started - see PlayerUiState.readyForInternalPlayback's own KDoc.
         if (uiState.readyForInternalPlayback) {
+        // A new generation means FFmpeg drew into the current Surface, which nothing else can use
+        // afterwards (see PlayerViewModel.videoSurfaceGeneration) - key() throws this PlayerView and
+        // its SurfaceView away and builds a new one.
+        key(videoSurfaceGeneration) {
         AndroidView(
             factory = { ctx -> PlayerView(ctx).apply { useController = false }.also { playerViewRef = it } },
+            // Unhooks the discarded view from the player. ExoPlayer only clears a SurfaceView that is
+            // still its current output, so this can't detach the replacement view.
+            onRelease = { view -> view.player = null },
             update = { view ->
                 view.player = currentPlayer
                 view.resizeMode = resizeMode
@@ -583,6 +596,7 @@ fun PlayerScreen(
             },
             modifier = Modifier.fillMaxSize()
         )
+        }
 
         if (!isInPip) {
             GestureLayer(
@@ -715,7 +729,13 @@ fun PlayerScreen(
                         },
                         sleepTimerRemainingMs = uiState.sleepTimerRemainingMs,
                         onSetSleepTimer = { duration -> bumpInteraction(); viewModel.setSleepTimer(duration) },
-                        onCancelSleepTimer = { bumpInteraction(); viewModel.cancelSleepTimer() }
+                        onCancelSleepTimer = { bumpInteraction(); viewModel.cancelSleepTimer() },
+                        onMenuOpenChange = { open ->
+                            topBarMenuOpen = open
+                            // Closing a menu counts as an interaction: restart the countdown from
+                            // here instead of hiding the controls the instant the menu goes away.
+                            if (!open) bumpInteraction()
+                        }
                     )
                     }
                     Box(modifier = Modifier.fillMaxSize().weight(1f), contentAlignment = Alignment.Center) {

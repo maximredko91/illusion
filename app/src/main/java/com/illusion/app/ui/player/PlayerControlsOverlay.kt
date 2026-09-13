@@ -53,6 +53,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.ui.unit.Dp
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.material3.LocalMinimumInteractiveComponentSize
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Audiotrack
@@ -159,6 +160,10 @@ fun TopGradientBar(
     sleepTimerRemainingMs: Long?,
     onSetSleepTimer: (Long) -> Unit,
     onCancelSleepTimer: () -> Unit,
+    // Reported so PlayerScreen can hold off its controls auto-hide while a menu is open - the menus
+    // live inside this bar, so hiding the bar mid-choice took the open menu down with it and the
+    // user's tap landed on the video instead (confirmed on-device with the decoder menu).
+    onMenuOpenChange: (Boolean) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     BoxWithConstraints(
@@ -309,6 +314,11 @@ fun TopGradientBar(
             // tint whenever the mode is NOT Авто, so a forced decoder is visible at a glance without
             // opening anything.
             var decoderMenuExpanded by remember { mutableStateOf(false) }
+            val anyMenuOpen = sleepTimerMenuExpanded || decoderMenuExpanded
+            DisposableEffect(anyMenuOpen) {
+                onMenuOpenChange(anyMenuOpen)
+                onDispose { if (anyMenuOpen) onMenuOpenChange(false) }
+            }
             Box {
                 val decoderSource = remember { MutableInteractionSource() }
                 IconButton(

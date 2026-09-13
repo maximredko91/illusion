@@ -24,7 +24,6 @@ import androidx.media3.common.TrackSelectionOverride
 import androidx.media3.common.Tracks
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultDataSource
-import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.extractor.DefaultExtractorsFactory
@@ -87,12 +86,12 @@ data class PlayerUiState(
     val bufferedPositionMs: Long = 0,
     val error: String? = null,
     /**
-     * True while playing a stream this device can only decode badly. Concretely: MPEG-4 Part 2 in
-     * Advanced Simple Profile (XviD/DivX rips), where the only decoder any of these phones ships
-     * for video/mp4v-es is c2.android.mpeg4.decoder - Simple Profile only, so ASP's B-frames and
-     * packed bitstream come out as broken macroblocks. Players that handle these files (MX, VLC)
-     * carry their own FFmpeg build instead of using the system decoder; until this app does too
-     * (see the note in CLAUDE.md), the honest move is to say so and offer the external player.
+     * True while the video track is being decoded by this device's platform MPEG-4 decoder
+     * (c2.android.mpeg4.decoder) - Simple Profile only, so DivX/XviD's Advanced Simple Profile
+     * B-frames and packed bitstream come out as broken macroblocks. The app's own FFmpeg decoder
+     * (data/player/ffmpeg) takes these tracks in Авто and Программный, so this only fires in
+     * Аппаратный mode or if the native libraries failed to load; the player then says so and
+     * offers the external player.
      */
     val videoCodecPoorlySupported: Boolean = false,
     val audioTracks: List<TrackOption> = emptyList(),
@@ -157,15 +156,9 @@ class PlayerViewModel(
      */
     private fun createPlayer(disableCuesSeek: Boolean = false): ExoPlayer = ExoPlayer.Builder(
         appContext,
-        // EXTENSION_RENDERER_MODE_ON: falls back to the FFmpeg extension (DTS/AC3/TrueHD) only when no
-        // platform decoder handles the format - a no-op today since the extension isn't on the classpath
-        // yet (see scripts/build_ffmpeg_extension.sh), but no code change will be needed once it is.
-        DefaultRenderersFactory(appContext)
-            // Reorders (never shortens) the platform decoder list per the Settings decoder-mode
-            // choice - see DecoderMode's own KDoc. AUTO hands back MediaCodecSelector.DEFAULT, so
-            // the default path is byte-for-byte what it was before this setting existed.
-            .setMediaCodecSelector(com.illusion.app.data.player.decoderSelector(decoderModeForCurrentPlayer))
-            .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON)
+        // Decoder mode shapes both the platform decoder order and where the app's own FFmpeg video
+        // renderer sits - see IllusionRenderersFactory.
+        com.illusion.app.data.player.IllusionRenderersFactory(appContext, decoderModeForCurrentPlayer)
     )
         // DefaultDataSource routes file:// URIs (a completed offline download) to Media3's built-in
         // FileDataSource and everything else to dataSourceFactory - so smb-item:// keeps streaming
@@ -201,6 +194,29 @@ class PlayerViewModel(
     /** Name of the decoder MediaCodec actually instantiated for the current video/audio track, for the diagnostic overlay - null until the renderer reports one. */
     private var videoDecoderName: String? = null
     private var audioDecoderName: String? = null
+
+    /**
+     * Bumped whenever the video Surface has to be replaced before anything else draws into it.
+     * FfmpegVideoDecoder draws through ANativeWindow_lock, which connects the Surface as a CPU
+     * producer, and that connection only goes away when the Surface itself is destroyed -
+     * ANativeWindow_release doesn't drop it and the NDK has no public disconnect. Until then
+     * MediaCodec and the GL effects pipeline can't connect to the same Surface: confirmed on-device
+     * as EGL_BAD_ALLOC (0x3003) right after switching a DivX file from Авто to Аппаратный.
+     * PlayerScreen keys its PlayerView on this, so each bump means a brand-new SurfaceView.
+     */
+    private val _videoSurfaceGeneration = MutableStateFlow(0)
+    val videoSurfaceGeneration: StateFlow<Int> = _videoSurfaceGeneration.asStateFlow()
+
+    /** Whether FFmpeg has drawn into the current Surface - see [videoSurfaceGeneration]. */
+    private var surfaceUsedByCpuRenderer = false
+
+    /** Asks PlayerScreen for a fresh Surface if FFmpeg drew into the current one; true if it did. */
+    private fun retireCpuRenderedSurface(): Boolean {
+        if (!surfaceUsedByCpuRenderer) return false
+        surfaceUsedByCpuRenderer = false
+        _videoSurfaceGeneration.update { it + 1 }
+        return true
+    }
 
     // Backed by a StateFlow (not a plain val) so it can be swapped out entirely - reloadPlayer()
     // needs a truly fresh ExoPlayer instance to reset the sharpen effects pipeline (see its own
@@ -263,6 +279,13 @@ class PlayerViewModel(
                 initializationDurationMs: Long
             ) {
                 videoDecoderName = decoderName
+                if (decoderName.startsWith("ffmpeg-")) surfaceUsedByCpuRenderer = true
+                // Only the platform's own MPEG-4 decoder mangles ASP streams - with FFmpeg taking the
+                // track (Авто/Программный) there's nothing to warn about. Checked against the decoder
+                // actually picked rather than the track's MIME type for exactly that reason.
+                _state.update {
+                    it.copy(videoCodecPoorlySupported = decoderName in PLATFORM_ASP_BROKEN_DECODERS)
+                }
             }
 
             override fun onAudioDecoderInitialized(
@@ -652,6 +675,9 @@ class PlayerViewModel(
             .setMediaMetadata(MediaMetadata.Builder().setTitle(item.title).build())
             .build()
 
+        // Next episode / Cues retry on the same player: detach it from a Surface FFmpeg drew into
+        // until PlayerScreen's replacement SurfaceView attaches (see videoSurfaceGeneration).
+        if (retireCpuRenderedSurface()) player.clearVideoSurface()
         player.setMediaItem(mediaItem, startPositionMs)
         player.prepare()
         player.playWhenReady = autoPlay
@@ -756,6 +782,9 @@ class PlayerViewModel(
         audioDecoderName = null
         val fresh = createPlayer(disableCuesSeek = cuesSeekDisabledForCurrentPlayer)
         attachListeners(fresh)
+        // Before the swap, so PlayerScreen builds the new SurfaceView for the fresh player instead of
+        // binding it to the old one first (see videoSurfaceGeneration).
+        retireCpuRenderedSurface()
         _player.value = fresh
         // MediaSession's player can't be swapped in place - re-attaching rebuilds it around the
         // fresh instance so the notification keeps working after a sharpen-triggered reload.
@@ -804,6 +833,7 @@ class PlayerViewModel(
             .setUri(uri)
             .setMediaMetadata(MediaMetadata.Builder().setTitle(item.title).build())
             .build()
+        if (retireCpuRenderedSurface()) player.clearVideoSurface()
         player.setMediaItem(mediaItem, startPositionMs)
         player.prepare()
         player.playWhenReady = autoPlay
@@ -1201,7 +1231,6 @@ class PlayerViewModel(
         }
         _state.update { it.copy(audioTracks = audio, subtitleTracks = subtitles) }
         updateAspectRatioFromTracks(tracks)
-        updatePoorlySupportedCodecFromTracks(tracks)
     }
 
     /**
@@ -1212,21 +1241,6 @@ class PlayerViewModel(
      * which render path is in use, so read the ratio from there instead and hand it to the UI,
      * which applies it to PlayerView's content frame itself (see PlayerScreen).
      */
-    /** See [PlayerUiState.videoCodecPoorlySupported]. */
-    private fun updatePoorlySupportedCodecFromTracks(tracks: Tracks) {
-        val poorlySupported = tracks.groups
-            .filter { it.type == C.TRACK_TYPE_VIDEO }
-            .any { group ->
-                (0 until group.length).any { i ->
-                    group.isTrackSelected(i) &&
-                        group.getTrackFormat(i).sampleMimeType == MimeTypes.VIDEO_MP4V
-                }
-            }
-        if (_state.value.videoCodecPoorlySupported != poorlySupported) {
-            _state.update { it.copy(videoCodecPoorlySupported = poorlySupported) }
-        }
-    }
-
     private fun updateAspectRatioFromTracks(tracks: Tracks) {
         for (group in tracks.groups) {
             if (group.type != C.TRACK_TYPE_VIDEO) continue
@@ -1371,6 +1385,9 @@ class PlayerViewModel(
     }
 
     companion object {
+        /** Platform decoders that turn MPEG-4 Advanced Simple Profile (DivX/XviD) into broken macroblocks - see [PlayerUiState.videoCodecPoorlySupported]. */
+        private val PLATFORM_ASP_BROKEN_DECODERS = setOf("c2.android.mpeg4.decoder", "OMX.google.mpeg4.decoder")
+
         /** How long a first-ever play is allowed to sit in BUFFERING at/near its start position before [playItem] assumes it's the Cues-table hang, not just a slow network - generous on purpose since falsely tripping it permanently disables seeking for that file. */
         private const val STALL_WATCHDOG_TIMEOUT_MS = 30_000L
 

@@ -81,6 +81,15 @@ android {
         // AGP rejects having both set at once ("Conflicting configuration").
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        // Native FFmpeg video decoder (src/main/cpp) - only built for the ABIs the splits below
+        // ship. This is the CMake-options abiFilters, which AGP allows alongside splits.abi (unlike
+        // defaultConfig.ndk.abiFilters, see the note above).
+        externalNativeBuild {
+            cmake {
+                abiFilters("arm64-v8a", "armeabi-v7a")
+            }
+        }
         buildConfigField("String", "TMDB_API_KEY", "\"$tmdbApiKey\"")
         buildConfigField("String", "DEV_ACCESS_PASSWORD", "\"$devAccessPassword\"")
     }
@@ -92,6 +101,16 @@ android {
     // this app's own updater (UpdateChecker.selectApkForDevice) always has both split APKs to
     // pick from and doesn't need one; a plain manual download from someone with neither device
     // profile in mind is already an edge case this app's GitHub-only distribution doesn't target.
+    // Same NDK/CMake versions AGP 9.3.2 defaults to, pinned so a newer side-by-side install doesn't
+    // silently change the toolchain. The FFmpeg .so files themselves come prebuilt from CI.
+    ndkVersion = "28.2.13676358"
+    externalNativeBuild {
+        cmake {
+            path = file("src/main/cpp/CMakeLists.txt")
+            version = "3.22.1"
+        }
+    }
+
     splits {
         abi {
             isEnable = true

@@ -34,6 +34,8 @@ fun decoderSelector(mode: DecoderMode): MediaCodecSelector = when (mode) {
  * platform's own software codecs).
  */
 fun isHardwareDecoder(decoderName: String): Boolean {
+    // The app's own FFmpeg decoder (FfmpegVideoDecoder.getName()) - never listed in MediaCodecList.
+    if (decoderName.startsWith("ffmpeg-")) return false
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
         val info = runCatching {
             MediaCodecList(MediaCodecList.REGULAR_CODECS).codecInfos.firstOrNull { it.name == decoderName }

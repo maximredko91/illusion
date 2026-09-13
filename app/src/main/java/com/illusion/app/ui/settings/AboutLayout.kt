@@ -94,7 +94,9 @@ internal fun AboutLibraries() {
             "Coil" to "https://github.com/coil-kt/coil/blob/main/LICENSE.txt",
             "smbj" to "https://github.com/hierynomus/smbj/blob/master/LICENSE_HEADER",
             "OkHttp" to "https://github.com/square/okhttp/blob/master/LICENSE.txt",
-            "kotlinx.serialization" to "https://github.com/Kotlin/kotlinx.serialization/blob/master/LICENSE.txt"
+            "kotlinx.serialization" to "https://github.com/Kotlin/kotlinx.serialization/blob/master/LICENSE.txt",
+            // LGPL 2.1+, dynamically linked as separate .so files - see scripts/build_ffmpeg_android.sh.
+            "FFmpeg" to "https://github.com/FFmpeg/FFmpeg/blob/master/COPYING.LGPLv2.1"
         )
     }
     SettingsGroup {
