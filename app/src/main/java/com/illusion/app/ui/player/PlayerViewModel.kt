@@ -146,10 +146,11 @@ class PlayerViewModel(
     private val appContext = context.applicationContext
 
     /**
-     * [disableCuesSeek] trades away seeking entirely for [item] in exchange for not hanging -
-     * verified via javap that with MatroskaExtractor's Cues-seek disabled, it emits
-     * SeekMap.Unseekable for the WHOLE file rather than a merely-less-precise seek map. Only worth
-     * it for files already known (via [SettingsRepository.cuesSeekWorkaroundStableIds]) to hang
+     * [disableCuesSeek] turns off MatroskaExtractor's own jump to the Cues, which is what hangs these
+     * files. On its own that makes the WHOLE file unseekable (verified via javap: SeekMap.Unseekable,
+     * not a less precise map), so IllusionExtractorsFactory also wraps the extractor in
+     * OutOfBandCuesExtractor, which reads the Cues separately and restores seeking. Only used
+     * for files already known (via [SettingsRepository.cuesSeekWorkaroundStableIds]) to hang
      * otherwise - see [playItem]'s stall watchdog for how a file gets added to that list. Normal
      * files never pass true here, so they keep full seeking.
      */
@@ -165,10 +166,12 @@ class PlayerViewModel(
         .setMediaSourceFactory(
             // Media3's own extractors (with the Cues workaround flag when this file needs it) plus the
             // app's ASF extractor for .wmv - see IllusionExtractorsFactory.
-            DefaultMediaSourceFactory(
-                appContext,
-                com.illusion.app.data.player.IllusionExtractorsFactory(disableCuesSeek)
-            ).setDataSourceFactory(DefaultDataSource.Factory(appContext, dataSourceFactory))
+            DefaultDataSource.Factory(appContext, dataSourceFactory).let { playbackDataSourceFactory ->
+                DefaultMediaSourceFactory(
+                    appContext,
+                    com.illusion.app.data.player.IllusionExtractorsFactory(disableCuesSeek, playbackDataSourceFactory)
+                ).setDataSourceFactory(playbackDataSourceFactory)
+            }
         )
         .setLoadControl(
             buildAdaptiveLoadControl(appContext, settingsRepository.playerBufferSizeSnapshot)

@@ -244,11 +244,11 @@ class SettingsRepository(private val context: Context) {
     /**
      * stableIds of files whose MatroskaExtractor Cues table is pathological enough to hang the
      * player forever in BUFFERING (observed on one real 38GB/76-chapter file - see project memory
-     * "Avatar infinite buffering bug"). Disabling Cues-based seeking fixes the hang but also makes
-     * that one file entirely non-seekable (MatroskaExtractor falls back to SeekMap.Unseekable, not
-     * a less-precise seek map), so it can't be a global setting - PlayerViewModel auto-detects the
-     * hang once (a stall watchdog on first play) and remembers the file here so every later replay
-     * skips straight to the workaround instead of hanging again first.
+     * "Avatar infinite buffering bug"). For these files MatroskaExtractor's own jump to the Cues is
+     * turned off, which fixes the hang, and OutOfBandCuesExtractor reads the Cues separately to keep
+     * seeking working. Ordinary files keep Media3's default path, so this stays per-file:
+     * PlayerViewModel auto-detects the hang once (a stall watchdog on first play) and remembers the
+     * file here so every later replay skips straight to the workaround instead of hanging again first.
      */
     val cuesSeekWorkaroundStableIds: Flow<Set<String>> = context.dataStore.data.map {
         val raw = it[Keys.CUES_SEEK_WORKAROUND_STABLE_IDS] ?: return@map emptySet()
