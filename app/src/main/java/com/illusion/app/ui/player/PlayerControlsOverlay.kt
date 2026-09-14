@@ -238,7 +238,7 @@ fun TopGradientBar(
                 // color - shows what tapping it does right now. BlurOn/BlurOff (a plain dotted square when off) didn't read as "sharpness" at all
                 // on-device - now Deblur (dots resolving into a sharp edge) while it's on, tinted with
                 // the accent, and the plainly-blurred BlurOn glyph while it's off.
-                Crossfade(targetState = sharpenEnabled, label = "sharpenIcon") { enabled ->
+                Crossfade(targetState = sharpenEnabled, animationSpec = tween(com.illusion.app.ui.common.economicalDurationMs(300)), label = "sharpenIcon") { enabled ->
                     Icon(
                         if (enabled) Icons.Default.Deblur else Icons.Default.BlurOn,
                         contentDescription = stringResource(R.string.player_sharpen_quick_toggle),
@@ -797,8 +797,8 @@ fun PlayerSettingsPanel(
     Box(modifier = Modifier.fillMaxSize()) {
         AnimatedVisibility(
             visible = visible,
-            enter = fadeIn(),
-            exit = fadeOut()
+            enter = fadeIn(tween(com.illusion.app.ui.common.economicalDurationMs(300))),
+            exit = fadeOut(tween(com.illusion.app.ui.common.economicalDurationMs(300)))
         ) {
             val scrimSource = remember { MutableInteractionSource() }
             Box(
@@ -810,8 +810,8 @@ fun PlayerSettingsPanel(
         }
         AnimatedVisibility(
             visible = visible,
-            enter = slideInHorizontally(animationSpec = tween(280), initialOffsetX = { it }) + fadeIn(),
-            exit = slideOutHorizontally(animationSpec = tween(220), targetOffsetX = { it }) + fadeOut(),
+            enter = slideInHorizontally(animationSpec = tween(com.illusion.app.ui.common.economicalDurationMs(280)), initialOffsetX = { it }) + fadeIn(tween(com.illusion.app.ui.common.economicalDurationMs(280))),
+            exit = slideOutHorizontally(animationSpec = tween(com.illusion.app.ui.common.economicalDurationMs(220)), targetOffsetX = { it }) + fadeOut(tween(com.illusion.app.ui.common.economicalDurationMs(220))),
             modifier = Modifier.align(Alignment.CenterEnd)
         ) {
             Column(
@@ -1262,8 +1262,8 @@ private fun CollapsiblePanelSection(text: String, content: @Composable ColumnSco
     }
     AnimatedVisibility(
         visible = expanded,
-        enter = fadeIn() + expandVertically(),
-        exit = fadeOut() + shrinkVertically()
+        enter = fadeIn(tween(com.illusion.app.ui.common.economicalDurationMs(300))) + expandVertically(tween(com.illusion.app.ui.common.economicalDurationMs(300))),
+        exit = fadeOut(tween(com.illusion.app.ui.common.economicalDurationMs(300))) + shrinkVertically(tween(com.illusion.app.ui.common.economicalDurationMs(300)))
     ) {
         Column(content = content)
     }

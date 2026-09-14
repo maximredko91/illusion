@@ -670,8 +670,8 @@ fun PlayerScreen(
         if (!isInPip) {
             AnimatedVisibility(
                 visible = uiState.showSkipIntro,
-                enter = fadeIn() + slideInVertically(initialOffsetY = { it / 2 }),
-                exit = fadeOut() + slideOutVertically(targetOffsetY = { it / 2 }),
+                enter = fadeIn(tween(com.illusion.app.ui.common.economicalDurationMs(300))) + slideInVertically(tween(com.illusion.app.ui.common.economicalDurationMs(300)), initialOffsetY = { it / 2 }),
+                exit = fadeOut(tween(com.illusion.app.ui.common.economicalDurationMs(300))) + slideOutVertically(tween(com.illusion.app.ui.common.economicalDurationMs(300)), targetOffsetY = { it / 2 }),
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
                     .padding(24.dp)
@@ -681,8 +681,8 @@ fun PlayerScreen(
 
             AnimatedVisibility(
                 visible = uiState.showSkipCredits,
-                enter = fadeIn() + slideInVertically(initialOffsetY = { it / 2 }),
-                exit = fadeOut() + slideOutVertically(targetOffsetY = { it / 2 }),
+                enter = fadeIn(tween(com.illusion.app.ui.common.economicalDurationMs(300))) + slideInVertically(tween(com.illusion.app.ui.common.economicalDurationMs(300)), initialOffsetY = { it / 2 }),
+                exit = fadeOut(tween(com.illusion.app.ui.common.economicalDurationMs(300))) + slideOutVertically(tween(com.illusion.app.ui.common.economicalDurationMs(300)), targetOffsetY = { it / 2 }),
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
                     .padding(24.dp)
@@ -963,8 +963,8 @@ private fun LockedOverlay(iconVisible: Boolean, onTap: () -> Unit, onUnlock: () 
     ) {
         AnimatedVisibility(
             visible = iconVisible,
-            enter = fadeIn(),
-            exit = fadeOut(),
+            enter = fadeIn(tween(com.illusion.app.ui.common.economicalDurationMs(300))),
+            exit = fadeOut(tween(com.illusion.app.ui.common.economicalDurationMs(300))),
             modifier = Modifier.align(Alignment.BottomEnd)
         ) {
             val unlockSource = remember { MutableInteractionSource() }
@@ -1319,8 +1319,8 @@ private fun GestureLayer(
         // behind your own hand while you were adjusting it.
         AnimatedVisibility(
             visible = showBrightness,
-            enter = fadeIn(),
-            exit = fadeOut(),
+            enter = fadeIn(tween(com.illusion.app.ui.common.economicalDurationMs(300))),
+            exit = fadeOut(tween(com.illusion.app.ui.common.economicalDurationMs(300))),
             modifier = Modifier.align(Alignment.CenterEnd).padding(end = gestureIndicatorEdgePadding)
         ) {
             GestureIndicator(
@@ -1331,8 +1331,8 @@ private fun GestureLayer(
         }
         AnimatedVisibility(
             visible = showVolume,
-            enter = fadeIn(),
-            exit = fadeOut(),
+            enter = fadeIn(tween(com.illusion.app.ui.common.economicalDurationMs(300))),
+            exit = fadeOut(tween(com.illusion.app.ui.common.economicalDurationMs(300))),
             modifier = Modifier.align(Alignment.CenterStart).padding(start = gestureIndicatorEdgePadding)
         ) {
             GestureIndicator(
