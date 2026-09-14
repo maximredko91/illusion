@@ -9,10 +9,10 @@
 # динамически (отдельными .so в APK), текст лицензии кладётся рядом.
 #
 # Состав выбран под конкретные дыры в поддержке форматов на телефоне (проверено по
-# media_codecs*.xml устройства — декодеров VC-1/WMV и WMA там нет вовсе, MPEG-4 только
-# Simple Profile, MPEG-2 лишь софтовый c2.android.mpeg2):
+# media_codecs*.xml устройства — декодеров VC-1/WMV, AC3/E-AC3, DTS и TrueHD там нет вовсе,
+# MPEG-4 только Simple Profile, MPEG-2 лишь софтовый c2.android.mpeg2):
 #   видео  — MPEG-4 ASP (DivX/XviD), MS-MPEG4 v1-3 (DivX 3), H.263, WMV1-3/VC-1, MPEG-1/2
-#   аудио  — WMA (звуковая дорожка .wmv; на устройстве декодера тоже нет)
+#   аудио  — WMA (звуковая дорожка .wmv), AC3/E-AC3, DTS, TrueHD (дорожки в .mkv-ремуксах)
 #   демукс — Matroska (патологические Cues), ASF (.wmv — в Media3 такого экстрактора нет), AVI
 set -euo pipefail
 
@@ -23,8 +23,8 @@ SRC_DIR="${SRC_DIR:-$PWD/ffmpeg-src}"
 OUT_DIR="${OUT_DIR:-$PWD/ffmpeg-android}"
 TOOLCHAIN="$NDK/toolchains/llvm/prebuilt/linux-x86_64"
 
-DECODERS="mpeg4,msmpeg4v1,msmpeg4v2,msmpeg4v3,h263,h263p,wmv1,wmv2,wmv3,vc1,mpeg1video,mpeg2video,wmav1,wmav2,wmapro"
-PARSERS="mpeg4video,h263,vc1,mpegvideo"
+DECODERS="mpeg4,msmpeg4v1,msmpeg4v2,msmpeg4v3,h263,h263p,wmv1,wmv2,wmv3,vc1,mpeg1video,mpeg2video,wmav1,wmav2,wmapro,ac3,eac3,dca,truehd,mlp"
+PARSERS="mpeg4video,h263,vc1,mpegvideo,ac3,dca,mlp"
 DEMUXERS="matroska,asf,avi"
 # DivX 5 "packed B-frames" (userdata вида DivX503b1393p) — без этого фильтра кадры приходят
 # в неправильном порядке относительно временных меток контейнера.
