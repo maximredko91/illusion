@@ -12,7 +12,9 @@ import com.illusion.app.data.player.asf.WindowsMediaMimeTypes
  * which is Simple Profile only, so DivX/XviD (Advanced Simple Profile) breaks up into macroblocks;
  * MS-MPEG4 (DivX 3) and VC-1/WMV have no decoder at all; MPEG-2 and H.263 do have working software
  * platform decoders and only go through FFmpeg when the user explicitly picks «Программный».
- * WMV1-3 and WMA (from .wmv, see AsfExtractor) have no platform decoder either.
+ * WMV1-3 (from .wmv, see AsfExtractor) has no platform decoder either; WMA goes through FFmpeg too via
+ * AsfExtractor's own MIME types, although the phone does list a c2.qti.wma decoder. AC3/E-AC3, DTS and
+ * TrueHD audio - the usual tracks in .mkv remuxes - have no platform decoder at all.
  */
 object FfmpegLibrary {
     private const val TAG = "FfmpegLibrary"
@@ -44,6 +46,12 @@ object FfmpegLibrary {
         WindowsMediaMimeTypes.AUDIO_WMA_V1 -> "wmav1"
         WindowsMediaMimeTypes.AUDIO_WMA_V2 -> "wmav2"
         WindowsMediaMimeTypes.AUDIO_WMA_PRO -> "wmapro"
+        // Same mapping as Media3's own decoder_ffmpeg FfmpegLibrary (1.11.0). DTS:X is left out: FFmpeg's
+        // dca decoder only has its core, and a platform or passthrough path is the better bet there.
+        MimeTypes.AUDIO_AC3 -> "ac3"
+        MimeTypes.AUDIO_E_AC3, MimeTypes.AUDIO_E_AC3_JOC -> "eac3"
+        MimeTypes.AUDIO_TRUEHD -> "truehd"
+        MimeTypes.AUDIO_DTS, MimeTypes.AUDIO_DTS_EXPRESS, MimeTypes.AUDIO_DTS_HD -> "dca"
         else -> null
     }
 

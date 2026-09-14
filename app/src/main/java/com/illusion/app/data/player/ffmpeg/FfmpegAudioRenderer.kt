@@ -15,7 +15,8 @@ import androidx.media3.exoplayer.audio.DecoderAudioRenderer
 /**
  * Audio renderer on top of [FfmpegAudioDecoder], modelled on Media3's decoder_ffmpeg
  * FfmpegAudioRenderer (1.11.0). Only claims the formats [FfmpegLibrary] maps to a libavcodec audio
- * decoder (WMA), so it never competes with the platform audio renderer for anything else.
+ * decoder (WMA, AC3/E-AC3, DTS, TrueHD). It sits after the platform audio renderer, so where the
+ * platform can take those itself - HDMI passthrough to a receiver on the TV box - that still wins.
  */
 @OptIn(UnstableApi::class)
 class FfmpegAudioRenderer(

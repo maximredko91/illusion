@@ -1,4 +1,5 @@
-// JNI bridge between FfmpegAudioDecoder (Media3 SimpleDecoder) and libavcodec - WMA from .wmv files.
+// JNI bridge between FfmpegAudioDecoder (Media3 SimpleDecoder) and libavcodec - WMA from .wmv files,
+// AC3/E-AC3, DTS and TrueHD from .mkv remuxes (no platform decoder for any of them on the phone).
 //
 // Follows Media3's decoder_ffmpeg JNI (ffmpeg_jni.cc, 1.11.0) with two differences:
 //  - no libswresample (the app's FFmpeg build leaves it out): WMA decoders emit planar float, and
@@ -41,6 +42,14 @@ struct AudioContext {
     uint8_t* output = nullptr;
     size_t outputCapacity = 0;
     size_t outputSize = 0;
+    // Kept to rebuild the codec context from scratch, see openCodec() and nativeFlush.
+    int sampleRate = 0;
+    int channelCount = 0;
+    int bitRate = 0;
+    int blockAlign = 0;
+    int bitsPerSample = 0;
+    uint8_t* extraData = nullptr;
+    int extraDataSize = 0;
 };
 
 bool ensureCapacity(uint8_t** buffer, size_t* capacity, size_t required) {
@@ -129,7 +138,33 @@ bool appendFrame(AudioContext* ctx, const AVFrame* frame) {
     return true;
 }
 
+// Allocates and opens ctx->codec from the parameters saved in ctx.
+bool openCodec(AudioContext* ctx, const AVCodec* codec) {
+    ctx->codec = avcodec_alloc_context3(codec);
+    if (!ctx->codec) return false;
+    // WMA decoders read these from the container's WAVEFORMATEX, not the bitstream; the others ignore them.
+    ctx->codec->sample_rate = ctx->sampleRate;
+    if (ctx->channelCount > 0) av_channel_layout_default(&ctx->codec->ch_layout, ctx->channelCount);
+    ctx->codec->bit_rate = ctx->bitRate;
+    ctx->codec->block_align = ctx->blockAlign;
+    ctx->codec->bits_per_coded_sample = ctx->bitsPerSample;
+    if (ctx->extraData) {
+        ctx->codec->extradata =
+            static_cast<uint8_t*>(av_mallocz(ctx->extraDataSize + AV_INPUT_BUFFER_PADDING_SIZE));
+        if (!ctx->codec->extradata) return false;
+        memcpy(ctx->codec->extradata, ctx->extraData, ctx->extraDataSize);
+        ctx->codec->extradata_size = ctx->extraDataSize;
+    }
+    int result = avcodec_open2(ctx->codec, codec, nullptr);
+    if (result < 0) {
+        logAvError("avcodec_open2", result);
+        return false;
+    }
+    return true;
+}
+
 void freeContext(AudioContext* ctx) {
+    free(ctx->extraData);
     av_frame_free(&ctx->frame);
     av_packet_free(&ctx->packet);
     avcodec_free_context(&ctx->codec);
@@ -153,33 +188,23 @@ JNIEXPORT jlong JNICALL Java_com_illusion_app_data_player_ffmpeg_FfmpegAudioDeco
 
     AudioContext* ctx = new AudioContext();
     ctx->outputFloat = outputFloat;
-    ctx->codec = avcodec_alloc_context3(codec);
-    ctx->packet = av_packet_alloc();
-    ctx->frame = av_frame_alloc();
-    if (!ctx->codec || !ctx->packet || !ctx->frame) {
-        LOGE("Out of memory allocating audio decoder context");
-        freeContext(ctx);
-        return 0;
-    }
-    // WMA decoders read all of these from the container's WAVEFORMATEX, not the bitstream.
-    ctx->codec->sample_rate = sampleRate;
-    if (channelCount > 0) av_channel_layout_default(&ctx->codec->ch_layout, channelCount);
-    ctx->codec->bit_rate = bitRate;
-    ctx->codec->block_align = blockAlign;
-    ctx->codec->bits_per_coded_sample = bitsPerSample;
+    ctx->sampleRate = sampleRate;
+    ctx->channelCount = channelCount;
+    ctx->bitRate = bitRate;
+    ctx->blockAlign = blockAlign;
+    ctx->bitsPerSample = bitsPerSample;
     if (jExtraData) {
-        jsize size = env->GetArrayLength(jExtraData);
-        ctx->codec->extradata =
-            static_cast<uint8_t*>(av_mallocz(size + AV_INPUT_BUFFER_PADDING_SIZE));
-        if (ctx->codec->extradata) {
-            env->GetByteArrayRegion(jExtraData, 0, size,
-                                    reinterpret_cast<jbyte*>(ctx->codec->extradata));
-            ctx->codec->extradata_size = size;
+        ctx->extraDataSize = env->GetArrayLength(jExtraData);
+        ctx->extraData = static_cast<uint8_t*>(malloc(ctx->extraDataSize > 0 ? ctx->extraDataSize : 1));
+        if (ctx->extraData) {
+            env->GetByteArrayRegion(jExtraData, 0, ctx->extraDataSize,
+                                    reinterpret_cast<jbyte*>(ctx->extraData));
         }
     }
-    int result = avcodec_open2(ctx->codec, codec, nullptr);
-    if (result < 0) {
-        logAvError("avcodec_open2", result);
+    ctx->packet = av_packet_alloc();
+    ctx->frame = av_frame_alloc();
+    if (!ctx->packet || !ctx->frame || (jExtraData && !ctx->extraData) || !openCodec(ctx, codec)) {
+        LOGE("Failed to set up %s decoder", codec->name);
         freeContext(ctx);
         return 0;
     }
@@ -190,6 +215,7 @@ JNIEXPORT jint JNICALL Java_com_illusion_app_data_player_ffmpeg_FfmpegAudioDecod
     JNIEnv* env, jobject, jlong jContext, jobject jData, jint size) {
     AudioContext* ctx = reinterpret_cast<AudioContext*>(jContext);
     ctx->outputSize = 0;
+    if (!ctx->codec) return kFatal;  // A TrueHD reopen after reset failed.
     const uint8_t* data = static_cast<const uint8_t*>(env->GetDirectBufferAddress(jData));
     size_t required = static_cast<size_t>(size) + AV_INPUT_BUFFER_PADDING_SIZE;
     if (!data || !ensureCapacity(&ctx->input, &ctx->inputCapacity, required)) return kFatal;
@@ -232,20 +258,30 @@ Java_com_illusion_app_data_player_ffmpeg_FfmpegAudioDecoder_nativeReadOutput(
 JNIEXPORT jint JNICALL
 Java_com_illusion_app_data_player_ffmpeg_FfmpegAudioDecoder_nativeGetChannelCount(JNIEnv*, jobject,
                                                                                   jlong jContext) {
-    return reinterpret_cast<AudioContext*>(jContext)->codec->ch_layout.nb_channels;
+    AudioContext* ctx = reinterpret_cast<AudioContext*>(jContext);
+    return ctx->codec ? ctx->codec->ch_layout.nb_channels : 0;
 }
 
 JNIEXPORT jint JNICALL
 Java_com_illusion_app_data_player_ffmpeg_FfmpegAudioDecoder_nativeGetSampleRate(JNIEnv*, jobject,
                                                                                 jlong jContext) {
-    return reinterpret_cast<AudioContext*>(jContext)->codec->sample_rate;
+    AudioContext* ctx = reinterpret_cast<AudioContext*>(jContext);
+    return ctx->codec ? ctx->codec->sample_rate : 0;
 }
 
 JNIEXPORT void JNICALL Java_com_illusion_app_data_player_ffmpeg_FfmpegAudioDecoder_nativeFlush(
     JNIEnv*, jobject, jlong jContext) {
     AudioContext* ctx = reinterpret_cast<AudioContext*>(jContext);
-    avcodec_flush_buffers(ctx->codec);
     ctx->outputSize = 0;
+    // Media3's own decoder_ffmpeg rebuilds the TrueHD context on reset instead of flushing it: the
+    // decoder keeps state avcodec_flush_buffers() doesn't clear, which breaks audio after a seek.
+    if (ctx->codec && ctx->codec->codec_id == AV_CODEC_ID_TRUEHD) {
+        const AVCodec* codec = ctx->codec->codec;
+        avcodec_free_context(&ctx->codec);
+        if (!openCodec(ctx, codec)) LOGE("Failed to reopen TrueHD decoder after reset");
+        return;
+    }
+    avcodec_flush_buffers(ctx->codec);
 }
 
 JNIEXPORT void JNICALL Java_com_illusion_app_data_player_ffmpeg_FfmpegAudioDecoder_nativeRelease(
