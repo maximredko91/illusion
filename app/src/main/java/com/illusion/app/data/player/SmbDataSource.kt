@@ -78,18 +78,33 @@ class SmbDataSourceFactory(
     }
 }
 
+/**
+ * Reads ahead in [READ_AHEAD_BYTES] chunks instead of sending one SMB READ per Media3 read().
+ * Media3's extractors ask for at most one 64 KB allocation segment at a time, often much less, and
+ * every SMB READ is a full request/response round trip to the NAS - so throughput was capped by the
+ * number of round trips, not by the network: Media3 asked for 4.6 KiB per read on average, so a 4K
+ * remux (~25 Mbit/s) got only ~12 Mbit/s over a 1 Gbit/s Wi-Fi link and rebuffered every couple of
+ * seconds. With 1 MiB chunks (~12-15 ms per READ to this NAS) the same file reads at 28-30 Mbit/s
+ * and doesn't rebuffer (measured on-device, 2026-09-14).
+ * smbj clamps each READ to min(SmbConfig read buffer, the server's negotiated maxReadSize), so a
+ * chunk may come back shorter than asked - that's handled like any short read.
+ */
 class SmbDataSource internal constructor(
     private val factory: SmbDataSourceFactory
 ) : BaseDataSource(/* isNetwork = */ true) {
 
     private var randomAccessFile: SmbRandomAccessFile? = null
+    /** File position of the next byte handed to Media3 - the read-ahead buffer is always filled from here. */
     private var position: Long = 0
     private var bytesRemaining: Long = C.LENGTH_UNSET.toLong()
     private var opened = false
     private var currentUri: Uri? = null
-    private var scratch = ByteArray(0)
     private var sourceId: Long = -1
     private var path: String = ""
+
+    private var readAhead = ByteArray(0)
+    private var readAheadLength = 0
+    private var readAheadOffset = 0
 
     override fun open(dataSpec: DataSpec): Long {
         currentUri = dataSpec.uri
@@ -103,6 +118,8 @@ class SmbDataSource internal constructor(
             parsed.sizeBytes >= 0 -> parsed.sizeBytes - dataSpec.position
             else -> C.LENGTH_UNSET.toLong()
         }
+        readAheadLength = 0
+        readAheadOffset = 0
         opened = true
         transferInitializing(dataSpec)
         transferStarted(dataSpec)
@@ -112,22 +129,27 @@ class SmbDataSource internal constructor(
     override fun read(buffer: ByteArray, offset: Int, length: Int): Int {
         if (length == 0) return 0
         if (bytesRemaining == 0L) return C.RESULT_END_OF_INPUT
-        val maxRead = if (bytesRemaining != C.LENGTH_UNSET.toLong() && bytesRemaining < length) {
-            bytesRemaining.toInt()
-        } else {
-            length
+        if (readAheadOffset == readAheadLength) {
+            // Never read past the DataSpec's end: small bounded opens (e.g. OutOfBandCuesExtractor's
+            // header reads) must not pull a whole chunk they'll never use.
+            val chunk = if (bytesRemaining != C.LENGTH_UNSET.toLong() && bytesRemaining < READ_AHEAD_BYTES) {
+                bytesRemaining.toInt()
+            } else {
+                READ_AHEAD_BYTES
+            }
+            if (readAhead.size < chunk) readAhead = ByteArray(chunk)
+            val read = readWithReconnect(readAhead, chunk)
+            if (read <= 0) return C.RESULT_END_OF_INPUT
+            readAheadLength = read
+            readAheadOffset = 0
         }
-        val target = if (offset == 0) buffer else scratchBuffer(maxRead)
-        // maxRead must be passed explicitly - target may be a scratch buffer left over (larger)
-        // from a previous, bigger read, and smbj's 2-arg read() fills up to buffer.size, not the
-        // caller's requested length, which previously overflowed the destination on the next copy.
-        val read = readWithReconnect(target, maxRead)
-        if (read <= 0) return C.RESULT_END_OF_INPUT
-        if (offset != 0) System.arraycopy(target, 0, buffer, offset, read)
-        position += read
-        if (bytesRemaining != C.LENGTH_UNSET.toLong()) bytesRemaining -= read
-        bytesTransferred(read)
-        return read
+        val count = minOf(length, readAheadLength - readAheadOffset)
+        System.arraycopy(readAhead, readAheadOffset, buffer, offset, count)
+        readAheadOffset += count
+        position += count
+        if (bytesRemaining != C.LENGTH_UNSET.toLong()) bytesRemaining -= count
+        bytesTransferred(count)
+        return count
     }
 
     /**
@@ -168,16 +190,13 @@ class SmbDataSource internal constructor(
         throw lastError!!
     }
 
-    private fun scratchBuffer(size: Int): ByteArray {
-        if (scratch.size < size) scratch = ByteArray(size)
-        return scratch
-    }
-
     override fun getUri(): Uri? = currentUri
 
     override fun close() {
         randomAccessFile?.let { runCatching { it.close() } }
         randomAccessFile = null
+        readAheadLength = 0
+        readAheadOffset = 0
         if (opened) {
             opened = false
             transferEnded()
@@ -188,5 +207,6 @@ class SmbDataSource internal constructor(
         private const val TAG = "SmbDataSource"
         private const val MAX_RECONNECT_ATTEMPTS = 3
         private const val RECONNECT_BACKOFF_MS = 300L
+        private const val READ_AHEAD_BYTES = 1 shl 20
     }
 }
