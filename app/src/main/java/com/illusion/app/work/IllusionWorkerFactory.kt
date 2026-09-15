@@ -9,6 +9,8 @@ import com.illusion.app.data.repository.SmbSourceRepository
 import com.illusion.app.data.scan.LibraryScanner
 import com.illusion.app.data.settings.SettingsRepository
 import com.illusion.app.data.smb.SmbClient
+import com.illusion.app.data.update.LocalUpdateChecker
+import com.illusion.app.data.update.UpdateChecker
 
 class IllusionWorkerFactory(
     private val libraryScanner: LibraryScanner,
@@ -16,7 +18,9 @@ class IllusionWorkerFactory(
     private val libraryRepository: LibraryRepository,
     private val smbSourceRepository: SmbSourceRepository,
     private val smbClient: SmbClient,
-    private val downloadRepository: DownloadRepository
+    private val downloadRepository: DownloadRepository,
+    private val updateChecker: UpdateChecker,
+    private val localUpdateChecker: LocalUpdateChecker
 ) : WorkerFactory() {
     override fun createWorker(
         appContext: Context,
@@ -33,6 +37,8 @@ class IllusionWorkerFactory(
             UploadWorker(appContext, workerParameters, smbSourceRepository, smbClient)
         UpdateDownloadWorker::class.java.name ->
             UpdateDownloadWorker(appContext, workerParameters, smbSourceRepository, smbClient)
+        UpdateCheckWorker::class.java.name ->
+            UpdateCheckWorker(appContext, workerParameters, updateChecker, localUpdateChecker, settingsRepository)
         else -> null
     }
 }

@@ -2,12 +2,15 @@ package com.illusion.app.work
 
 import android.content.Context
 import androidx.work.Constraints
+import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.ExistingWorkPolicy
 import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.workDataOf
 import java.util.UUID
+import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
@@ -153,5 +156,19 @@ object WorkScheduler {
     /** Lets the user bail out of a stuck/too-slow update download instead of staring at a progress dialog with no way out - see the Cancel button in DownloadProgressDialog. */
     fun cancelUpdateDownload(context: Context) {
         WorkManager.getInstance(context).cancelUniqueWork(UPDATE_DOWNLOAD_WORK_NAME)
+    }
+
+    private const val UPDATE_CHECK_WORK_NAME = "update_check_periodic"
+
+    /** Schedules [UpdateCheckWorker] once a day. KEEP leaves an existing schedule alone, so calling this on every app start is safe. */
+    fun schedulePeriodicUpdateCheck(context: Context) {
+        val request = PeriodicWorkRequestBuilder<UpdateCheckWorker>(24, TimeUnit.HOURS)
+            .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
+            .build()
+        WorkManager.getInstance(context).enqueueUniquePeriodicWork(
+            UPDATE_CHECK_WORK_NAME,
+            ExistingPeriodicWorkPolicy.KEEP,
+            request
+        )
     }
 }

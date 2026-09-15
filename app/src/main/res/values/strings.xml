@@ -404,6 +404,10 @@
     <string name="streaming_notification_channel_name">Воспроизведение во внешнем плеере</string>
     <string name="streaming_notification_text">Передача файла внешнему плееру</string>
     <string name="streaming_notification_stop">Остановить</string>
+    <string name="update_notification_channel_name">Обновления приложения</string>
+    <string name="update_notification_title">Доступно обновление %1$s</string>
+    <string name="update_notification_title_mandatory">Требуется обновление %1$s</string>
+    <string name="update_notification_text">Нажмите, чтобы посмотреть, что нового</string>
 
     <string name="player_buffering">Буферизация</string>
     <string name="player_sharpen_on_label">Резкость включена</string>

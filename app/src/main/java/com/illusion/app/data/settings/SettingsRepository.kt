@@ -55,6 +55,8 @@ class SettingsRepository(private val context: Context) {
         val SUBTITLE_TEXT_SIZE_PERCENT = intPreferencesKey("player_subtitle_text_size_percent")
         val SKIPPED_UPDATE_VERSION_CODE = intPreferencesKey("skipped_update_version_code")
         val LAST_UPDATE_CHECK_AT_MS = longPreferencesKey("last_update_check_at_ms")
+        val LAST_BACKGROUND_UPDATE_CHECK_AT_MS = longPreferencesKey("last_background_update_check_at_ms")
+        val LAST_NOTIFIED_UPDATE_VERSION_CODE = intPreferencesKey("last_notified_update_version_code")
         val UPDATE_CHECK_INTERVAL_HOURS = intPreferencesKey("update_check_interval_hours")
         val TV_OVERSCAN_MARGIN_PERCENT = intPreferencesKey("tv_overscan_margin_percent")
         val UPDATE_SOURCE = stringPreferencesKey("update_source")
@@ -417,6 +419,20 @@ class SettingsRepository(private val context: Context) {
 
     suspend fun setLastUpdateCheckAtMs(timestamp: Long) {
         context.dataStore.edit { it[Keys.LAST_UPDATE_CHECK_AT_MS] = timestamp }
+    }
+
+    /** Throttle for UpdateCheckWorker, kept apart from [lastUpdateCheckAtMs] - see the worker's own KDoc for why. */
+    val lastBackgroundUpdateCheckAtMs: Flow<Long> = context.dataStore.data.map { it[Keys.LAST_BACKGROUND_UPDATE_CHECK_AT_MS] ?: 0L }
+
+    suspend fun setLastBackgroundUpdateCheckAtMs(timestamp: Long) {
+        context.dataStore.edit { it[Keys.LAST_BACKGROUND_UPDATE_CHECK_AT_MS] = timestamp }
+    }
+
+    /** versionCode UpdateCheckWorker last posted a notification for, so one release notifies only once. */
+    val lastNotifiedUpdateVersionCode: Flow<Int?> = context.dataStore.data.map { it[Keys.LAST_NOTIFIED_UPDATE_VERSION_CODE] }
+
+    suspend fun setLastNotifiedUpdateVersionCode(versionCode: Int) {
+        context.dataStore.edit { it[Keys.LAST_NOTIFIED_UPDATE_VERSION_CODE] = versionCode }
     }
 
     /** How often MainActivity's automatic on-launch check is allowed to hit the network - 0 disables it entirely (manual "Проверить обновления" in Settings still always works). Defaults to once a month (720h), same "0 = off" convention as [rescanIntervalHours]. */

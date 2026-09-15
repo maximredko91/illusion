@@ -99,7 +99,9 @@ class IllusionApplication : Application(), Configuration.Provider, SingletonImag
                     libraryRepository,
                     smbSourceRepository,
                     smbClient,
-                    downloadRepository
+                    downloadRepository,
+                    updateChecker,
+                    localUpdateChecker
                 )
             )
             .build()
@@ -130,6 +132,9 @@ class IllusionApplication : Application(), Configuration.Provider, SingletonImag
         // constructor args - it only ever needs this one process-wide factory, the same one
         // internal playback already shares.
         com.illusion.app.data.player.StreamingService.dataSourceFactory = smbDataSourceFactory
+        // Daily background update check with a notification - KEEP, so this re-run on every launch
+        // never resets the schedule. The worker itself applies the user's interval/off setting.
+        com.illusion.app.work.WorkScheduler.schedulePeriodicUpdateCheck(this)
     }
 
     override fun newImageLoader(context: PlatformContext): ImageLoader =

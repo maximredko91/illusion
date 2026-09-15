@@ -99,7 +99,12 @@ class MainActivity : ComponentActivity() {
                         viewModelStoreOwner = this@MainActivity,
                         factory = UpdateViewModel.factory(app, app.updateChecker, app.localUpdateChecker, app.settingsRepository)
                     )
-                    LaunchedEffect(Unit) { updateViewModel.checkForUpdate() }
+                    // Opened from the background update notification (UpdateCheckWorker): force the check so
+                    // the dialog shows despite the on-launch interval. Only on a fresh start - a rotation
+                    // recreates the activity with the same Intent and mustn't re-trigger it.
+                    val openedFromUpdateNotification = savedInstanceState == null &&
+                        intent.getBooleanExtra(com.illusion.app.work.UpdateNotifications.EXTRA_SHOW_UPDATE, false)
+                    LaunchedEffect(Unit) { updateViewModel.checkForUpdate(force = openedFromUpdateNotification) }
                     UpdatePrompt(updateViewModel)
                 }
             }
