@@ -113,6 +113,14 @@ class FfmpegVideoDecoder(
         this.outputMode = outputMode
     }
 
+    /**
+     * Sharpening strength applied to the luma plane while a frame is copied into the output Surface
+     * (see the native side's own comment) - Media3's GL [com.illusion.app.ui.player.SharpenEffect]
+     * never runs on frames this decoder produces. 0 turns it off. Must only be called while the
+     * decoder is alive; [FfmpegVideoRenderer] does so from its own render call.
+     */
+    fun setSharpen(amount: Float) = nativeSetSharpen(nativeContext, amount)
+
     fun renderToSurface(outputBuffer: VideoDecoderOutputBuffer, surface: Surface) {
         if (nativeRenderFrame(nativeContext, surface, outputBuffer) == ERROR) {
             throw FfmpegDecoderException("Failed to render $codecName frame to surface")
@@ -125,6 +133,7 @@ class FfmpegVideoDecoder(
     private external fun nativeGetFrame(context: Long, outputBuffer: VideoDecoderOutputBuffer, outputMode: Int): Int
     private external fun nativeRenderFrame(context: Long, surface: Surface, outputBuffer: VideoDecoderOutputBuffer): Int
     private external fun nativeReleaseFrame(outputBuffer: VideoDecoderOutputBuffer)
+    private external fun nativeSetSharpen(context: Long, amount: Float)
     private external fun nativeFlush(context: Long)
     private external fun nativeRelease(context: Long)
 

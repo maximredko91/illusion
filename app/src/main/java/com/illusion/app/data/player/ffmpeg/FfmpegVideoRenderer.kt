@@ -25,11 +25,15 @@ import com.illusion.app.domain.model.DecoderMode
  * platform decodes fine, so the platform still wins those and FFmpeg only takes over where the
  * platform decoder is broken or missing.
  *
- * Doesn't support Media3 video effects - the sharpen shader has no effect on FFmpeg-decoded video.
+ * Doesn't support Media3 video effects (they only run on MediaCodecVideoRenderer's VideoSink), so
+ * the player's sharpen setting is applied by the decoder itself instead - [sharpenAmountProvider] is
+ * read fresh per rendered frame, mirroring how [com.illusion.app.ui.player.SharpenEffect] reads its
+ * own strength, so toggling sharpen mid-playback needs no reload here.
  */
 @OptIn(UnstableApi::class)
 class FfmpegVideoRenderer(
     private val decoderMode: DecoderMode,
+    private val sharpenAmountProvider: () -> Float,
     allowedJoiningTimeMs: Long,
     eventHandler: Handler?,
     eventListener: VideoRendererEventListener?,
@@ -37,6 +41,7 @@ class FfmpegVideoRenderer(
 ) : DecoderVideoRenderer(allowedJoiningTimeMs, eventHandler, eventListener, maxDroppedFramesToNotify) {
 
     private var decoder: FfmpegVideoDecoder? = null
+    private var appliedSharpen = Float.NaN
 
     override fun getName(): String = "FfmpegVideoRenderer"
 
@@ -69,11 +74,19 @@ class FfmpegVideoRenderer(
             NUM_BUFFERS,
             initialInputBufferSize,
             Runtime.getRuntime().availableProcessors().coerceIn(1, MAX_THREADS)
-        ).also { decoder = it }
+        ).also {
+            decoder = it
+            appliedSharpen = Float.NaN
+        }
     }
 
     override fun renderOutputBufferToSurface(outputBuffer: VideoDecoderOutputBuffer, surface: Surface) {
         val decoder = decoder ?: throw FfmpegDecoderException("Render before decoder was created")
+        val sharpen = sharpenAmountProvider()
+        if (sharpen != appliedSharpen) {
+            decoder.setSharpen(sharpen)
+            appliedSharpen = sharpen
+        }
         decoder.renderToSurface(outputBuffer, surface)
         outputBuffer.release()
     }

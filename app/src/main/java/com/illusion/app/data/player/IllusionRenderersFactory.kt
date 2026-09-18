@@ -31,7 +31,9 @@ import com.illusion.app.domain.model.DecoderMode
 @OptIn(UnstableApi::class)
 class IllusionRenderersFactory(
     context: Context,
-    private val decoderMode: DecoderMode
+    private val decoderMode: DecoderMode,
+    /** Live sharpen strength (0 = off) for [FfmpegVideoRenderer], which can't use the GL effect. */
+    private val sharpenAmountProvider: () -> Float = { 0f }
 ) : DefaultRenderersFactory(context) {
 
     init {
@@ -62,6 +64,7 @@ class IllusionRenderersFactory(
         if (!FfmpegLibrary.isAvailable) return
         val ffmpeg = FfmpegVideoRenderer(
             decoderMode,
+            sharpenAmountProvider,
             allowedVideoJoiningTimeMs,
             eventHandler,
             eventListener,

@@ -3,6 +3,8 @@ package com.illusion.app.ui.addmedia
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusGroup
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -23,7 +25,6 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Key
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
@@ -31,17 +32,14 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -56,8 +54,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.work.WorkInfo
-import androidx.work.WorkManager
 import coil3.compose.AsyncImage
 import com.illusion.app.R
 import com.illusion.app.data.nfo.NfoWriter
@@ -67,11 +63,13 @@ import com.illusion.app.data.smb.SmbClient
 import com.illusion.app.data.tmdb.TmdbClient
 import com.illusion.app.data.tmdb.TmdbSearchResult
 import com.illusion.app.ui.settings.formatBytes
-import com.illusion.app.work.UploadWorker
 import com.illusion.app.work.WorkScheduler
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import com.illusion.app.ui.common.MenuShape
+import com.illusion.app.ui.common.TvAwareTextButton
+import com.illusion.app.ui.common.dpadFieldNavigation
+import com.illusion.app.ui.common.focusHighlight
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -93,20 +91,11 @@ fun AddMediaScreen(
 
     // Observes UploadWorker's own progress/result directly via WorkManager - no dedicated Room
     // table for this developer-only, one-item-at-a-time flow (unlike DownloadsScreen, which tracks
-    // a whole queue and needs to survive the screen closing).
-    LaunchedEffect(state.uploadWorkId) {
-        val workId = state.uploadWorkId ?: return@LaunchedEffect
-        WorkManager.getInstance(context).getWorkInfoByIdFlow(workId).collect { info ->
-            if (info == null) return@collect
-            val uploaded = info.progress.getLong(UploadWorker.KEY_UPLOADED, -1L)
-            val total = info.progress.getLong(UploadWorker.KEY_TOTAL, -1L)
-            if (uploaded >= 0) viewModel.onUploadProgress(uploaded, total, info.progress.getBoolean(UploadWorker.KEY_VERIFYING, false))
-            when (info.state) {
-                WorkInfo.State.SUCCEEDED -> viewModel.onUploadFinished(true, null)
-                WorkInfo.State.FAILED -> viewModel.onUploadFinished(false, info.outputData.getString(UploadWorker.KEY_ERROR))
-                else -> Unit
-            }
-        }
+    // a whole queue and needs to survive the screen closing). Keyed on the unique work NAME, not on
+    // a work id this process happens to hold, so an upload still running after the app was killed
+    // and restarted is picked back up here (see AddMediaViewModel.onUploadWorkInfo).
+    LaunchedEffect(Unit) {
+        WorkScheduler.addMediaUploadWorkInfo(context).collect(viewModel::onUploadWorkInfo)
     }
 
     val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
@@ -198,7 +187,11 @@ fun AddMediaScreen(
                 onConfirm = { viewModel.confirmAndUpload(context) },
                 modifier = Modifier.padding(innerPadding)
             )
-            AddMediaStep.UPLOADING -> UploadingStep(state = state, modifier = Modifier.padding(innerPadding))
+            AddMediaStep.UPLOADING -> UploadingStep(
+                state = state,
+                onCancel = { viewModel.cancelUpload(context) },
+                modifier = Modifier.padding(innerPadding)
+            )
             AddMediaStep.DONE -> DoneStep(onRescanNow = onRescanNow, modifier = Modifier.padding(innerPadding))
         }
     }
@@ -217,10 +210,10 @@ private fun TmdbKeyEntryStep(
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         Text(stringResource(R.string.addmedia_not_configured))
-        OutlinedTextField(
+        FormTextField(
             value = keyInput,
             onValueChange = onKeyChange,
-            label = { Text(stringResource(R.string.addmedia_tmdb_key_label)) },
+            label = stringResource(R.string.addmedia_tmdb_key_label),
             singleLine = true,
             modifier = Modifier.fillMaxWidth()
         )
@@ -228,7 +221,7 @@ private fun TmdbKeyEntryStep(
             Text(stringResource(R.string.addmedia_tmdb_key_save))
         }
         if (onCancel != null) {
-            TextButton(onClick = onCancel, modifier = Modifier.fillMaxWidth()) {
+            TvAwareTextButton(onClick = onCancel, modifier = Modifier.fillMaxWidth()) {
                 Text(stringResource(R.string.action_cancel))
             }
         }
@@ -249,7 +242,7 @@ private fun SetupStep(
     modifier: Modifier = Modifier
 ) {
     Column(
-        modifier = modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
+        modifier = modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp).focusGroup(),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         var sourceMenuExpanded by remember { mutableStateOf(false) }
@@ -270,36 +263,42 @@ private fun SetupStep(
         FreeSpaceIndicator(state)
 
         SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+            val movieSource = remember { MutableInteractionSource() }
+            val episodeSource = remember { MutableInteractionSource() }
             SegmentedButton(
                 selected = state.kind == MediaKind.MOVIE,
                 onClick = { onSelectKind(MediaKind.MOVIE) },
-                shape = SegmentedButtonDefaults.itemShape(0, 2)
+                shape = SegmentedButtonDefaults.itemShape(0, 2),
+                interactionSource = movieSource,
+                modifier = Modifier.focusHighlight(movieSource)
             ) { Text(stringResource(R.string.addmedia_kind_movie)) }
             SegmentedButton(
                 selected = state.kind == MediaKind.TV_EPISODE,
                 onClick = { onSelectKind(MediaKind.TV_EPISODE) },
-                shape = SegmentedButtonDefaults.itemShape(1, 2)
+                shape = SegmentedButtonDefaults.itemShape(1, 2),
+                interactionSource = episodeSource,
+                modifier = Modifier.focusHighlight(episodeSource)
             ) { Text(stringResource(R.string.addmedia_kind_episode)) }
         }
 
         if (state.kind == MediaKind.TV_EPISODE) {
-            OutlinedTextField(
+            FormTextField(
                 value = state.showTitleInput,
                 onValueChange = onShowTitleChange,
-                label = { Text(stringResource(R.string.addmedia_show_title)) },
+                label = stringResource(R.string.addmedia_show_title),
                 modifier = Modifier.fillMaxWidth()
             )
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(
+                FormTextField(
                     value = state.seasonNumber,
                     onValueChange = onSeasonChange,
-                    label = { Text(stringResource(R.string.addmedia_season)) },
+                    label = stringResource(R.string.addmedia_season),
                     modifier = Modifier.weight(1f)
                 )
-                OutlinedTextField(
+                FormTextField(
                     value = state.episodeNumber,
                     onValueChange = onEpisodeChange,
-                    label = { Text(stringResource(R.string.addmedia_episode)) },
+                    label = stringResource(R.string.addmedia_episode),
                     modifier = Modifier.weight(1f)
                 )
             }
@@ -358,10 +357,10 @@ private fun SearchStep(
 ) {
     Column(modifier = modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedTextField(
+            FormTextField(
                 value = state.searchQuery,
                 onValueChange = onQueryChange,
-                label = { Text(stringResource(R.string.addmedia_search_query)) },
+                label = stringResource(R.string.addmedia_search_query),
                 modifier = Modifier.weight(1f)
             )
             com.illusion.app.ui.common.TvAwareButton(onClick = onSearch) { Text(stringResource(R.string.addmedia_search_button)) }
@@ -379,9 +378,14 @@ private fun SearchStep(
             Text(stringResource(R.string.addmedia_no_results), color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
 
-        LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.focusGroup()) {
             items(state.searchResults, key = { it.id }) { result ->
-                Card(onClick = { onSelect(result) }, modifier = Modifier.fillMaxWidth()) {
+                val cardSource = remember { MutableInteractionSource() }
+                Card(
+                    onClick = { onSelect(result) },
+                    interactionSource = cardSource,
+                    modifier = Modifier.fillMaxWidth().focusHighlight(cardSource)
+                ) {
                     Row(modifier = Modifier.padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
                         result.posterPath?.let { path ->
                             AsyncImage(
@@ -422,25 +426,25 @@ private fun ConfirmStep(
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         Text(stringResource(R.string.addmedia_confirm_title), style = MaterialTheme.typography.titleMedium)
-        OutlinedTextField(value = fetched.title, onValueChange = onTitleChange, label = { Text(stringResource(R.string.addmedia_field_title)) }, modifier = Modifier.fillMaxWidth())
-        OutlinedTextField(value = fetched.originalTitle ?: "", onValueChange = onOriginalTitleChange, label = { Text(stringResource(R.string.addmedia_field_original_title)) }, modifier = Modifier.fillMaxWidth())
-        OutlinedTextField(value = fetched.year?.toString() ?: "", onValueChange = onYearChange, label = { Text(stringResource(R.string.addmedia_field_year)) }, modifier = Modifier.fillMaxWidth())
-        OutlinedTextField(value = fetched.plot ?: "", onValueChange = onPlotChange, label = { Text(stringResource(R.string.addmedia_field_plot)) }, minLines = 3, modifier = Modifier.fillMaxWidth())
+        FormTextField(value = fetched.title, onValueChange = onTitleChange, label = stringResource(R.string.addmedia_field_title), modifier = Modifier.fillMaxWidth())
+        FormTextField(value = fetched.originalTitle ?: "", onValueChange = onOriginalTitleChange, label = stringResource(R.string.addmedia_field_original_title), modifier = Modifier.fillMaxWidth())
+        FormTextField(value = fetched.year?.toString() ?: "", onValueChange = onYearChange, label = stringResource(R.string.addmedia_field_year), modifier = Modifier.fillMaxWidth())
+        FormTextField(value = fetched.plot ?: "", onValueChange = onPlotChange, label = stringResource(R.string.addmedia_field_plot), minLines = 3, modifier = Modifier.fillMaxWidth())
 
         if (fetched.genres.isNotEmpty()) Text(fetched.genres.joinToString(", "), style = MaterialTheme.typography.bodySmall)
         fetched.rating?.let { Text("★ %.1f".format(it), style = MaterialTheme.typography.bodySmall) }
 
         HorizontalDivider()
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedTextField(
+            FormTextField(
                 value = state.destinationFolder,
                 onValueChange = onFolderChange,
-                label = { Text(stringResource(R.string.addmedia_destination_folder)) },
+                label = stringResource(R.string.addmedia_destination_folder),
                 modifier = Modifier.weight(1f)
             )
             com.illusion.app.ui.common.TvAwareOutlinedButton(onClick = onBrowseFolder) { Text(stringResource(R.string.addmedia_browse)) }
         }
-        OutlinedTextField(value = state.destinationFileName, onValueChange = onFileNameChange, label = { Text(stringResource(R.string.addmedia_destination_file)) }, modifier = Modifier.fillMaxWidth())
+        FormTextField(value = state.destinationFileName, onValueChange = onFileNameChange, label = stringResource(R.string.addmedia_destination_file), modifier = Modifier.fillMaxWidth())
 
         if (state.pickedSubtitleName != null) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -449,7 +453,7 @@ private fun ConfirmStep(
                     style = MaterialTheme.typography.bodySmall,
                     modifier = Modifier.weight(1f)
                 )
-                TextButton(onClick = onRemoveSubtitle) { Text(stringResource(R.string.addmedia_remove_subtitle)) }
+                TvAwareTextButton(onClick = onRemoveSubtitle) { Text(stringResource(R.string.addmedia_remove_subtitle)) }
             }
         } else {
             com.illusion.app.ui.common.TvAwareOutlinedButton(onClick = onPickSubtitle, modifier = Modifier.fillMaxWidth()) {
@@ -480,18 +484,22 @@ private fun ConfirmStep(
 }
 
 @Composable
-private fun UploadingStep(state: AddMediaUiState, modifier: Modifier = Modifier) {
+private fun UploadingStep(state: AddMediaUiState, onCancel: () -> Unit, modifier: Modifier = Modifier) {
     Column(
         modifier = modifier.fillMaxSize().padding(24.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Text(stringResource(if (state.verifyingUpload) R.string.addmedia_verifying else R.string.addmedia_uploading))
+        if (state.destinationFileName.isNotBlank()) {
+            Text(state.destinationFileName, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
         val fraction = if (state.uploadTotalBytes > 0) (state.uploadedBytes.toFloat() / state.uploadTotalBytes).coerceIn(0f, 1f) else 0f
         if (state.verifyingUpload) LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
         else LinearProgressIndicator(progress = { fraction }, modifier = Modifier.fillMaxWidth())
         Text("${state.uploadedBytes / 1_000_000} / ${state.uploadTotalBytes / 1_000_000} МБ")
         state.uploadError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+        TvAwareTextButton(onClick = onCancel) { Text(stringResource(R.string.addmedia_upload_cancel)) }
     }
 }
 
@@ -578,7 +586,7 @@ private fun SmbFolderPickerDialog(
         text = {
             Column {
                 if (currentPath.isNotBlank()) {
-                    TextButton(onClick = { currentPath = currentPath.substringBeforeLast('\\', "") }) {
+                    TvAwareTextButton(onClick = { currentPath = currentPath.substringBeforeLast('\\', "") }) {
                         Text(stringResource(R.string.addmedia_folder_picker_up))
                     }
                 }
@@ -588,13 +596,18 @@ private fun SmbFolderPickerDialog(
                     }
                     loadError != null -> Text(loadError.orEmpty(), color = MaterialTheme.colorScheme.error)
                     folders.isEmpty() -> Text(stringResource(R.string.addmedia_folder_picker_empty), color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    else -> LazyColumn(modifier = Modifier.heightIn(max = 280.dp)) {
+                    else -> LazyColumn(modifier = Modifier.heightIn(max = 280.dp).focusGroup()) {
                         items(folders) { name ->
+                            val rowSource = remember { MutableInteractionSource() }
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .clickable { currentPath = if (currentPath.isBlank()) name else "$currentPath\\$name" }
+                                    .clickable(
+                                        interactionSource = rowSource,
+                                        indication = androidx.compose.material3.ripple()
+                                    ) { currentPath = if (currentPath.isBlank()) name else "$currentPath\\$name" }
+                                    .focusHighlight(rowSource)
                                     .padding(vertical = 10.dp)
                             ) {
                                 Icon(Icons.Default.Folder, contentDescription = null, modifier = Modifier.padding(end = 8.dp))
@@ -605,14 +618,14 @@ private fun SmbFolderPickerDialog(
                 }
                 HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(
+                    FormTextField(
                         value = newFolderName,
                         onValueChange = { newFolderName = it },
-                        label = { Text(stringResource(R.string.addmedia_folder_picker_new_folder)) },
+                        label = stringResource(R.string.addmedia_folder_picker_new_folder),
                         singleLine = true,
                         modifier = Modifier.weight(1f)
                     )
-                    TextButton(
+                    TvAwareTextButton(
                         onClick = {
                             val newPath = if (currentPath.isBlank()) newFolderName.trim() else "$currentPath\\${newFolderName.trim()}"
                             virtualPaths.value = virtualPaths.value + newPath
@@ -625,10 +638,37 @@ private fun SmbFolderPickerDialog(
             }
         },
         confirmButton = {
-            TextButton(onClick = { onPick(currentPath) }) { Text(stringResource(R.string.addmedia_folder_picker_choose)) }
+            TvAwareTextButton(onClick = { onPick(currentPath) }) { Text(stringResource(R.string.addmedia_folder_picker_choose)) }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) }
+            TvAwareTextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) }
         }
+    )
+}
+
+/**
+ * Every text field on this screen: a plain [OutlinedTextField] plus the focus treatment the rest of
+ * the app's forms already use (see `ui/common/TvFocus.kt`) - on TV a D-pad user otherwise can't
+ * tell which field holds focus, and Up/Down inside a field doesn't move on to the next one. Inert
+ * on phone, where this developer-only flow is normally used.
+ */
+@Composable
+private fun FormTextField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    label: String,
+    modifier: Modifier = Modifier,
+    minLines: Int = 1,
+    singleLine: Boolean = false
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    OutlinedTextField(
+        value = value,
+        onValueChange = onValueChange,
+        label = { Text(label) },
+        minLines = minLines,
+        singleLine = singleLine,
+        interactionSource = interactionSource,
+        modifier = modifier.focusHighlight(interactionSource).dpadFieldNavigation()
     )
 }

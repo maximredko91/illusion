@@ -101,7 +101,14 @@ object WorkScheduler {
         WorkManager.getInstance(context).cancelUniqueWork(downloadWorkName(stableId))
     }
 
-    /** Copies a picked local video to [destinationPath] on SMB source [sourceId] - the developer-only "add media" scraper's one background step. Returns the work id so the UI can observe progress. */
+    /**
+     * Copies a picked local video to [destinationPath] on SMB source [sourceId] - the developer-only
+     * "add media" scraper's one background step. Returns the work id so the UI can observe progress.
+     *
+     * The file name and total size also ride along as tags, so a screen opened after the app itself
+     * was killed mid-upload can show what is being uploaded before the worker's first progress
+     * report arrives - see [addMediaUploadWorkInfo] and AddMediaViewModel.onUploadWorkInfo.
+     */
     fun enqueueUpload(context: Context, sourceId: Long, videoUri: String, destinationPath: String, totalBytes: Long): UUID {
         val constraints = Constraints.Builder()
             .setRequiredNetworkType(NetworkType.CONNECTED)
@@ -109,6 +116,8 @@ object WorkScheduler {
 
         val request = OneTimeWorkRequestBuilder<UploadWorker>()
             .setConstraints(constraints)
+            .addTag(UPLOAD_NAME_TAG_PREFIX + destinationPath.substringAfterLast('\\'))
+            .addTag(UPLOAD_TOTAL_TAG_PREFIX + totalBytes)
             .setInputData(
                 workDataOf(
                     UploadWorker.KEY_SOURCE_ID to sourceId,
@@ -126,6 +135,24 @@ object WorkScheduler {
         )
         return request.id
     }
+
+    /**
+     * The upload's current state, whether or not this process is the one that enqueued it: keyed on
+     * the unique work name rather than a work id, so it survives the app being killed and restarted
+     * mid-upload (WorkManager keeps running/restarts the worker itself, and UploadWorker resumes
+     * from the bytes already on the NAS after verifying them).
+     */
+    fun addMediaUploadWorkInfo(context: Context): Flow<androidx.work.WorkInfo?> =
+        WorkManager.getInstance(context).getWorkInfosForUniqueWorkFlow(ADD_MEDIA_UPLOAD_WORK_NAME)
+            .map { infos -> infos.firstOrNull { !it.state.isFinished } ?: infos.lastOrNull() }
+
+    fun cancelUpload(context: Context) {
+        WorkManager.getInstance(context).cancelUniqueWork(ADD_MEDIA_UPLOAD_WORK_NAME)
+    }
+
+    /** Uploaded file name / total size, carried as work tags - see [enqueueUpload]. */
+    const val UPLOAD_NAME_TAG_PREFIX = "upload_name:"
+    const val UPLOAD_TOTAL_TAG_PREFIX = "upload_total:"
 
     private const val ADD_MEDIA_UPLOAD_WORK_NAME = "add_media_upload"
     private const val UPDATE_DOWNLOAD_WORK_NAME = "update_download"

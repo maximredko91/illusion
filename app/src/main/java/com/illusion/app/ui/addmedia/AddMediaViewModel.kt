@@ -18,6 +18,7 @@ import com.illusion.app.data.tmdb.TmdbClient
 import com.illusion.app.data.tmdb.TmdbContentRatingsResponse
 import com.illusion.app.data.tmdb.TmdbReleaseDatesResponse
 import com.illusion.app.data.tmdb.TmdbSearchResult
+import androidx.work.WorkInfo
 import com.illusion.app.work.UploadWorker
 import com.illusion.app.work.WorkScheduler
 import java.util.UUID
@@ -453,6 +454,66 @@ class AddMediaViewModel(
             }
         }
     }
+
+    /**
+     * Single entry point for everything WorkManager reports about the upload (see
+     * [WorkScheduler.addMediaUploadWorkInfo]), including an upload this process didn't start:
+     * killing the app mid-upload doesn't stop the work, so reopening this screen picks it back up
+     * at the UPLOADING step instead of starting over at SETUP with a half-written file on the NAS.
+     * File name and total size come from the work's own tags - they're known before the worker's
+     * first progress report, and after a restart the view model has nothing else to show.
+     */
+    fun onUploadWorkInfo(info: WorkInfo?) {
+        if (info == null) return
+        val uploaded = info.progress.getLong(UploadWorker.KEY_UPLOADED, -1L)
+        val total = info.progress.getLong(UploadWorker.KEY_TOTAL, -1L)
+        val verifying = info.progress.getBoolean(UploadWorker.KEY_VERIFYING, false)
+        val active = info.state == WorkInfo.State.RUNNING ||
+            info.state == WorkInfo.State.ENQUEUED ||
+            info.state == WorkInfo.State.BLOCKED
+
+        _state.update { state ->
+            var next = state
+            if (active && state.step != AddMediaStep.UPLOADING) {
+                next = next.copy(
+                    step = AddMediaStep.UPLOADING,
+                    uploadError = null,
+                    uploadWorkId = info.id,
+                    uploadTotalBytes = info.tagValue(WorkScheduler.UPLOAD_TOTAL_TAG_PREFIX)?.toLongOrNull()
+                        ?: state.uploadTotalBytes,
+                    destinationFileName = state.destinationFileName.ifBlank {
+                        info.tagValue(WorkScheduler.UPLOAD_NAME_TAG_PREFIX).orEmpty()
+                    }
+                )
+            }
+            if (uploaded >= 0) {
+                next = next.copy(
+                    uploadedBytes = uploaded,
+                    uploadTotalBytes = if (total > 0) total else next.uploadTotalBytes,
+                    verifyingUpload = verifying
+                )
+            }
+            next
+        }
+
+        // Terminal states only matter for an upload this screen is actually showing - an old,
+        // already-finished work record shouldn't drop a freshly opened screen onto the DONE step.
+        if (_state.value.step != AddMediaStep.UPLOADING) return
+        when (info.state) {
+            WorkInfo.State.SUCCEEDED -> onUploadFinished(true, null)
+            WorkInfo.State.FAILED -> onUploadFinished(false, info.outputData.getString(UploadWorker.KEY_ERROR))
+            WorkInfo.State.CANCELLED -> _state.update {
+                it.copy(step = AddMediaStep.CONFIRM, verifyingUpload = false, uploadedBytes = 0L, uploadError = null)
+            }
+            else -> Unit
+        }
+    }
+
+    /** Stops the upload; the partially written file stays on the NAS and a later upload of the same name resumes from it. */
+    fun cancelUpload(context: Context) = WorkScheduler.cancelUpload(context)
+
+    private fun WorkInfo.tagValue(prefix: String): String? =
+        tags.firstOrNull { it.startsWith(prefix) }?.removePrefix(prefix)
 
     fun onUploadProgress(uploaded: Long, total: Long, verifying: Boolean = false) =
         _state.update { it.copy(uploadedBytes = uploaded, uploadTotalBytes = total, verifyingUpload = verifying) }

@@ -158,7 +158,14 @@ class PlayerViewModel(
         appContext,
         // Decoder mode shapes both the platform decoder order and where the app's own FFmpeg video
         // renderer sits - see IllusionRenderersFactory.
-        com.illusion.app.data.player.IllusionRenderersFactory(appContext, decoderModeForCurrentPlayer)
+        com.illusion.app.data.player.IllusionRenderersFactory(
+            appContext,
+            decoderModeForCurrentPlayer,
+            // The FFmpeg renderer can't use SharpenEffect (GL effects only reach
+            // MediaCodecVideoRenderer), so it sharpens in the decoder instead - same live-value
+            // trick, read per frame, so toggling sharpen mid-playback needs no reload there.
+            sharpenAmountProvider = { if (sharpenEnabledValue) sharpenAmountValue else 0f }
+        )
     )
         // DefaultDataSource routes file:// URIs (a completed offline download) to Media3's built-in
         // FileDataSource and everything else to dataSourceFactory - so smb-item:// keeps streaming
@@ -439,6 +446,7 @@ class PlayerViewModel(
                     // one's.
                     _state.update { it.copy(sharpenEnabled = enabled, sharpenAmount = amount) }
                     sharpenAmountValue = amount
+                    sharpenEnabledValue = enabled
                     when {
                         // Amount-only change while sharpen is already running: the shader picks the
                         // new uniform up on its next frame. Touching setVideoEffects() here is what
@@ -508,6 +516,10 @@ class PlayerViewModel(
      */
     @Volatile
     private var sharpenAmountValue: Float = 0.4f
+
+    /** Companion of [sharpenAmountValue] for the FFmpeg renderer, which needs "off" as a strength of 0. */
+    @Volatile
+    private var sharpenEnabledValue: Boolean = false
 
     fun setSharpenEnabled(enabled: Boolean) {
         viewModelScope.launch { settingsRepository.setSharpenEnabled(enabled) }

@@ -597,5 +597,6 @@
     <string name="addmedia_tmdb_key_save">Сохранить</string>
     <string name="addmedia_tmdb_key_change">Изменить TMDB-ключ</string>
     <string name="addmedia_back">Назад</string>
+    <string name="addmedia_upload_cancel">Отменить загрузку</string>
     <string name="addmedia_verifying">Проверка уже загруженной части…</string>
 </resources>

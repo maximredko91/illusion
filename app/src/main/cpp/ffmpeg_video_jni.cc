@@ -11,6 +11,7 @@
 #include <android/native_window_jni.h>
 #include <jni.h>
 
+#include <atomic>
 #include <cstdlib>
 #include <cstring>
 
@@ -62,6 +63,9 @@ struct Context {
     jobject surface = nullptr;  // Global ref.
     int windowWidth = 0;
     int windowHeight = 0;
+    // Written from the player's own thread (nativeSetSharpen), read by the playback thread on
+    // every rendered frame. 0 means "copy the luma plane untouched", i.e. the pre-sharpen path.
+    std::atomic<float> sharpen{0.0f};
 };
 
 bool ensureInputCapacity(Context* ctx, size_t size) {
@@ -117,6 +121,35 @@ void copyPlane(uint8_t* dst, int dstStride, const uint8_t* src, int srcStride, i
         memcpy(dst, src, width);
         dst += dstStride;
         src += srcStride;
+    }
+}
+
+// Media3's GL effects (and with them SharpenEffect) never see a frame this renderer decodes - they
+// only run on MediaCodecVideoRenderer's VideoSink pipeline. Sharpening therefore happens here, on
+// the luma plane, while the frame is copied into the window buffer: same unsharp-mask kernel as
+// SharpenEffect's fragment shader (out = c + amount * (4c - left - right - up - down)), just in
+// fixed-point 8.8 integers and on Y only - chroma carries no detail worth sharpening at 4:2:0.
+// The outermost columns are copied through unchanged, rows clamp to themselves at the edges.
+void sharpenPlane(uint8_t* dst, int dstStride, const uint8_t* src, int srcStride, int width,
+                  int height, float amount) {
+    const int scaled = static_cast<int>(amount * 256.0f + 0.5f);
+    for (int y = 0; y < height; y++) {
+        const uint8_t* row = src + static_cast<size_t>(y) * srcStride;
+        const uint8_t* above = y > 0 ? row - srcStride : row;
+        const uint8_t* below = y + 1 < height ? row + srcStride : row;
+        uint8_t* out = dst + static_cast<size_t>(y) * dstStride;
+        if (width <= 2) {
+            memcpy(out, row, width);
+            continue;
+        }
+        out[0] = row[0];
+        for (int x = 1; x + 1 < width; x++) {
+            const int center = row[x];
+            const int highPass = 4 * center - row[x - 1] - row[x + 1] - above[x] - below[x];
+            const int value = center + ((scaled * highPass) >> 8);
+            out[x] = static_cast<uint8_t>(value < 0 ? 0 : (value > 255 ? 255 : value));
+        }
+        out[width - 1] = row[width - 1];
     }
 }
 
@@ -338,7 +371,13 @@ Java_com_illusion_app_data_player_ffmpeg_FfmpegVideoDecoder_nativeRenderFrame(
     uint8_t* bits = static_cast<uint8_t*>(buffer.bits);
     int copyWidth = frame->width < buffer.width ? frame->width : buffer.width;
     int copyHeight = frame->height < buffer.height ? frame->height : buffer.height;
-    copyPlane(bits, buffer.stride, frame->data[0], frame->linesize[0], copyWidth, copyHeight);
+    const float sharpen = ctx->sharpen.load(std::memory_order_relaxed);
+    if (sharpen > 0.0f) {
+        sharpenPlane(bits, buffer.stride, frame->data[0], frame->linesize[0], copyWidth, copyHeight,
+                     sharpen);
+    } else {
+        copyPlane(bits, buffer.stride, frame->data[0], frame->linesize[0], copyWidth, copyHeight);
+    }
 
     // YV12: a full-size Y plane, then V, then U, each chroma plane at half size with its stride
     // rounded up to a multiple of 16 (the layout documented for HAL_PIXEL_FORMAT_YV12).
@@ -363,6 +402,12 @@ Java_com_illusion_app_data_player_ffmpeg_FfmpegVideoDecoder_nativeReleaseFrame(
         reinterpret_cast<AVFrame*>(env->GetLongField(jOutputBuffer, decoderPrivateField));
     env->SetLongField(jOutputBuffer, decoderPrivateField, 0);
     if (frame) av_frame_free(&frame);
+}
+
+JNIEXPORT void JNICALL Java_com_illusion_app_data_player_ffmpeg_FfmpegVideoDecoder_nativeSetSharpen(
+    JNIEnv*, jobject, jlong jContext, jfloat amount) {
+    Context* ctx = reinterpret_cast<Context*>(jContext);
+    ctx->sharpen.store(amount > 0.0f ? amount : 0.0f, std::memory_order_relaxed);
 }
 
 JNIEXPORT void JNICALL Java_com_illusion_app_data_player_ffmpeg_FfmpegVideoDecoder_nativeFlush(

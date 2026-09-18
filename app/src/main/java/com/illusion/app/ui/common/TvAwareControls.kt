@@ -9,6 +9,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Switch
+import androidx.compose.material3.TextButton
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
@@ -144,6 +145,23 @@ fun TvAwareOutlinedButton(
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     OutlinedButton(
+        onClick = onClick,
+        enabled = enabled,
+        interactionSource = interactionSource,
+        modifier = modifier.focusHighlight(interactionSource)
+    ) { content() }
+}
+
+/** Dialog/inline text action (Отмена, Вверх, +) - same focus treatment as the filled/outlined buttons above. */
+@Composable
+fun TvAwareTextButton(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    content: @Composable () -> Unit
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    TextButton(
         onClick = onClick,
         enabled = enabled,
         interactionSource = interactionSource,
