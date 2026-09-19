@@ -5,6 +5,9 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <!-- SSDP discovery of DLNA renderers (data/cast/DlnaDiscovery): without a multicast lock some
+         Wi-Fi chipsets filter the replies out in hardware before the socket ever sees them. -->
+    <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
     <uses-feature android:name="android.hardware.wifi" android:required="false" />
     <!-- Android 17+ (SDK 37): mandatory runtime permission for raw local-network sockets,
          which is exactly how smbj connects to an SMB share. Without it, connections to

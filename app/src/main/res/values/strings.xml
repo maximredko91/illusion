@@ -118,6 +118,7 @@
     <string name="settings_poster_preload_progress">Загружено %1$d из %2$d</string>
     <string name="settings_poster_preload_done">Все постеры закешированы</string>
     <string name="action_cancel">Отмена</string>
+    <string name="action_close">Закрыть</string>
     <string name="crash_report_title">Приложение недавно закрылось с ошибкой</string>
     <string name="crash_report_message">Можно отправить отчёт разработчику, чтобы помочь найти причину.</string>
     <string name="crash_report_send">Отправить</string>
@@ -473,6 +474,17 @@
     <string name="player_subtitles_button">Субтитры</string>
     <string name="player_audio_tracks_button">Аудиодорожка</string>
     <string name="player_cast_unavailable">Трансляция (недоступна)</string>
+    <string name="player_cast">Транслировать на ТВ</string>
+    <string name="player_cast_title">Трансляция на ТВ</string>
+    <string name="player_cast_searching">Поиск устройств…</string>
+    <string name="player_cast_empty">Устройства не найдены. Проверьте, что телевизор включён и подключён к той же сети.</string>
+    <string name="player_cast_refresh">Искать снова</string>
+    <string name="player_cast_connecting">Подключение…</string>
+    <string name="player_cast_playing_on">Идёт трансляция: %1$s</string>
+    <string name="player_cast_stop">Остановить трансляцию</string>
+    <string name="player_cast_error_no_item">Нечего транслировать</string>
+    <string name="player_cast_error_no_network">Нет подключения к локальной сети</string>
+    <string name="player_cast_error_failed">Устройство не приняло видео</string>
     <string name="player_settings">Настройки воспроизведения</string>
     <string name="player_settings_panel_title">Настройки</string>
     <string name="player_codec_unsupported_title">Формат DivX/XviD</string>

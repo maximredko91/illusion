@@ -62,6 +62,7 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.BlurOn
 import androidx.compose.material.icons.filled.Memory
 import androidx.compose.material.icons.filled.Cast
+import androidx.compose.material.icons.filled.CastConnected
 import androidx.compose.material.icons.filled.Deblur
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ExpandLess
@@ -153,6 +154,8 @@ fun TopGradientBar(
     onOpenAudioTracks: () -> Unit,
     onCycleAspectRatio: () -> Unit,
     onOpenSettings: () -> Unit,
+    onOpenCast: () -> Unit,
+    isCasting: Boolean,
     sharpenEnabled: Boolean,
     decoderMode: com.illusion.app.domain.model.DecoderMode,
     onDecoderModeChange: (com.illusion.app.domain.model.DecoderMode) -> Unit,
@@ -352,14 +355,15 @@ fun TopGradientBar(
                     }
                 }
             }
-            // Deliberately enabled = false, not just a dimmed tint on a live button: it looked
-            // identical in weight to the working controls next to it, and tapping it did nothing with
-            // no explanation. Disabled it also stops taking D-pad focus on the way to Settings.
-            IconButton(onClick = {}, enabled = false) {
+            // Live since 2026-09-19 (DLNA, see data/cast/*) - was a deliberately disabled stub for
+            // as long as there was nothing behind it. Tinted with the accent while a cast is running,
+            // same "state shows on the icon itself" treatment as the sharpen toggle next to it.
+            val castSource = remember { MutableInteractionSource() }
+            IconButton(onClick = onOpenCast, interactionSource = castSource, modifier = Modifier.focusHighlight(castSource, color = Color.White)) {
                 Icon(
-                    Icons.Default.Cast,
-                    contentDescription = stringResource(R.string.player_cast_unavailable),
-                    tint = Color.White.copy(alpha = 0.4f)
+                    if (isCasting) Icons.Default.CastConnected else Icons.Default.Cast,
+                    contentDescription = stringResource(R.string.player_cast),
+                    tint = if (isCasting) MaterialTheme.colorScheme.primary else Color.White
                 )
             }
             val settingsSource = remember { MutableInteractionSource() }

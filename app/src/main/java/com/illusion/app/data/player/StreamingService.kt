@@ -7,6 +7,7 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
+import android.net.ConnectivityManager
 import android.net.Uri
 import android.os.Build
 import android.os.IBinder
@@ -15,6 +16,7 @@ import androidx.core.content.ContextCompat
 import com.illusion.app.MainActivity
 import com.illusion.app.R
 import fi.iki.elonen.NanoHTTPD
+import java.net.Inet4Address
 import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -168,16 +170,47 @@ class StreamingService : Service() {
             return newServer
         }
 
-        /** Starts (or reuses) the loopback server + foreground service and returns the URL
-         * external players should open instead of a raw smb:// path. Binding the server itself is
-         * fast/synchronous - only the foreground-service notification lags slightly behind, which
-         * doesn't block the very first bytes being served. */
-        fun streamUrl(context: Context, sourceId: Long, path: String, sizeBytes: Long): String {
+        /** Starts (or reuses) the streaming server + foreground service and returns the URL
+         * external players on THIS device should open instead of a raw smb:// path. Binding the
+         * server itself is fast/synchronous - only the foreground-service notification lags
+         * slightly behind, which doesn't block the very first bytes being served. */
+        fun streamUrl(context: Context, sourceId: Long, path: String, sizeBytes: Long): String =
+            streamUrl(context, sourceId, path, sizeBytes, host = "127.0.0.1")
+
+        /**
+         * Same stream, addressed by this device's own LAN address so a DLNA renderer on the TV can
+         * fetch it (see [com.illusion.app.data.cast.DlnaController]). Null when the phone has no
+         * usable IPv4 address on a local network right now - mobile data only, Wi-Fi off, etc.
+         */
+        fun lanStreamUrl(context: Context, sourceId: Long, path: String, sizeBytes: Long): String? {
+            val host = localIpv4Address(context) ?: return null
+            return streamUrl(context, sourceId, path, sizeBytes, host)
+        }
+
+        private fun streamUrl(context: Context, sourceId: Long, path: String, sizeBytes: Long, host: String): String {
             val factory = requireNotNull(dataSourceFactory) { "StreamingService.dataSourceFactory not set" }
             val srv = ensureServerStarted(factory)
             ContextCompat.startForegroundService(context, Intent(context, StreamingService::class.java))
             val encodedPath = Uri.encode(path)
-            return "http://127.0.0.1:${srv.listeningPort}${LocalStreamingServer.STREAM_PATH}?source=$sourceId&path=$encodedPath&size=$sizeBytes"
+            return "http://$host:${srv.listeningPort}${LocalStreamingServer.STREAM_PATH}" +
+                "?source=$sourceId&path=$encodedPath&size=$sizeBytes&token=${srv.token}"
+        }
+
+        /**
+         * This device's IPv4 address on the currently active network, read from the OS's own
+         * LinkProperties rather than by walking NetworkInterface: on a phone with VPN/tethering/
+         * multiple radios up, interface enumeration happily returns an address that the TV can't
+         * reach, while the active network is exactly the one the renderer shares.
+         */
+        fun localIpv4Address(context: Context): String? {
+            val manager = context.getSystemService(ConnectivityManager::class.java) ?: return null
+            val network = manager.activeNetwork ?: return null
+            val linkProperties = manager.getLinkProperties(network) ?: return null
+            return linkProperties.linkAddresses
+                .map { it.address }
+                .filterIsInstance<Inet4Address>()
+                .firstOrNull { !it.isLoopbackAddress && !it.isAnyLocalAddress }
+                ?.hostAddress
         }
     }
 }

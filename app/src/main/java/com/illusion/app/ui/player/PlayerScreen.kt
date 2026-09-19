@@ -180,6 +180,7 @@ fun PlayerScreen(
     // property read wouldn't be observed by Compose's snapshot system.
     val currentPlayer by viewModel.playerState.collectAsState()
     val videoSurfaceGeneration by viewModel.videoSurfaceGeneration.collectAsState()
+    val castState by viewModel.castState.collectAsState()
     val noExternalAppMessage = stringResource(R.string.player_open_external_no_app)
 
     // Settings' "external player" choice (see SettingsRepository.playerMode) is applied once by
@@ -718,6 +719,8 @@ fun PlayerScreen(
                         onOpenAudioTracks = { bumpInteraction(); showAudioDialog = true },
                         onCycleAspectRatio = { bumpInteraction(); cycleResizeMode() },
                         onOpenSettings = { bumpInteraction(); showSpeedDialog = true },
+                        onOpenCast = { bumpInteraction(); viewModel.openCastPicker() },
+                        isCasting = castState.isCasting,
                         decoderMode = uiState.decoderMode,
                         onDecoderModeChange = { mode -> bumpInteraction(); viewModel.setDecoderMode(mode) },
                         sharpenEnabled = uiState.sharpenEnabled,
@@ -853,6 +856,18 @@ fun PlayerScreen(
                         modifier = Modifier.focusHighlight(internalSource)
                     ) { Text(stringResource(R.string.player_mode_ask_internal)) }
                 }
+            )
+        }
+
+        if (castState.isPickerOpen && !isInPip) {
+            CastDialog(
+                state = castState,
+                onDismiss = viewModel::closeCastPicker,
+                onRefresh = viewModel::refreshCastDevices,
+                onSelectDevice = viewModel::castTo,
+                onTogglePlayPause = viewModel::castTogglePlayPause,
+                onSeekBy = viewModel::castSeekBy,
+                onStopCast = { viewModel.stopCast() }
             )
         }
 

@@ -3,15 +3,21 @@ package com.illusion.app.data.player
 import com.illusion.app.data.smb.SmbRandomAccessFile
 import fi.iki.elonen.NanoHTTPD
 import java.io.InputStream
+import java.security.SecureRandom
 
 /**
- * Loopback-only HTTP server that re-exposes a single SMB file as
- * `http://127.0.0.1:<port>/stream?source=<id>&path=<encoded path>&size=<bytes>`, with `Range`
- * support for seeking. Exists because most external video players (everything except VLC/MX
- * Player, which have their own SMB clients) can't open an `smb://` URI passed via
- * `Intent.ACTION_VIEW` at all - they only understand ordinary HTTP(S). Never binds beyond
- * 127.0.0.1 - a same-device bridge for the external-player intent handoff, not a media server
- * exposed to the network.
+ * HTTP server that re-exposes a single SMB file as
+ * `http://<host>:<port>/stream?source=<id>&path=<encoded path>&size=<bytes>&token=<token>`, with
+ * `Range` support for seeking. Exists because most external video players (everything except
+ * VLC/MX Player, which have their own SMB clients) can't open an `smb://` URI passed via
+ * `Intent.ACTION_VIEW` at all - they only understand ordinary HTTP(S).
+ *
+ * Binds every interface, not just loopback (changed 2026-09-19): a DLNA renderer on the TV fetches
+ * the file over the LAN, so a loopback-only bind can't serve it. External players on this device
+ * still use the 127.0.0.1 form, unchanged. [token] is what keeps that wider bind from turning the
+ * NAS into an open share for the whole network - it's regenerated per server instance and every
+ * request without it is refused, so a URL is only usable by whoever this app handed it to, for as
+ * long as the server lives.
  *
  * Reuses [SmbDataSourceFactory] (the same connection pool ExoPlayer's own internal playback uses)
  * rather than opening a separate SMB session, so this doesn't pay for a second authentication
@@ -20,7 +26,10 @@ import java.io.InputStream
 class LocalStreamingServer(
     private val dataSourceFactory: SmbDataSourceFactory,
     port: Int = 0
-) : NanoHTTPD("127.0.0.1", port) {
+) : NanoHTTPD(null, port) {
+
+    /** Per-instance secret every request must carry - see this class's own KDoc. */
+    val token: String = ByteArray(16).also { SecureRandom().nextBytes(it) }.joinToString("") { "%02x".format(it) }
 
     /** Called when a streaming response starts / when it (eventually) closes - lets
      * [StreamingService] know whether a connection is actually still live rather than guessing
@@ -38,6 +47,9 @@ class LocalStreamingServer(
 
     private fun serveFile(session: IHTTPSession): Response {
         val params = session.parameters
+        if (params["token"]?.firstOrNull() != token) {
+            return newFixedLengthResponse(Response.Status.FORBIDDEN, "text/plain", "Forbidden")
+        }
         val sourceId = params["source"]?.firstOrNull()?.toLongOrNull()
             ?: return newFixedLengthResponse(Response.Status.BAD_REQUEST, "text/plain", "Missing source")
         val path = params["path"]?.firstOrNull()
