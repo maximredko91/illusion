@@ -92,7 +92,10 @@ class GoogleCastController(
     fun connect(id: String) {
         val route = router.routes.firstOrNull { it.id == id && it.isEnabled && it.matchesSelector(selector) }
         if (route == null) {
-            onError(-1)
+            // The device disappeared between being listed and being tapped (TV switched off,
+            // Wi-Fi blip) - distinct from a load failing on a connected session, which is what
+            // ERROR_NO_CLIENT covers, and the two used to be indistinguishable in the UI.
+            onError(ERROR_ROUTE_GONE)
             return
         }
         selected = true
@@ -107,7 +110,7 @@ class GoogleCastController(
     }
 
     fun load(url: String, title: String, mimeType: String, positionMs: Long, onLoaded: () -> Unit) {
-        val remote = client ?: return failed(-1)
+        val remote = client ?: return failed(ERROR_NO_CLIENT)
         contentId = url
         val metadata = MediaMetadata(MediaMetadata.MEDIA_TYPE_MOVIE).apply {
             putString(MediaMetadata.KEY_TITLE, title)
@@ -150,6 +153,14 @@ class GoogleCastController(
         onError(code)
         stop()
         onDisconnected()
+    }
+
+    companion object {
+        /** Tapped device is no longer on the network. */
+        const val ERROR_ROUTE_GONE = -1
+
+        /** Session is up but exposes no RemoteMediaClient - nothing to load into. */
+        const val ERROR_NO_CLIENT = -2
     }
 
     fun release() {

@@ -49,6 +49,7 @@ class MainActivity : ComponentActivity() {
      * нажатия - см. [com.illusion.app.ui.player.PlayerKeyEvents]. Без этого на устройстве без
      * тачскрина панель управления показать было нечем.
      */
+    @android.annotation.SuppressLint("RestrictedApi")
     override fun dispatchKeyEvent(event: android.view.KeyEvent): Boolean {
         if (com.illusion.app.ui.player.PlayerKeyEvents.handler?.invoke(event) == true) return true
         return super.dispatchKeyEvent(event)

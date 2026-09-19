@@ -3,6 +3,7 @@ package com.illusion.app.data.crash
 import android.content.Context
 import android.content.Intent
 import android.os.Build
+import androidx.core.net.toUri
 import com.illusion.app.BuildConfig
 import java.io.File
 
@@ -84,7 +85,7 @@ object CrashReporter {
         val header = "Illusion ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})\n" +
             "Android ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT}), ${Build.MANUFACTURER} ${Build.MODEL}\n\n"
         val title = if (kind == "bug") "Ошибка: " else "Предложение: "
-        val uri = android.net.Uri.parse("https://github.com/maximredko91/illusion/issues/new").buildUpon()
+        val uri = "https://github.com/maximredko91/illusion/issues/new".toUri().buildUpon()
             .appendQueryParameter("title", title)
             .appendQueryParameter("body", header)
             .apply { if (kind == "bug") appendQueryParameter("labels", "bug") }

@@ -597,7 +597,7 @@ private fun SmbFolderPickerDialog(
                     loadError != null -> Text(loadError.orEmpty(), color = MaterialTheme.colorScheme.error)
                     folders.isEmpty() -> Text(stringResource(R.string.addmedia_folder_picker_empty), color = MaterialTheme.colorScheme.onSurfaceVariant)
                     else -> LazyColumn(modifier = Modifier.heightIn(max = 280.dp).focusGroup()) {
-                        items(folders) { name ->
+                        items(folders, key = { it }) { name ->
                             val rowSource = remember { MutableInteractionSource() }
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,

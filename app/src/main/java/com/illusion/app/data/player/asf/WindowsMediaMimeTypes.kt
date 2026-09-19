@@ -27,6 +27,7 @@ object WindowsMediaMimeTypes {
         ByteBuffer.allocate(8).order(ByteOrder.LITTLE_ENDIAN).putInt(blockAlign).putInt(bitsPerSample).array()
 
     /** Inverse of [encodeAudioParams]: (blockAlign, bitsPerSample), zeros if absent. */
+    @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
     fun decodeAudioParams(format: Format): Pair<Int, Int> {
         val data = format.initializationData.getOrNull(1)?.takeIf { it.size >= 8 } ?: return 0 to 0
         val buffer = ByteBuffer.wrap(data).order(ByteOrder.LITTLE_ENDIAN)

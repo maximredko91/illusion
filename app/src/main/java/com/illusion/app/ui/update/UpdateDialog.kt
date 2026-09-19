@@ -13,6 +13,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -20,6 +21,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
+import com.illusion.app.R
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
@@ -55,9 +58,9 @@ fun UpdatePrompt(viewModel: UpdateViewModel) {
     if (launchFailed) {
         AlertDialog(
             onDismissRequest = { launchFailed = false },
-            title = { Text("Не удалось запустить установку") },
-            text = { Text("На этом устройстве нет приложения для установки APK. Скачайте файл вручную со страницы релизов на GitHub и установите через файловый менеджер.") },
-            confirmButton = { TextButton(onClick = { launchFailed = false }) { Text("Понятно") } }
+            title = { Text(stringResource(R.string.update_launch_failed_title)) },
+            text = { Text(stringResource(R.string.update_launch_failed_text)) },
+            confirmButton = { TextButton(onClick = { launchFailed = false }) { Text(stringResource(R.string.update_launch_failed_ok)) } }
         )
     }
 
@@ -110,10 +113,17 @@ fun UpdatePrompt(viewModel: UpdateViewModel) {
 private fun WhatsNewDialog(update: UpdateInfo, onUpdate: () -> Unit, onLater: () -> Unit, onSkip: () -> Unit) {
     AlertDialog(
         onDismissRequest = if (update.mandatory) {{}} else onLater,
-        title = { Text(if (update.mandatory) "Требуется обновление ${update.versionName}" else "Доступно обновление ${update.versionName}") },
+        title = {
+            Text(
+                stringResource(
+                    if (update.mandatory) R.string.update_mandatory_title else R.string.update_available_title,
+                    update.versionName
+                )
+            )
+        },
         text = {
             if (update.releaseNotes.isBlank()) {
-                Text("Список изменений не указан.")
+                Text(stringResource(R.string.update_no_release_notes))
             } else {
                 Text(
                     update.releaseNotes,
@@ -123,12 +133,12 @@ private fun WhatsNewDialog(update: UpdateInfo, onUpdate: () -> Unit, onLater: ()
         },
         confirmButton = {
             Row {
-                if (!update.mandatory) TextButton(onClick = onSkip) { Text("Пропустить версию") }
-                TextButton(onClick = onUpdate) { Text("Обновить") }
+                if (!update.mandatory) TextButton(onClick = onSkip) { Text(stringResource(R.string.update_skip_version)) }
+                TextButton(onClick = onUpdate) { Text(stringResource(R.string.update_action_update)) }
             }
         },
         dismissButton = if (update.mandatory) null else {
-            { TextButton(onClick = onLater) { Text("Позже") } }
+            { TextButton(onClick = onLater) { Text(stringResource(R.string.update_action_later)) } }
         }
     )
 }
@@ -137,13 +147,13 @@ private fun WhatsNewDialog(update: UpdateInfo, onUpdate: () -> Unit, onLater: ()
 private fun DownloadProgressDialog(progress: Float?, onCancel: () -> Unit) {
     AlertDialog(
         onDismissRequest = {},
-        title = { Text("Загрузка обновления") },
+        title = { Text(stringResource(R.string.update_downloading_title)) },
         text = {
             Column(Modifier.fillMaxWidth().padding(top = 8.dp)) {
                 if (progress != null) {
                     LinearProgressIndicator(progress = { progress }, modifier = Modifier.fillMaxWidth())
                     Text(
-                        "${(progress * 100).toInt()}%",
+                        stringResource(R.string.update_download_percent, (progress * 100).toInt()),
                         style = MaterialTheme.typography.bodySmall,
                         modifier = Modifier.padding(top = 4.dp)
                     )
@@ -156,7 +166,7 @@ private fun DownloadProgressDialog(progress: Float?, onCancel: () -> Unit) {
         // Was no way out of this dialog at all if the download stalled (real report: "висит на
         // 1%") short of force-closing the app - now bounded anyway by callTimeout on the HTTP
         // client (see UpdateDownloadWorker), but this is the immediate, user-driven escape hatch.
-        dismissButton = { TextButton(onClick = onCancel) { Text("Отмена") } }
+        dismissButton = { TextButton(onClick = onCancel) { Text(stringResource(R.string.action_cancel)) } }
     )
 }
 
@@ -177,26 +187,26 @@ private fun DownloadErrorDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Не удалось скачать обновление") },
+        title = { Text(stringResource(R.string.update_download_error_title)) },
         text = {
             Column {
                 Text(message)
                 if (mandatory) {
                     Text(
-                        "Если ошибка повторяется, скачайте APK вручную со страницы релизов на GitHub и установите через файловый менеджер.",
+                        stringResource(R.string.update_download_error_manual_hint),
                         style = MaterialTheme.typography.bodySmall,
                         modifier = Modifier.padding(top = 8.dp)
                     )
                 }
             }
         },
-        confirmButton = { TextButton(onClick = onRetry) { Text("Повторить") } },
+        confirmButton = { TextButton(onClick = onRetry) { Text(stringResource(R.string.update_action_retry)) } },
         dismissButton = {
             Row {
                 if (mandatory) {
-                    TextButton(onClick = onOpenReleasesPage) { Text("Открыть GitHub") }
+                    TextButton(onClick = onOpenReleasesPage) { Text(stringResource(R.string.update_open_github)) }
                 }
-                TextButton(onClick = onDismiss) { Text("Закрыть") }
+                TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_close)) }
             }
         }
     )
@@ -206,11 +216,11 @@ private fun DownloadErrorDialog(
 private fun InstallReadyDialog(mandatory: Boolean, onInstall: () -> Unit, onLater: () -> Unit) {
     AlertDialog(
         onDismissRequest = if (mandatory) {{}} else onLater,
-        title = { Text("Обновление готово") },
-        text = { Text("Новая версия скачана. Установить сейчас?") },
-        confirmButton = { TextButton(onClick = onInstall) { Text("Установить") } },
+        title = { Text(stringResource(R.string.update_ready_title)) },
+        text = { Text(stringResource(R.string.update_ready_text)) },
+        confirmButton = { TextButton(onClick = onInstall) { Text(stringResource(R.string.update_action_install)) } },
         dismissButton = if (mandatory) null else {
-            { TextButton(onClick = onLater) { Text("Позже") } }
+            { TextButton(onClick = onLater) { Text(stringResource(R.string.update_action_later)) } }
         }
     )
 }

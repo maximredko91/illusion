@@ -13,6 +13,15 @@ import kotlinx.coroutines.flow.map
 class LibraryRepository(private val dao: MediaItemDao) {
 
     suspend fun getAll(): List<MediaItemEntity> = dao.getAll()
+
+    /** Tags of every item, still JSON-encoded per row - see [MediaItemDao.getAllTags]. */
+    suspend fun getAllTags(): List<List<String>> = dao.getAllTags().map { json ->
+        runCatching { kotlinx.serialization.json.Json.decodeFromString<List<String>>(json) }.getOrDefault(emptyList())
+    }
+
+    suspend fun getAllCredits(): List<com.illusion.app.data.local.dao.CreditsProjection> = dao.getAllCredits()
+
+    suspend fun getAllImagePaths(): List<com.illusion.app.data.local.dao.ImagePathsProjection> = dao.getAllImagePaths()
     suspend fun getBySource(sourceId: Long): List<MediaItemEntity> = dao.getBySource(sourceId)
     suspend fun clearAll() = dao.deleteAll()
     fun observeByCategory(category: Category, sort: SortOrder, ascending: Boolean): Flow<List<MediaItemEntity>> =

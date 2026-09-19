@@ -74,8 +74,11 @@ fun AppSplashOverlay(app: IllusionApplication) {
     // (подмена её в attachBaseContext пересоздавала активность при запуске).
     val appDark = destinationBackground.luminance() < 0.5f
     val context = androidx.compose.ui.platform.LocalContext.current
-    val themedContext = remember(appDark) {
-        val config = android.content.res.Configuration(context.resources.configuration).apply {
+    // Базовая конфигурация берётся из LocalConfiguration, а не из context.resources: композиция
+    // на неё подписана, поэтому смена конфигурации доходит сюда сама (на что и указывает lint).
+    val baseConfiguration = androidx.compose.ui.platform.LocalConfiguration.current
+    val themedContext = remember(appDark, baseConfiguration) {
+        val config = android.content.res.Configuration(baseConfiguration).apply {
             uiMode = (uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK.inv()) or
                 if (appDark) android.content.res.Configuration.UI_MODE_NIGHT_YES else android.content.res.Configuration.UI_MODE_NIGHT_NO
         }

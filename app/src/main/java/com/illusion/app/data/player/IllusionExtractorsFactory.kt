@@ -59,12 +59,14 @@ class IllusionExtractorsFactory(
     }
 
     @Deprecated("Deprecated in Java")
+    @OptIn(androidx.media3.common.util.ExperimentalApi::class)
     override fun experimentalSetTextTrackTranscodingEnabled(textTrackTranscodingEnabled: Boolean): ExtractorsFactory {
         @Suppress("DEPRECATION")
         defaults.experimentalSetTextTrackTranscodingEnabled(textTrackTranscodingEnabled)
         return this
     }
 
+    @OptIn(androidx.media3.common.util.ExperimentalApi::class)
     override fun experimentalSetCodecsToParseWithinGopSampleDependencies(codecsToParseWithinGopSampleDependencies: Int): ExtractorsFactory {
         defaults.experimentalSetCodecsToParseWithinGopSampleDependencies(codecsToParseWithinGopSampleDependencies)
         return this

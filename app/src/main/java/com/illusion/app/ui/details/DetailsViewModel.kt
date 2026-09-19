@@ -112,15 +112,17 @@ class DetailsViewModel(
 
     /** Which actors/directors have more than one title in the library - only these are worth opening a filmography for. A full-library scan, so it runs after the screen is already showing rather than gating [DetailsUiState.isLoading]. */
     private suspend fun loadClickablePersons(item: MediaItemEntity) {
-        // One getAll() scan shared across every person on this item, rather than a separate
-        // getFilmography() library scan per name. The scan+count below is real CPU work over the
-        // whole library (thousands of items) - left on the caller's dispatcher (viewModelScope
-        // defaults to Main.immediate) it ran right as the Details nav transition was still
-        // animating and dropped frames, reading as the shared-element poster animation stuttering.
+        // One scan shared across every person on this item, rather than a separate
+        // getFilmography() library scan per name - and only the two credit columns, not whole
+        // rows, since the JSON decoding of every other TEXT column was the real cost. The
+        // scan+count below is still real CPU work over the whole library (thousands of items) -
+        // left on the caller's dispatcher (viewModelScope defaults to Main.immediate) it ran right
+        // as the Details nav transition was still animating and dropped frames, reading as the
+        // shared-element poster animation stuttering.
         val clickablePersons = withContext(Dispatchers.Default) {
-            val allItems = libraryRepository.getAll()
+            val credits = libraryRepository.getAllCredits()
             (item.director + item.actors).distinct()
-                .filter { name -> allItems.count { name in it.actors || name in it.director } > 1 }
+                .filter { name -> credits.count { name in it.actors || name in it.director } > 1 }
                 .toSet()
         }
         _state.update { it.copy(clickablePersons = clickablePersons) }

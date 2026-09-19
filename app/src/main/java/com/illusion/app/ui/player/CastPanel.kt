@@ -160,16 +160,18 @@ private fun CastTransportControls(state: CastUiState, onTogglePlayPause: () -> U
         Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
             Row(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
                 TvAwareIconButton(onClick = { onSeekBy(-10_000L) }) {
-                    Icon(Icons.Default.Replay10, contentDescription = null)
+                    Icon(Icons.Default.Replay10, contentDescription = stringResource(R.string.player_cast_rewind))
                 }
                 TvAwareIconButton(onClick = onTogglePlayPause) {
                     Icon(
                         if (state.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                        contentDescription = null
+                        contentDescription = stringResource(
+                            if (state.isPlaying) R.string.player_cast_pause else R.string.player_cast_play
+                        )
                     )
                 }
                 TvAwareIconButton(onClick = { onSeekBy(10_000L) }) {
-                    Icon(Icons.Default.Forward10, contentDescription = null)
+                    Icon(Icons.Default.Forward10, contentDescription = stringResource(R.string.player_cast_forward))
                 }
             }
         }

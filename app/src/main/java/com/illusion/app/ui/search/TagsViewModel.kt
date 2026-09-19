@@ -42,8 +42,8 @@ class TagsViewModel(
     init {
         viewModelScope.launch {
             val counts = withContext(Dispatchers.Default) {
-                libraryRepository.getAll()
-                    .flatMap { it.tags }
+                libraryRepository.getAllTags()
+                    .flatten()
                     .groupingBy { it }
                     .eachCount()
                     .map { (tag, count) -> TagCount(tag, count) }

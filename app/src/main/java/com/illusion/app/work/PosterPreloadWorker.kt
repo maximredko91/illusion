@@ -8,9 +8,7 @@ import coil3.ImageLoader
 import coil3.SingletonImageLoader
 import coil3.request.ImageRequest
 import com.illusion.app.IllusionApplication
-import com.illusion.app.data.image.episodeThumbModel
-import com.illusion.app.data.image.fanartModel
-import com.illusion.app.data.image.posterModel
+import com.illusion.app.data.image.SmbImageUri
 import com.illusion.app.data.repository.LibraryRepository
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -24,14 +22,17 @@ class PosterPreloadWorker(
 ) : CoroutineWorker(context, params) {
 
     override suspend fun doWork(): Result {
-        val items = libraryRepository.getAll()
+        // Only the image columns, not whole rows - see MediaItemDao.getAllImagePaths.
+        val items = libraryRepository.getAllImagePaths()
         val posterLoader = SingletonImageLoader.get(applicationContext)
         val fanartLoader = (applicationContext as IllusionApplication).fanartImageLoader
         // Posters and fanarts go through separate ImageLoaders (separate disk caches, see
         // IllusionApplication) so tagging each model with which loader executes it, rather than one
         // flat distinct() list like before the cache split.
-        val posterModels = items.mapNotNull { it.posterModel }.distinct().map { it to posterLoader }
-        val fanartModels = items.mapNotNull { it.fanartModel }.distinct().map { it to fanartLoader }
+        val posterModels = items.mapNotNull { SmbImageUri.resolve(it.sourceId, it.posterPath) }
+            .distinct().map { it to posterLoader }
+        val fanartModels = items.mapNotNull { SmbImageUri.resolve(it.sourceId, it.fanartPath) }
+            .distinct().map { it to fanartLoader }
         // Episode screenshots (episodeThumbModel) used to be missing here entirely - Coil still
         // cached them normally once actually viewed (same smb-image:// pipeline, same
         // PosterCachePolicyInterceptor as posters/fanarts), but never pre-warmed like every other
@@ -39,7 +40,8 @@ class PosterPreloadWorker(
         // SMB fetch per thumbnail - felt uncached by comparison even though it technically wasn't.
         // Shares the poster loader/cache, not fanart's - comparable small-thumbnail size, not a
         // full backdrop.
-        val episodeThumbModels = items.mapNotNull { it.episodeThumbModel }.distinct().map { it to posterLoader }
+        val episodeThumbModels = items.mapNotNull { SmbImageUri.resolve(it.sourceId, it.episodeThumbPath) }
+            .distinct().map { it to posterLoader }
         val work = posterModels + fanartModels + episodeThumbModels
         var done = 0
         setProgress(workDataOf(KEY_PROCESSED to 0, KEY_TOTAL to work.size))

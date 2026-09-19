@@ -1424,17 +1424,21 @@ fun SettingsScreen(
         )
     }
 
+    val resetDoneMessage = stringResource(R.string.settings_reset_done)
     if (showResetConfirm) {
         AlertDialog(
             onDismissRequest = { showResetConfirm = false },
             title = { Text(stringResource(R.string.settings_reset_to_defaults)) },
             text = { Text(stringResource(R.string.settings_reset_to_defaults_confirm)) },
+            // Resolved here rather than inside the click lambda: reading resources off
+            // LocalContext at click time misses a configuration change (lint's own point).
+
             confirmButton = {
                 TextButton(onClick = {
                     haptics.reject()
                     onResetToDefaults()
                     showResetConfirm = false
-                    coroutineScope.launch { snackbarHostState.showSnackbar(context.getString(R.string.settings_reset_done)) }
+                    coroutineScope.launch { snackbarHostState.showSnackbar(resetDoneMessage) }
                 }) { Text(stringResource(R.string.settings_reset_to_defaults_action)) }
             },
             dismissButton = {

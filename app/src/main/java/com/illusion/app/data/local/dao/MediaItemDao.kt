@@ -131,6 +131,20 @@ interface MediaItemDao {
     @Query("SELECT * FROM media_items WHERE isOrphanedDownload = 0")
     suspend fun getAll(): List<MediaItemEntity>
 
+    /**
+     * Narrow projections for callers that need one or two columns of every row. Reading whole
+     * MediaItemEntity rows for these meant JSON-decoding a dozen TEXT columns per item across a
+     * 3000+ row library, which is the actually expensive part - not the query.
+     */
+    @Query("SELECT tags FROM media_items WHERE tags IS NOT NULL AND tags != '[]'")
+    suspend fun getAllTags(): List<String>
+
+    @Query("SELECT actors, director FROM media_items")
+    suspend fun getAllCredits(): List<CreditsProjection>
+
+    @Query("SELECT sourceId, posterPath, fanartPath, episodeThumbPath FROM media_items")
+    suspend fun getAllImagePaths(): List<ImagePathsProjection>
+
     @Query("SELECT * FROM media_items WHERE sourceId = :sourceId")
     suspend fun getBySource(sourceId: Long): List<MediaItemEntity>
 
@@ -158,3 +172,17 @@ interface MediaItemDao {
     @Query("UPDATE media_items SET outroStartMs = NULL WHERE seriesStableId = :seriesStableId AND seasonNumber = :seasonNumber")
     suspend fun clearOutroMarkerForSeason(seriesStableId: String, seasonNumber: Int)
 }
+
+/** Just the two credit columns - see [MediaItemDao.getAllCredits]. */
+data class CreditsProjection(
+    val actors: List<String>,
+    val director: List<String>
+)
+
+/** Everything needed to build a Coil model, nothing else - see [MediaItemDao.getAllImagePaths]. */
+data class ImagePathsProjection(
+    val sourceId: Long,
+    val posterPath: String?,
+    val fanartPath: String?,
+    val episodeThumbPath: String?
+)
