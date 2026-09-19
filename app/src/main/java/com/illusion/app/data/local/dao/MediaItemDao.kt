@@ -90,6 +90,11 @@ interface MediaItemDao {
     @Query("SELECT * FROM media_items WHERE seriesStableId = :seriesStableId ORDER BY seasonNumber, episodeNumber")
     fun observeEpisodes(seriesStableId: String): Flow<List<MediaItemEntity>>
 
+    /** One-shot counterpart of [observeEpisodes], narrowed to a season - the intro detector needs
+     * a neighbouring episode once, not a subscription. */
+    @Query("SELECT * FROM media_items WHERE seriesStableId = :seriesStableId AND seasonNumber = :seasonNumber ORDER BY episodeNumber")
+    suspend fun getSeasonEpisodes(seriesStableId: String, seasonNumber: Int): List<MediaItemEntity>
+
     /** .nfo <set>-based - Details' own "Другие части" row. */
     @Query("SELECT * FROM media_items WHERE collectionName = :collectionName AND isOrphanedDownload = 0")
     fun observeByCollection(collectionName: String): Flow<List<MediaItemEntity>>

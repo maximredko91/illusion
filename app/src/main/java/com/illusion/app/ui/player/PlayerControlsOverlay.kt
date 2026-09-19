@@ -84,6 +84,7 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -789,6 +790,9 @@ fun PlayerSettingsPanel(
     introMarkedEndMs: Long?,
     onMarkIntroEnd: () -> Unit,
     onClearIntroMarkers: () -> Unit,
+    introDetectState: IntroDetectUiState,
+    onDetectIntro: () -> Unit,
+    onCancelDetectIntro: () -> Unit,
     canMarkCredits: Boolean,
     outroMarkedStartMs: Long?,
     onMarkCreditsStart: () -> Unit,
@@ -1111,6 +1115,44 @@ fun PlayerSettingsPanel(
                     }
                     Text(
                         stringResource(R.string.player_mark_intro_end_hint),
+                        color = Color.White.copy(alpha = 0.7f),
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                    // Automatic detection sits under the manual marker rather than replacing it:
+                    // it costs minutes of SMB traffic and can legitimately find nothing (a show
+                    // with no fixed intro), so the one-tap manual path stays the default.
+                    if (introDetectState.isRunning) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            CircularProgressIndicator(
+                                progress = { introDetectState.progress.coerceIn(0f, 1f) },
+                                modifier = Modifier.size(18.dp),
+                                strokeWidth = 2.dp,
+                                color = Color.White
+                            )
+                            Text(
+                                stringResource(R.string.player_detect_intro_running),
+                                color = Color.White.copy(alpha = 0.7f),
+                                style = MaterialTheme.typography.bodySmall,
+                                modifier = Modifier.padding(start = 8.dp)
+                            )
+                            TextButton(onClick = onCancelDetectIntro) {
+                                Text(stringResource(R.string.action_cancel))
+                            }
+                        }
+                    } else {
+                        TextButton(onClick = onDetectIntro) {
+                            Text(stringResource(R.string.player_detect_intro))
+                        }
+                        introDetectState.error?.let { error ->
+                            Text(
+                                stringResource(introDetectErrorText(error)),
+                                color = Color.White.copy(alpha = 0.7f),
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        }
+                    }
+                    Text(
+                        stringResource(R.string.player_detect_intro_hint),
                         color = Color.White.copy(alpha = 0.7f),
                         style = MaterialTheme.typography.bodySmall
                     )

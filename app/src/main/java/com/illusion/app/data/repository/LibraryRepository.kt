@@ -167,6 +167,25 @@ class LibraryRepository(private val dao: MediaItemDao) {
         }
     }
 
+    /**
+     * Writes a full intro RANGE (not just an end) to the whole season - what the automatic detector
+     * produces, since a detected intro doesn't have to start at 0: many shows run a cold open first.
+     * [markIntroEnd] stays as the manual path, where the user marks one point and 0 is assumed.
+     */
+    suspend fun markIntroRange(item: MediaItemEntity, startMs: Long, endMs: Long) {
+        val seriesId = item.seriesStableId
+        val season = item.seasonNumber
+        if (seriesId != null && season != null) {
+            dao.setIntroMarkersForSeason(seriesId, season, startMs, endMs)
+        } else {
+            dao.setIntroMarkers(item.stableId, startMs, endMs)
+        }
+    }
+
+    /** Episodes of one season, once - see [MediaItemDao.getSeasonEpisodes]. */
+    suspend fun getSeasonEpisodes(seriesStableId: String, seasonNumber: Int): List<MediaItemEntity> =
+        dao.getSeasonEpisodes(seriesStableId, seasonNumber)
+
     /** Undoes [markIntroEnd] - same single-item-vs-whole-season scoping. */
     suspend fun clearIntroMarkers(item: MediaItemEntity) {
         val seriesId = item.seriesStableId

@@ -181,6 +181,7 @@ fun PlayerScreen(
     val currentPlayer by viewModel.playerState.collectAsState()
     val videoSurfaceGeneration by viewModel.videoSurfaceGeneration.collectAsState()
     val castState by viewModel.castState.collectAsState()
+    val introDetectState by viewModel.introDetectState.collectAsState()
     val noExternalAppMessage = stringResource(R.string.player_open_external_no_app)
 
     // Settings' "external player" choice (see SettingsRepository.playerMode) is applied once by
@@ -904,6 +905,9 @@ fun PlayerScreen(
             introMarkedEndMs = uiState.introMarkedEndMs,
             onMarkIntroEnd = { viewModel.markIntroEnd(); showSpeedDialog = false },
             onClearIntroMarkers = { viewModel.clearIntroMarkers(); showSpeedDialog = false },
+            introDetectState = introDetectState,
+            onDetectIntro = viewModel::detectIntroAutomatically,
+            onCancelDetectIntro = viewModel::cancelIntroDetection,
             canMarkCredits = uiState.canMarkCredits,
             outroMarkedStartMs = uiState.outroMarkedStartMs,
             onMarkCreditsStart = { viewModel.markCreditsStart(); showSpeedDialog = false },

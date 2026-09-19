@@ -468,6 +468,13 @@
     <string name="player_hold_to_seek">Удержанием</string>
     <string name="player_mark_intro_end">Отметить конец заставки</string>
     <string name="player_mark_intro_end_hint">Применится ко всем сериям этого сезона</string>
+    <string name="player_detect_intro">Найти заставку автоматически</string>
+    <string name="player_detect_intro_running">Анализ звука двух серий…</string>
+    <string name="player_detect_intro_hint">Сравнивает звук этой и соседней серии и ставит метки всему сезону. Занимает несколько минут — файлы читаются с сервера.</string>
+    <string name="player_detect_intro_not_found">Не нашёл общую заставку в этих сериях</string>
+    <string name="player_detect_intro_no_reference">Нужна ещё хотя бы одна серия этого сезона</string>
+    <string name="player_detect_intro_not_series">Автопоиск работает только для серий сериала</string>
+    <string name="player_detect_intro_failed">Не удалось разобрать звук серии</string>
     <string name="player_intro_marked_at">Заставка отмечена: 0:00–%1$s</string>
     <string name="player_clear_intro_markers">Сбросить</string>
     <string name="player_back">Назад</string>

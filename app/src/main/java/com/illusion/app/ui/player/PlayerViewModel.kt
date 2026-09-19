@@ -242,6 +242,57 @@ class PlayerViewModel(
     private var currentItem: MediaItemEntity? = null
     private var currentTrailerItem: MediaItemEntity? = null
 
+    // ---- Automatic intro detection (see data/intro/*, work/IntroDetectWorker) -----------------
+
+    private val _introDetectState = MutableStateFlow(IntroDetectUiState())
+    val introDetectState: StateFlow<IntroDetectUiState> = _introDetectState.asStateFlow()
+
+    /**
+     * Starts the audio-fingerprint search for this season's title sequence and follows the worker
+     * until it finishes. Separate StateFlow for the same reason the cast state is - `playItem`
+     * rebuilds [PlayerUiState] from scratch, and a detection running across an episode change
+     * shouldn't silently lose its progress indicator.
+     */
+    fun detectIntroAutomatically() {
+        val item = currentItem ?: return
+        com.illusion.app.work.WorkScheduler.enqueueIntroDetect(appContext, item.stableId)
+        _introDetectState.value = IntroDetectUiState(isRunning = true)
+        introDetectJob?.cancel()
+        introDetectJob = viewModelScope.launch {
+            com.illusion.app.work.WorkScheduler.introDetectWorkInfo(appContext).collect { info ->
+                if (info == null) return@collect
+                val progress = info.progress.getFloat(com.illusion.app.work.IntroDetectWorker.KEY_PROGRESS, 0f)
+                when (info.state) {
+                    androidx.work.WorkInfo.State.SUCCEEDED -> {
+                        val endMs = info.outputData.getLong(com.illusion.app.work.IntroDetectWorker.KEY_END_MS, 0L)
+                        val startMs = info.outputData.getLong(com.illusion.app.work.IntroDetectWorker.KEY_START_MS, 0L)
+                        // The worker wrote the markers straight to Room; this view model keeps its
+                        // own copy of the item (skip-intro reads it every frame), so it needs the
+                        // same update rather than a re-query.
+                        currentItem = currentItem?.copy(introStartMs = startMs, introEndMs = endMs)
+                        _state.update { it.copy(introMarkedEndMs = endMs) }
+                        _introDetectState.value = IntroDetectUiState(foundEndMs = endMs)
+                    }
+                    androidx.work.WorkInfo.State.FAILED ->
+                        _introDetectState.value = IntroDetectUiState(
+                            error = info.outputData.getString(com.illusion.app.work.IntroDetectWorker.KEY_ERROR)
+                                ?: com.illusion.app.work.IntroDetectWorker.ERROR_NOT_FOUND
+                        )
+                    androidx.work.WorkInfo.State.CANCELLED -> _introDetectState.value = IntroDetectUiState()
+                    else -> _introDetectState.value = IntroDetectUiState(isRunning = true, progress = progress)
+                }
+            }
+        }
+    }
+
+    fun cancelIntroDetection() {
+        com.illusion.app.work.WorkScheduler.cancelIntroDetect(appContext)
+        introDetectJob?.cancel()
+        _introDetectState.value = IntroDetectUiState()
+    }
+
+    private var introDetectJob: Job? = null
+
     // ---- DLNA casting (see data/cast/*) -------------------------------------------------------
 
     private val _castState = MutableStateFlow(CastUiState())

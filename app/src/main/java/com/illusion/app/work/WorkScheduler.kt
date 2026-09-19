@@ -185,6 +185,30 @@ object WorkScheduler {
         WorkManager.getInstance(context).cancelUniqueWork(UPDATE_DOWNLOAD_WORK_NAME)
     }
 
+    /** Kicks off automatic intro detection for the season [stableId] belongs to. Unique: two runs
+     * at once would each pull minutes of video off the same share for nothing. */
+    fun enqueueIntroDetect(context: Context, stableId: String) {
+        val request = OneTimeWorkRequestBuilder<IntroDetectWorker>()
+            .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
+            .setInputData(workDataOf(IntroDetectWorker.KEY_STABLE_ID to stableId))
+            .build()
+        WorkManager.getInstance(context).enqueueUniqueWork(
+            INTRO_DETECT_WORK_NAME,
+            ExistingWorkPolicy.REPLACE,
+            request
+        )
+    }
+
+    fun introDetectWorkInfo(context: Context): Flow<androidx.work.WorkInfo?> =
+        WorkManager.getInstance(context).getWorkInfosForUniqueWorkFlow(INTRO_DETECT_WORK_NAME)
+            .map { infos -> infos.firstOrNull { !it.state.isFinished } ?: infos.lastOrNull() }
+
+    fun cancelIntroDetect(context: Context) {
+        WorkManager.getInstance(context).cancelUniqueWork(INTRO_DETECT_WORK_NAME)
+    }
+
+    private const val INTRO_DETECT_WORK_NAME = "intro_detect"
+
     private const val UPDATE_CHECK_WORK_NAME = "update_check_periodic"
 
     /** Schedules [UpdateCheckWorker] once a day. KEEP leaves an existing schedule alone, so calling this on every app start is safe. */
