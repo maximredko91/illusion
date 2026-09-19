@@ -39,7 +39,22 @@ class LocalStreamingServer(
     var onStreamOpened: (() -> Unit)? = null
     var onStreamClosed: (() -> Unit)? = null
 
-    override fun serve(session: IHTTPSession): Response = when (session.uri) {
+    override fun serve(session: IHTTPSession): Response {
+        val response = when {
+            session.method == Method.OPTIONS && session.uri == STREAM_PATH ->
+                newFixedLengthResponse(Response.Status.OK, "text/plain", "")
+            else -> serveRequest(session)
+        }
+        // The default Google Cast receiver is a web app, so Range requests need CORS too.
+        // Actual media requests still require the per-server token in serveFile().
+        response.addHeader("Access-Control-Allow-Origin", "*")
+        response.addHeader("Access-Control-Allow-Methods", "GET, HEAD, OPTIONS")
+        response.addHeader("Access-Control-Allow-Headers", "Range, Content-Type")
+        response.addHeader("Access-Control-Expose-Headers", "Content-Length, Content-Range, Accept-Ranges")
+        return response
+    }
+
+    private fun serveRequest(session: IHTTPSession): Response = when (session.uri) {
         STREAM_PATH -> runCatching { serveFile(session) }
             .getOrElse { newFixedLengthResponse(Response.Status.INTERNAL_ERROR, "text/plain", it.message ?: "Error") }
         else -> newFixedLengthResponse(Response.Status.NOT_FOUND, "text/plain", "Not found")

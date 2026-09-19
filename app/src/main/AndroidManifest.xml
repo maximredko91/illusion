@@ -107,6 +107,10 @@
              Exactly one alias is enabled at a time (IllusionApplication doesn't manage this;
              see data/appicon/IconVariantManager) and that's what actually shows on the home
              screen; MainActivity itself is only ever reached through whichever alias is active. -->
+        <meta-data
+            android:name="com.google.android.gms.cast.framework.OPTIONS_PROVIDER_CLASS_NAME"
+            android:value="com.illusion.app.data.cast.GoogleCastOptionsProvider" />
+
         <activity
             android:name=".MainActivity"
             android:exported="true"

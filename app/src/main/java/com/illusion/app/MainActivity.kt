@@ -62,6 +62,10 @@ class MainActivity : ComponentActivity() {
         // synchronous startup work slow enough to be worth stalling on.
         installSplashScreen()
         super.onCreate(savedInstanceState)
+        // Register the Cast SDK's activity lifecycle callbacks before the first onResume.
+        // Devices without Google Play services must still be able to use the local player/DLNA.
+        runCatching { com.google.android.gms.cast.framework.CastContext.getSharedInstance(this) }
+            .onFailure { android.util.Log.w("IllusionCast", "Google Cast unavailable", it) }
         enableEdgeToEdge()
         val app = application as IllusionApplication
         setContent {

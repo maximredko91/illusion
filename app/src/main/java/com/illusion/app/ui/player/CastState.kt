@@ -16,6 +16,8 @@ data class CastUiState(
     val isPickerOpen: Boolean = false,
     val isSearching: Boolean = false,
     val devices: List<DlnaDevice> = emptyList(),
+    val googleDevices: List<com.illusion.app.data.cast.GoogleCastDevice> = emptyList(),
+    val googleDeviceName: String? = null,
     /** Non-null while a file is playing on a renderer. */
     val device: DlnaDevice? = null,
     val isConnecting: Boolean = false,
@@ -24,5 +26,6 @@ data class CastUiState(
     val durationMs: Long = 0L,
     val error: String? = null
 ) {
-    val isCasting: Boolean get() = device != null
+    val isCasting: Boolean get() = device != null || googleDeviceName != null
+    val deviceName: String get() = googleDeviceName ?: device?.displayName.orEmpty()
 }

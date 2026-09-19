@@ -302,6 +302,113 @@ class PlayerViewModel(
     private var castController: com.illusion.app.data.cast.DlnaController? = null
     private var castPollJob: Job? = null
     private var castSearchJob: Job? = null
+    private var googleCast: com.illusion.app.data.cast.GoogleCastController? = null
+    private var castConnectJob: Job? = null
+    private var pendingGoogleItem: MediaItemEntity? = null
+
+    private fun ensureGoogleCast(): com.illusion.app.data.cast.GoogleCastController? {
+        googleCast?.let { return it }
+        return runCatching {
+            com.illusion.app.data.cast.GoogleCastController(
+                appContext,
+                onDevices = { devices -> _castState.update { it.copy(googleDevices = devices) } },
+                onConnected = ::loadGoogleCastMedia,
+                onDisconnected = {
+                    castConnectJob?.cancel()
+                    castPollJob?.cancel()
+                    pendingGoogleItem = null
+                    val old = _castState.value
+                    if (old.googleDeviceName != null) {
+                        persistProgress(old.positionMs, old.durationMs)
+                        player.seekTo(old.positionMs)
+                    }
+                    _castState.update { it.copy(googleDeviceName = null, isConnecting = false, isPlaying = false) }
+                },
+                onError = { code ->
+                    castConnectJob?.cancel()
+                    pendingGoogleItem = null
+                    _castState.update { it.copy(isPickerOpen = true, isConnecting = false,
+                        error = appContext.getString(com.illusion.app.R.string.player_cast_google_error, code)) }
+                }
+            ).also { googleCast = it }
+        }.getOrElse {
+            _castState.update { it.copy(error = appContext.getString(com.illusion.app.R.string.player_cast_google_unavailable)) }
+            null
+        }
+    }
+
+    fun castToGoogle(deviceId: String) {
+        if (_castState.value.isConnecting || _castState.value.isCasting) return
+        val item = currentItem ?: currentTrailerItem ?: return
+        val controller = ensureGoogleCast() ?: return
+        pendingGoogleItem = item
+        _castState.update { it.copy(isConnecting = true, error = null) }
+        castConnectJob?.cancel()
+        castConnectJob = viewModelScope.launch {
+            delay(30_000)
+            controller.stop()
+            pendingGoogleItem = null
+            _castState.update { it.copy(isPickerOpen = true, isConnecting = false,
+                error = appContext.getString(com.illusion.app.R.string.player_cast_error_failed)) }
+        }
+        controller.connect(deviceId)
+    }
+
+    private fun loadGoogleCastMedia(deviceName: String) {
+        val item = pendingGoogleItem ?: return
+        val controller = googleCast ?: return
+        val path = if (currentItem == null) item.trailerPath ?: item.filePath else item.filePath
+        val position = player.currentPosition.coerceAtLeast(0)
+        runCatching {
+            val url = com.illusion.app.data.player.StreamingService.lanStreamUrl(
+                appContext, item.sourceId, path, if (currentItem == null) -1L else item.sizeBytes
+            ) ?: error(appContext.getString(com.illusion.app.R.string.player_cast_error_no_network))
+            controller.load(url, item.title,
+                com.illusion.app.data.player.mimeTypeForExtension(path.substringAfterLast('.', "")), position) {
+                castConnectJob?.cancel()
+                pendingGoogleItem = null
+                player.pause()
+                controller.stopDiscovery()
+                _castState.update { it.copy(isPickerOpen = false, isConnecting = false,
+                    googleDeviceName = deviceName, isPlaying = true, positionMs = position,
+                    durationMs = player.duration.takeIf { d -> d != C.TIME_UNSET } ?: 0L, error = null) }
+                startGoogleCastPolling()
+            }
+        }.onFailure { error ->
+            castConnectJob?.cancel()
+            pendingGoogleItem = null
+            controller.stop()
+            _castState.update { it.copy(isConnecting = false, error = error.message) }
+        }
+    }
+
+    private fun startGoogleCastPolling() {
+        castPollJob?.cancel()
+        castPollJob = viewModelScope.launch {
+            while (isActive) {
+                val controller = googleCast ?: break
+                val remote = controller.client
+                if (remote != null && controller.ownsCurrentMedia()) {
+                    val position = remote.approximateStreamPosition.coerceAtLeast(0)
+                    val duration = remote.streamDuration.coerceAtLeast(0)
+                    _castState.update { it.copy(positionMs = position,
+                        durationMs = duration.takeIf { d -> d > 0 } ?: it.durationMs,
+                        isPlaying = remote.isPlaying) }
+                    maybeSaveProgress(position, _castState.value.durationMs)
+                    if (remote.playerState == com.google.android.gms.cast.MediaStatus.PLAYER_STATE_IDLE) {
+                        val failed = remote.idleReason == com.google.android.gms.cast.MediaStatus.IDLE_REASON_ERROR
+                        if (remote.idleReason == com.google.android.gms.cast.MediaStatus.IDLE_REASON_FINISHED || failed) {
+                            stopCast(resumeLocally = false)
+                            if (failed) _castState.update { it.copy(isPickerOpen = true,
+                                error = appContext.getString(com.illusion.app.R.string.player_cast_google_format_error)) }
+                            break
+                        }
+                    }
+                }
+                delay(CAST_POLL_INTERVAL_MS)
+            }
+        }
+    }
 
     fun openCastPicker() {
         _castState.update { it.copy(isPickerOpen = true, error = null) }
@@ -310,13 +417,16 @@ class PlayerViewModel(
 
     fun closeCastPicker() {
         castSearchJob?.cancel()
+        googleCast?.stopDiscovery()
         _castState.update { it.copy(isPickerOpen = false, isSearching = false) }
     }
 
     fun refreshCastDevices() {
+        if (_castState.value.isCasting || _castState.value.isConnecting) return
         castSearchJob?.cancel()
+        _castState.update { it.copy(isSearching = true, error = null) }
+        ensureGoogleCast()?.startDiscovery()
         castSearchJob = viewModelScope.launch {
-            _castState.update { it.copy(isSearching = true, error = null) }
             val found = runCatching { dlnaDiscovery.discover() }.getOrDefault(emptyList())
             _castState.update { it.copy(isSearching = false, devices = found) }
         }
@@ -334,6 +444,7 @@ class PlayerViewModel(
      * delay before resuming at the local position - seeking too early is simply ignored by most.
      */
     fun castTo(device: com.illusion.app.data.cast.DlnaDevice) {
+        if (_castState.value.isConnecting || _castState.value.isCasting) return
         val item = currentItem ?: currentTrailerItem
         if (item == null) {
             _castState.update { it.copy(error = appContext.getString(com.illusion.app.R.string.player_cast_error_no_item)) }
@@ -412,6 +523,10 @@ class PlayerViewModel(
     }
 
     fun castTogglePlayPause() {
+        if (_castState.value.googleDeviceName != null) {
+            googleCast?.toggle()
+            return
+        }
         val controller = castController ?: return
         val playing = _castState.value.isPlaying
         _castState.update { it.copy(isPlaying = !playing) }
@@ -419,6 +534,11 @@ class PlayerViewModel(
     }
 
     fun castSeekTo(positionMs: Long) {
+        if (_castState.value.googleDeviceName != null) {
+            val duration = _castState.value.durationMs
+            googleCast?.seek(positionMs.coerceIn(0, duration.takeIf { it > 0 } ?: Long.MAX_VALUE))
+            return
+        }
         val controller = castController ?: return
         val target = positionMs.coerceAtLeast(0)
         _castState.update { it.copy(positionMs = target) }
@@ -433,13 +553,28 @@ class PlayerViewModel(
      * passes false instead, since there's nothing left to resume.
      */
     fun stopCast(resumeLocally: Boolean = true) {
+        if (_castState.value.googleDeviceName != null || pendingGoogleItem != null) {
+            val old = _castState.value
+            castConnectJob?.cancel()
+            castPollJob?.cancel()
+            pendingGoogleItem = null
+            googleCast?.stop()
+            if (old.googleDeviceName != null) {
+                persistProgress(old.positionMs, old.durationMs)
+                player.seekTo(old.positionMs)
+                if (resumeLocally) player.play()
+            }
+            _castState.update { CastUiState(devices = it.devices, googleDevices = it.googleDevices) }
+            return
+        }
         val controller = castController ?: return
         val position = _castState.value.positionMs
         castPollJob?.cancel()
         castPollJob = null
         castController = null
         viewModelScope.launch { runCatching { controller.stop() } }
-        _castState.update { CastUiState(devices = it.devices) }
+        persistProgress(position, _castState.value.durationMs)
+        _castState.update { CastUiState(devices = it.devices, googleDevices = it.googleDevices) }
         if (resumeLocally && position > 0) {
             player.seekTo(position)
             player.play()
@@ -770,6 +905,7 @@ class PlayerViewModel(
     }
 
     fun load(stableId: String, playTrailer: Boolean = false) {
+        if (_castState.value.isCasting || pendingGoogleItem != null) stopCast(resumeLocally = false)
         viewModelScope.launch {
             val item = libraryRepository.getById(stableId) ?: run {
                 _state.update { it.copy(error = "Файл не найден в библиотеке", isLoading = false) }
@@ -986,7 +1122,7 @@ class PlayerViewModel(
         val duration = old.duration.takeIf { it != C.TIME_UNSET }?.coerceAtLeast(0) ?: 0L
         val item = currentItem
         val trailerItem = currentTrailerItem
-        if (item != null) persistProgress(position, duration)
+        if (item != null && !_castState.value.isCasting) persistProgress(position, duration)
 
         old.release()
         // Preserves whichever mode (normal / Cues-seek-disabled) the player was already in -
@@ -1179,15 +1315,18 @@ class PlayerViewModel(
     }
 
     fun togglePlayPause() {
+        if (_castState.value.isCasting) { castTogglePlayPause(); return }
         if (player.isPlaying) player.pause() else player.play()
     }
 
     fun seekBy(deltaMs: Long) {
+        if (_castState.value.isCasting) { castSeekBy(deltaMs); return }
         val duration = player.duration.takeIf { it != C.TIME_UNSET } ?: Long.MAX_VALUE
         player.seekTo((player.currentPosition + deltaMs).coerceIn(0, duration))
     }
 
     fun seekTo(positionMs: Long) {
+        if (_castState.value.isCasting) { castSeekTo(positionMs); return }
         player.seekTo(positionMs.coerceAtLeast(0))
     }
 
@@ -1511,12 +1650,14 @@ class PlayerViewModel(
         tickerJob?.cancel()
         tickerJob = viewModelScope.launch {
             while (isActive) {
-                val position = player.currentPosition.coerceAtLeast(0)
-                val duration = player.duration.takeIf { it != C.TIME_UNSET }?.coerceAtLeast(0) ?: 0L
+                val cast = _castState.value
+                val position = if (cast.isCasting) cast.positionMs else player.currentPosition.coerceAtLeast(0)
+                val duration = if (cast.isCasting) cast.durationMs else player.duration.takeIf { it != C.TIME_UNSET }?.coerceAtLeast(0) ?: 0L
                 val buffered = player.bufferedPosition.coerceAtLeast(0)
                 _state.update {
                     it.copy(
                         currentPositionMs = position,
+                        isPlaying = if (cast.isCasting) cast.isPlaying else it.isPlaying,
                         // A freshly created ExoPlayer (reloadPlayer(), e.g. from the sharpen
                         // toggle) reports duration as C.TIME_UNSET - coerced to 0 above - until it
                         // actually reads the container's metadata, which is a real network round
@@ -1581,8 +1722,9 @@ class PlayerViewModel(
         PlaybackActivity.isActive = false
         val item = currentItem
         if (item != null) {
-            val position = player.currentPosition.coerceAtLeast(0)
-            val duration = player.duration.takeIf { it != C.TIME_UNSET }?.coerceAtLeast(0) ?: 0L
+            val cast = _castState.value
+            val position = if (cast.isCasting) cast.positionMs else player.currentPosition.coerceAtLeast(0)
+            val duration = if (cast.isCasting) cast.durationMs else player.duration.takeIf { it != C.TIME_UNSET }?.coerceAtLeast(0) ?: 0L
             // Та же защита, что и в persistProgress - выход из плеера, который так и не начал
             // играть (ошибка чтения файла, закрытие на буферизации), не должен стирать прогресс.
             if (duration > 0 && position > 0) {
@@ -1590,6 +1732,7 @@ class PlayerViewModel(
                 persistFinalWatchProgress(item.stableId, position, duration, watched, System.currentTimeMillis())
             }
         }
+        googleCast?.release()
         if (playbackServiceStarted) {
             playbackService?.detachPlayer()
             runCatching { appContext.unbindService(playbackServiceConnection) }

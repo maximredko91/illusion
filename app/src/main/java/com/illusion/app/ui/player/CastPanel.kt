@@ -51,6 +51,7 @@ fun CastDialog(
     onDismiss: () -> Unit,
     onRefresh: () -> Unit,
     onSelectDevice: (DlnaDevice) -> Unit,
+    onSelectGoogleDevice: (String) -> Unit,
     onTogglePlayPause: () -> Unit,
     onSeekBy: (Long) -> Unit,
     onStopCast: () -> Unit
@@ -64,7 +65,7 @@ fun CastDialog(
                 if (state.isCasting) {
                     CastTransportControls(state, onTogglePlayPause, onSeekBy)
                 } else {
-                    CastDeviceList(state, onSelectDevice)
+                    CastDeviceList(state, onSelectDevice, onSelectGoogleDevice)
                 }
             }
         },
@@ -72,7 +73,7 @@ fun CastDialog(
             if (state.isCasting) {
                 TvAwareTextButton(onClick = onStopCast) { Text(stringResource(R.string.player_cast_stop)) }
             } else {
-                TvAwareTextButton(onClick = onRefresh, enabled = !state.isSearching) {
+                TvAwareTextButton(onClick = onRefresh, enabled = !state.isSearching && !state.isConnecting) {
                     Text(stringResource(R.string.player_cast_refresh))
                 }
             }
@@ -84,25 +85,41 @@ fun CastDialog(
 }
 
 @Composable
-private fun CastDeviceList(state: CastUiState, onSelectDevice: (DlnaDevice) -> Unit) {
+private fun CastDeviceList(state: CastUiState, onSelectDevice: (DlnaDevice) -> Unit, onSelectGoogleDevice: (String) -> Unit) {
+    val noDevices = state.devices.isEmpty() && state.googleDevices.isEmpty()
     when {
         state.isConnecting -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
             Text(stringResource(R.string.player_cast_connecting))
         }
-        state.isSearching && state.devices.isEmpty() -> Row(
+        state.isSearching && noDevices -> Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
             Text(stringResource(R.string.player_cast_searching))
         }
-        state.devices.isEmpty() -> Text(
+        noDevices -> Text(
             stringResource(R.string.player_cast_empty),
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         else -> LazyColumn(modifier = Modifier.heightIn(max = 260.dp).focusGroup()) {
-            items(state.devices, key = { it.udn }) { device ->
+            items(state.googleDevices, key = { "cast:${it.id}" }) { device ->
+                TvAwareButton(
+                    onClick = { onSelectGoogleDevice(device.id) },
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
+                        Icon(Icons.Default.Tv, contentDescription = null)
+                        Column {
+                            Text(device.name)
+                            Text("Google Cast", style = MaterialTheme.typography.labelSmall)
+                        }
+                    }
+                }
+            }
+            items(state.devices, key = { "dlna:${it.udn}" }) { device ->
                 val interactionSource = remember { MutableInteractionSource() }
                 TvAwareButton(
                     onClick = { onSelectDevice(device) },
@@ -114,7 +131,10 @@ private fun CastDeviceList(state: CastUiState, onSelectDevice: (DlnaDevice) -> U
                         modifier = Modifier.fillMaxWidth().focusHighlight(interactionSource)
                     ) {
                         Icon(Icons.Default.Tv, contentDescription = null)
-                        Text(device.displayName)
+                        Column {
+                            Text(device.displayName)
+                            Text("DLNA", style = MaterialTheme.typography.labelSmall)
+                        }
                     }
                 }
             }
@@ -125,7 +145,7 @@ private fun CastDeviceList(state: CastUiState, onSelectDevice: (DlnaDevice) -> U
 @Composable
 private fun CastTransportControls(state: CastUiState, onTogglePlayPause: () -> Unit, onSeekBy: (Long) -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text(stringResource(R.string.player_cast_playing_on, state.device?.displayName.orEmpty()))
+        Text(stringResource(R.string.player_cast_playing_on, state.deviceName))
         if (state.durationMs > 0) {
             LinearProgressIndicator(
                 progress = { (state.positionMs.toFloat() / state.durationMs).coerceIn(0f, 1f) },

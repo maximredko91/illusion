@@ -2,6 +2,9 @@
 # their AARs - nothing needed here for those. Rules below were added because R8 actually broke on
 # them, not guessed preemptively.
 
+# Instantiated by name from AndroidManifest metadata by the Google Cast framework.
+-keep class com.illusion.app.data.cast.GoogleCastOptionsProvider { public <init>(); }
+
 # smbj's transitive deps (net.engio.mbassy's optional event-filter expression-language support,
 # and Kerberos/SPNEGO auth via org.ietf.jgss) reference JVM-only classes that don't exist on
 # Android and are never actually reached at runtime - this app only ever uses NTLM auth (see

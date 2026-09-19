@@ -484,7 +484,11 @@
     <string name="player_cast">Транслировать на ТВ</string>
     <string name="player_cast_title">Трансляция на ТВ</string>
     <string name="player_cast_searching">Поиск устройств…</string>
-    <string name="player_cast_empty">Устройства не найдены. Проверьте, что телевизор включён и подключён к той же сети.</string>
+    <string name="player_cast_empty">Устройства Google Cast и DLNA пока не найдены. Проверьте, что телевизор или приставка включены и подключены к той же сети. На DLNA-устройстве должен быть запущен приёмник.</string>
+    <string name="player_cast_google_unavailable">Google Cast недоступен. Проверьте, что на телефоне установлены и включены сервисы Google Play. Поиск DLNA доступен.</string>
+    <string name="player_cast_permission_required">Для поиска телевизора разрешите доступ к локальной сети.</string>
+    <string name="player_cast_google_error">Ошибка Google Cast (%1$d). Проверьте подключение приставки и поддержку формата видео.</string>
+    <string name="player_cast_google_format_error">Приставка не смогла воспроизвести поток. Проверьте подключение и поддержку формата видео в Google Cast.</string>
     <string name="player_cast_refresh">Искать снова</string>
     <string name="player_cast_connecting">Подключение…</string>
     <string name="player_cast_playing_on">Идёт трансляция: %1$s</string>

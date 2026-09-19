@@ -181,6 +181,9 @@ fun PlayerScreen(
     val currentPlayer by viewModel.playerState.collectAsState()
     val videoSurfaceGeneration by viewModel.videoSurfaceGeneration.collectAsState()
     val castState by viewModel.castState.collectAsState()
+    val castPermissionGate = com.illusion.app.ui.smbsource.rememberLocalNetworkPermissionGate {
+        android.widget.Toast.makeText(context, R.string.player_cast_permission_required, android.widget.Toast.LENGTH_LONG).show()
+    }
     val introDetectState by viewModel.introDetectState.collectAsState()
     val noExternalAppMessage = stringResource(R.string.player_open_external_no_app)
 
@@ -720,7 +723,7 @@ fun PlayerScreen(
                         onOpenAudioTracks = { bumpInteraction(); showAudioDialog = true },
                         onCycleAspectRatio = { bumpInteraction(); cycleResizeMode() },
                         onOpenSettings = { bumpInteraction(); showSpeedDialog = true },
-                        onOpenCast = { bumpInteraction(); viewModel.openCastPicker() },
+                        onOpenCast = { bumpInteraction(); castPermissionGate { viewModel.openCastPicker() } },
                         isCasting = castState.isCasting,
                         decoderMode = uiState.decoderMode,
                         onDecoderModeChange = { mode -> bumpInteraction(); viewModel.setDecoderMode(mode) },
@@ -866,6 +869,7 @@ fun PlayerScreen(
                 onDismiss = viewModel::closeCastPicker,
                 onRefresh = viewModel::refreshCastDevices,
                 onSelectDevice = viewModel::castTo,
+                onSelectGoogleDevice = viewModel::castToGoogle,
                 onTogglePlayPause = viewModel::castTogglePlayPause,
                 onSeekBy = viewModel::castSeekBy,
                 onStopCast = { viewModel.stopCast() }
