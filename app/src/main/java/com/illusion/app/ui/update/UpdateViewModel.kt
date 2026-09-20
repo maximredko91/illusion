@@ -291,6 +291,18 @@ class UpdateViewModel(
         }
     }
 
+    /**
+     * Запасной путь, когда систему не устроила тихая установка: открываем обычный системный
+     * установщик вместо того, чтобы показывать «система отклонила установку» и упираться в тупик.
+     *
+     * Отказ здесь - штатная ситуация, а не ошибка приложения: прошивки (HyperOS в том числе)
+     * вправе не пускать стороннего установщика мимо своего экрана подтверждения.
+     */
+    fun installViaSystemInstaller() {
+        val file = _state.value.downloadedFile ?: return
+        viewModelScope.launch { _installIntent.send(UpdateInstaller.installIntent(appContext, file)) }
+    }
+
     companion object {
         /** How often the automatic check still runs even with "Автопроверка обновлений: Отключена" - just frequently enough that a `[MANDATORY]` release doesn't sit unreachable for weeks, not so often that "disabled" stops meaning anything. */
         private const val MANDATORY_FALLBACK_CHECK_INTERVAL_HOURS = 24

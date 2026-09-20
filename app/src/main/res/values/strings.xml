@@ -123,9 +123,6 @@
     <string name="update_launch_failed_title">Не удалось запустить установку</string>
     <string name="update_launch_failed_text">На этом устройстве нет приложения для установки APK. Скачайте файл вручную со страницы релизов на GitHub и установите через файловый менеджер.</string>
     <string name="update_launch_failed_ok">Понятно</string>
-    <string name="update_install_failed_title">Не удалось установить обновление</string>
-    <string name="update_install_failed_text">Система отклонила установку. Попробуйте ещё раз или скачайте APK со страницы релизов вручную.</string>
-    <string name="update_install_failed_text_with_reason">Система отклонила установку: %1$s</string>
     <string name="update_available_title">Доступно обновление %1$s</string>
     <string name="update_mandatory_title">Требуется обновление %1$s</string>
     <string name="update_no_release_notes">Список изменений не указан.</string>

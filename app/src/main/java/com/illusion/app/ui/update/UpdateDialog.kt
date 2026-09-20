@@ -53,29 +53,19 @@ fun UpdatePrompt(viewModel: UpdateViewModel) {
     // Результат тихой установки (UpdateInstaller.installSilently): успех сюда не приходит - при
     // удачном самообновлении процесс просто заменяется. Приходит либо просьба подтвердить, либо
     // отказ системы, и оба случая надо показать, а не проглотить.
-    var installError by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(Unit) {
         com.illusion.app.data.update.installOutcomeFlow.collect { outcome ->
             when (outcome) {
                 is com.illusion.app.data.update.InstallOutcome.NeedsUserAction ->
                     runCatching { context.startActivity(outcome.intent) }.onFailure { launchFailed = true }
-                is com.illusion.app.data.update.InstallOutcome.Failed ->
-                    installError = outcome.message ?: ""
+                is com.illusion.app.data.update.InstallOutcome.Failed -> {
+                    // Не тупик, а переход на обычный путь: прошивка вправе не пускать тихую
+                    // установку, и пользователю в этот момент нужен установщик, а не сообщение.
+                    android.util.Log.w("UpdateDialog", "silent install rejected: ${outcome.message}")
+                    viewModel.installViaSystemInstaller()
+                }
             }
         }
-    }
-    installError?.let { message ->
-        AlertDialog(
-            onDismissRequest = { installError = null },
-            title = { Text(stringResource(R.string.update_install_failed_title)) },
-            text = {
-                Text(
-                    if (message.isBlank()) stringResource(R.string.update_install_failed_text)
-                    else stringResource(R.string.update_install_failed_text_with_reason, message)
-                )
-            },
-            confirmButton = { TextButton(onClick = { installError = null }) { Text(stringResource(R.string.update_launch_failed_ok)) } }
-        )
     }
     LaunchedEffect(Unit) {
         viewModel.permissionSettingsIntent.collect { intent ->
