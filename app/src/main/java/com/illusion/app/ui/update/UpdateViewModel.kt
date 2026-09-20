@@ -254,14 +254,22 @@ class UpdateViewModel(
         _state.update { it.copy(error = null) }
     }
 
-    /** Either sends the ready-to-launch install Intent, or - the first time this app tries to install an update - redirects to the one-time "install unknown apps" toggle instead. See UpdateInstaller's own KDoc for why that gate can't be skipped. */
+    /**
+     * Installs the downloaded update, preferring the silent [PackageInstaller] session (no
+     * installer UI at all once this app is its own installer of record - see UpdateInstaller's
+     * KDoc) and falling back to the system-installer Intent when that session can't be started.
+     * The first time an update is installed at all, this instead redirects to the one-time
+     * "install unknown apps" toggle, which neither path can skip.
+     */
     fun install() {
         val file = _state.value.downloadedFile ?: return
         viewModelScope.launch {
-            if (UpdateInstaller.canInstallPackages(appContext)) {
-                _installIntent.send(UpdateInstaller.installIntent(appContext, file))
-            } else {
+            if (!UpdateInstaller.canInstallPackages(appContext)) {
                 _permissionSettingsIntent.send(UpdateInstaller.installPermissionSettingsIntent(appContext))
+                return@launch
+            }
+            if (!UpdateInstaller.installSilently(appContext, file)) {
+                _installIntent.send(UpdateInstaller.installIntent(appContext, file))
             }
         }
     }

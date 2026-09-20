@@ -34,6 +34,10 @@
          that's a separate, one-time-per-source gate the user still has to clear themselves; see
          UpdateInstaller's own KDoc. -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <!-- Android 12+: позволяет обновлять САМО приложение без диалога подтверждения, если
+         предыдущую версию установило оно же (так работают обновления в сторонних магазинах).
+         Обычное разрешение, у пользователя ничего не спрашивается. -->
+    <uses-permission android:name="android.permission.UPDATE_PACKAGES_WITHOUT_USER_ACTION" />
 
     <!-- The Xiaomi TV Box target has no touchscreen and may not declare the leanback feature -
          both must be optional or the Play Store (and some OEM stores) would filter the app out
@@ -110,6 +114,11 @@
         <meta-data
             android:name="com.google.android.gms.cast.framework.OPTIONS_PROVIDER_CLASS_NAME"
             android:value="com.illusion.app.data.cast.GoogleCastOptionsProvider" />
+
+        <!-- Результат сессии установки обновления (см. UpdateInstaller.installSilently). -->
+        <receiver
+            android:name=".data.update.UpdateInstallReceiver"
+            android:exported="false" />
 
         <activity
             android:name=".MainActivity"
