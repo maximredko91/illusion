@@ -14,6 +14,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -457,9 +458,17 @@ fun PlayerScreen(
     // доходили, панель управления не появлялась вовсе (проверено на Xiaomi MiTV-AFKR0). Перехват
     // на уровне активности от фокуса не зависит: первое нажатие любой навигационной кнопки
     // показывает панель и дальше не идёт, следующие обрабатываются обычным образом.
-    DisposableEffect(isLocked, isInPip) {
+    DisposableEffect(isLocked, isInPip, castState.isCasting) {
         PlayerKeyEvents.handler = handler@{ event ->
             if (event.action != android.view.KeyEvent.ACTION_DOWN) return@handler false
+            // Во время трансляции качелька громкости должна двигать телевизор, а не динамик
+            // телефона: локальное воспроизведение в этот момент стоит на паузе и всё равно молчит.
+            if (castState.isCasting) {
+                when (event.keyCode) {
+                    android.view.KeyEvent.KEYCODE_VOLUME_UP -> if (viewModel.castAdjustVolume(1)) return@handler true
+                    android.view.KeyEvent.KEYCODE_VOLUME_DOWN -> if (viewModel.castAdjustVolume(-1)) return@handler true
+                }
+            }
             if (isInPip || isLocked) return@handler false
             val isNavKey = when (event.keyCode) {
                 android.view.KeyEvent.KEYCODE_DPAD_CENTER,
@@ -685,6 +694,17 @@ fun PlayerScreen(
             }
 
             AnimatedVisibility(
+                visible = uiState.showSkipToPostCredits,
+                enter = fadeIn(tween(com.illusion.app.ui.common.economicalDurationMs(300))) + slideInVertically(tween(com.illusion.app.ui.common.economicalDurationMs(300)), initialOffsetY = { it / 2 }),
+                exit = fadeOut(tween(com.illusion.app.ui.common.economicalDurationMs(300))) + slideOutVertically(tween(com.illusion.app.ui.common.economicalDurationMs(300)), targetOffsetY = { it / 2 }),
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(24.dp)
+            ) {
+                SkipToPostCreditsBanner(onSkip = viewModel::skipToPostCredits)
+            }
+
+            AnimatedVisibility(
                 visible = uiState.showSkipCredits,
                 enter = fadeIn(tween(com.illusion.app.ui.common.economicalDurationMs(300))) + slideInVertically(tween(com.illusion.app.ui.common.economicalDurationMs(300)), initialOffsetY = { it / 2 }),
                 exit = fadeOut(tween(com.illusion.app.ui.common.economicalDurationMs(300))) + slideOutVertically(tween(com.illusion.app.ui.common.economicalDurationMs(300)), targetOffsetY = { it / 2 }),
@@ -872,6 +892,7 @@ fun PlayerScreen(
                 onSelectGoogleDevice = viewModel::castToGoogle,
                 onTogglePlayPause = viewModel::castTogglePlayPause,
                 onSeekBy = viewModel::castSeekBy,
+                onVolumeChange = viewModel::castSetVolume,
                 onStopCast = { viewModel.stopCast() }
             )
         }
@@ -916,6 +937,9 @@ fun PlayerScreen(
             outroMarkedStartMs = uiState.outroMarkedStartMs,
             onMarkCreditsStart = { viewModel.markCreditsStart(); showSpeedDialog = false },
             onClearOutroMarker = { viewModel.clearOutroMarker(); showSpeedDialog = false },
+            postCreditsMarkedStartMs = uiState.postCreditsMarkedStartMs,
+            onMarkPostCreditsStart = { viewModel.markPostCreditsStart(); showSpeedDialog = false },
+            onClearPostCreditsMarker = { viewModel.clearPostCreditsMarker(); showSpeedDialog = false },
             onSelect = { speed -> viewModel.setPlaybackSpeed(speed); showSpeedDialog = false },
             onDismiss = { showSpeedDialog = false }
         )

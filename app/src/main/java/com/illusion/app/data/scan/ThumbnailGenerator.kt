@@ -70,7 +70,7 @@ class ThumbnailGenerator(
 
             val columns = ceil(sqrt(frames.size.toDouble())).toInt().coerceAtLeast(1)
             val rows = ceil(frames.size.toDouble() / columns).toInt()
-            val sprite = createBitmap(columns * FRAME_WIDTH, rows * FRAME_HEIGHT, Bitmap.Config.RGB_565)
+            val sprite = createBitmap(columns * FRAME_WIDTH, rows * FRAME_HEIGHT, Bitmap.Config.ARGB_8888)
             val canvas = Canvas(sprite)
             frames.forEachIndexed { index, frame ->
                 val col = index % columns
@@ -80,7 +80,7 @@ class ThumbnailGenerator(
             }
 
             val outFile = File(spriteDir(context), "${item.stableId}.jpg")
-            FileOutputStream(outFile).use { out -> sprite.compress(Bitmap.CompressFormat.JPEG, 80, out) }
+            FileOutputStream(outFile).use { out -> sprite.compress(Bitmap.CompressFormat.JPEG, 85, out) }
             sprite.recycle()
 
             return ThumbnailSpriteEntity(
@@ -102,8 +102,12 @@ class ThumbnailGenerator(
     }
 
     companion object {
-        private const val FRAME_WIDTH = 160
-        private const val FRAME_HEIGHT = 90
+        // Было 160x90 - на полосе перемотки терпимо, а на карточке «Продолжить просмотр» (кадр
+        // растягивается на всю ширину карточки) превращалось в кашу. Вчетверо больше пикселей -
+        // это ~0.7 МБ на фильм вместо ~0.2 и вдвое дольше генерация, зато кадр остаётся кадром.
+        // Спрайты старого формата пересоздаются сами - см. IllusionApplication.generateThumbnailIfMissing.
+        const val FRAME_WIDTH = 320
+        const val FRAME_HEIGHT = 180
         private const val MIN_INTERVAL_MS = 10_000L
         private const val MAX_FRAMES = 100
 

@@ -23,6 +23,10 @@
     <string name="player_settings_section_decoder">Декодер</string>
     <string name="player_decoder_hint">Если картинка рассыпается или зеленеет — попробуйте программный</string>
     <string name="settings_update_check_interval">Автопроверка обновлений</string>
+    <string name="settings_install_permission">Установка обновлений</string>
+    <string name="settings_install_permission_granted">Разрешено. Обновления ставятся прямо из приложения</string>
+    <string name="settings_install_permission_missing">Android не разрешает приложению устанавливать обновления. Без этого разрешения обновиться не получится</string>
+    <string name="settings_install_permission_action">Разрешить установку</string>
     <string name="settings_about_section">О программе</string>
     <string name="player_mode_ask_title">Как открыть?</string>
     <string name="player_mode_ask_internal">Внутренний плеер</string>
@@ -311,6 +315,11 @@
     <string name="settings_predictive_back_description">Анимированный предпросмотр при свайпе назад (Android 13+)</string>
     <string name="settings_glass_effect">Эффект стекла</string>
     <string name="settings_glass_effect_description">Матовое стекло на кнопке прокрутки наверх (Android 12+)</string>
+    <string name="settings_visuals_note">Каждое украшение можно выключить по отдельности. В профиле «Экономичный» они выключены все сразу, независимо от этих переключателей.</string>
+    <string name="settings_poster_accent">Цвет из постера</string>
+    <string name="settings_poster_accent_description">Экран фильма подкрашивается под его постер. Цена: постер один раз читается в уменьшенном виде, чтобы взять цвет — на прокрутку не влияет.</string>
+    <string name="settings_parallax">Параллакс</string>
+    <string name="settings_parallax_description">Фон в описании уезжает медленнее текста. Цена: почти нулевая, сдвиг считается при прокрутке.</string>
     <string name="settings_accent_color">Акцентный цвет</string>
     <string name="settings_app_icon">Значок приложения</string>
     <string name="settings_expand">Развернуть</string>
@@ -510,6 +519,13 @@
     <string name="player_cast_pause">Пауза на телевизоре</string>
     <string name="player_cast_rewind">Назад на 10 секунд</string>
     <string name="player_cast_forward">Вперёд на 10 секунд</string>
+    <string name="player_cast_volume">Громкость телевизора</string>
+    <string name="player_settings_section_post_credits">Сцена после титров</string>
+    <string name="player_mark_post_credits">Отметить сцену после титров</string>
+    <string name="player_clear_post_credits">Убрать отметку</string>
+    <string name="player_post_credits_marked_at">Сцена отмечена на %1$s</string>
+    <string name="player_mark_post_credits_hint">Откройте момент, где начинается сцена после титров, и нажмите. Во время титров появится кнопка перехода к ней, а переход к следующему файлу до неё не сработает.</string>
+    <string name="player_skip_to_post_credits">К сцене после титров</string>
     <string name="player_cast_error_no_item">Нечего транслировать</string>
     <string name="player_cast_error_no_network">Нет подключения к локальной сети</string>
     <string name="player_cast_error_failed">Устройство не приняло видео</string>

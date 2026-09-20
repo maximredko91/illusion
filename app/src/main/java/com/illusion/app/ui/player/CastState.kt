@@ -24,6 +24,9 @@ data class CastUiState(
     val isPlaying: Boolean = false,
     val positionMs: Long = 0L,
     val durationMs: Long = 0L,
+    /** Receiver volume, 0..1. Null means "this device doesn't let us control it" - a DLNA renderer
+     * without a RenderingControl service, or no session yet - and the slider is hidden. */
+    val volume: Float? = null,
     val error: String? = null
 ) {
     val isCasting: Boolean get() = device != null || googleDeviceName != null

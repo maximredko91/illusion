@@ -695,6 +695,18 @@ fun SkipCreditsBanner(onSkip: () -> Unit, modifier: Modifier = Modifier) {
     }
 }
 
+/** «К сцене после титров» - см. PlayerViewModel.isBeforePostCredits. */
+@Composable
+fun SkipToPostCreditsBanner(onSkip: () -> Unit, modifier: Modifier = Modifier) {
+    Button(
+        onClick = onSkip,
+        colors = ButtonDefaults.buttonColors(containerColor = Color.White.copy(alpha = 0.85f)),
+        modifier = modifier
+    ) {
+        Text(stringResource(R.string.player_skip_to_post_credits), color = Color.Black)
+    }
+}
+
 @Composable
 fun ErrorOverlay(message: String, onRetry: () -> Unit, modifier: Modifier = Modifier) {
     Box(
@@ -795,6 +807,9 @@ fun PlayerSettingsPanel(
     onCancelDetectIntro: () -> Unit,
     canMarkCredits: Boolean,
     outroMarkedStartMs: Long?,
+    postCreditsMarkedStartMs: Long?,
+    onMarkPostCreditsStart: () -> Unit,
+    onClearPostCreditsMarker: () -> Unit,
     onMarkCreditsStart: () -> Unit,
     onClearOutroMarker: () -> Unit,
     onSelect: (Float) -> Unit,
@@ -1183,6 +1198,33 @@ fun PlayerSettingsPanel(
                         style = MaterialTheme.typography.bodySmall
                     )
                 }
+
+                // Сцена после титров (Marvel и прочие): у фильма нет соседней серии, автоматически
+                // такое не найти, поэтому только ручная отметка - зато она же удерживает переход
+                // к следующему файлу, пока сцена не пройдена.
+                PanelSectionLabel(stringResource(R.string.player_settings_section_post_credits))
+                if (postCreditsMarkedStartMs != null) {
+                    Text(
+                        stringResource(R.string.player_post_credits_marked_at, formatTime(postCreditsMarkedStartMs)),
+                        color = Color.White.copy(alpha = 0.7f),
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    TextButton(onClick = onMarkPostCreditsStart) {
+                        Text(stringResource(R.string.player_mark_post_credits))
+                    }
+                    if (postCreditsMarkedStartMs != null) {
+                        TextButton(onClick = onClearPostCreditsMarker) {
+                            Text(stringResource(R.string.player_clear_post_credits))
+                        }
+                    }
+                }
+                Text(
+                    stringResource(R.string.player_mark_post_credits_hint),
+                    color = Color.White.copy(alpha = 0.7f),
+                    style = MaterialTheme.typography.bodySmall
+                )
             }
         }
     }

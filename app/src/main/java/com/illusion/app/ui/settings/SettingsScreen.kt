@@ -80,6 +80,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -153,6 +154,10 @@ fun SettingsScreen(
     predictiveBackEnabled: Flow<Boolean>,
     onPredictiveBackEnabledChange: (Boolean) -> Unit,
     glassEffectEnabled: Flow<Boolean>,
+    posterAccentEnabled: Flow<Boolean>,
+    onPosterAccentEnabledChange: (Boolean) -> Unit,
+    parallaxEnabled: Flow<Boolean>,
+    onParallaxEnabledChange: (Boolean) -> Unit,
     onGlassEffectEnabledChange: (Boolean) -> Unit,
     accentColor: Flow<com.illusion.app.domain.model.AccentColor>,
     onAccentColorChange: (com.illusion.app.domain.model.AccentColor) -> Unit,
@@ -212,6 +217,8 @@ fun SettingsScreen(
     val hapticsOn by hapticsEnabled.collectAsState(initial = true)
     val predictiveBackOn by predictiveBackEnabled.collectAsState(initial = true)
     val glassEffectOn by glassEffectEnabled.collectAsState(initial = false)
+    val posterAccentOn by posterAccentEnabled.collectAsState(initial = true)
+    val parallaxOn by parallaxEnabled.collectAsState(initial = true)
     val currentAccentColor by accentColor.collectAsState(initial = com.illusion.app.domain.model.AccentColor.ILLUSION)
     val currentThemeMode by themeMode.collectAsState(initial = com.illusion.app.domain.model.ThemeMode.SYSTEM)
     // Same effective-dark logic as IllusionTheme itself - the accent swatches need to preview
@@ -550,6 +557,45 @@ fun SettingsScreen(
                                         }
                                     }
                                     SettingsDivider()
+                                    // Разрешение «установка неизвестных приложений» раньше нигде не
+                                    // показывалось: о нём узнавали только в момент установки, когда
+                                    // приложение внезапно уводило в системные настройки. Теперь его
+                                    // состояние видно заранее и включается отсюда же.
+                                    val installContext = LocalContext.current
+                                    var canInstallUpdates by remember { mutableStateOf(com.illusion.app.data.update.UpdateInstaller.canInstallPackages(installContext)) }
+                                    val installLifecycle = androidx.lifecycle.compose.LocalLifecycleOwner.current
+                                    // Разрешение выдаётся в системных настройках, то есть за
+                                    // пределами приложения - пересчитываем его на каждом возврате.
+                                    DisposableEffect(installLifecycle) {
+                                        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+                                            if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
+                                                canInstallUpdates = com.illusion.app.data.update.UpdateInstaller.canInstallPackages(installContext)
+                                            }
+                                        }
+                                        installLifecycle.lifecycle.addObserver(observer)
+                                        onDispose { installLifecycle.lifecycle.removeObserver(observer) }
+                                    }
+                                    SettingsActionCard(
+                                        title = stringResource(R.string.settings_install_permission),
+                                        description = stringResource(
+                                            if (canInstallUpdates) R.string.settings_install_permission_granted
+                                            else R.string.settings_install_permission_missing
+                                        )
+                                    ) {
+                                        if (!canInstallUpdates) {
+                                            TvAwareButton(
+                                                onClick = {
+                                                    runCatching {
+                                                        installContext.startActivity(
+                                                            com.illusion.app.data.update.UpdateInstaller.installPermissionSettingsIntent(installContext)
+                                                        )
+                                                    }
+                                                },
+                                                modifier = Modifier.fillMaxWidth()
+                                            ) { Text(stringResource(R.string.settings_install_permission_action)) }
+                                        }
+                                    }
+                                    SettingsDivider()
                                     val currentUpdateCheckIntervalHours by updateCheckIntervalHours.collectAsState(initial = 720)
                                     SettingsActionCard(title = stringResource(R.string.settings_update_check_interval)) {
                                         UpdateCheckIntervalMenu(currentUpdateCheckIntervalHours, onUpdateCheckIntervalChange, modifier = Modifier.fillMaxWidth())
@@ -773,6 +819,28 @@ fun SettingsScreen(
                                 },
                                 colors = ListItemDefaults.colors(containerColor = Color.Transparent),
                                 modifier = Modifier.fillMaxWidth()
+                            )
+                            // Украшения по отдельности: у каждого в подписи сказано, что оно даёт
+                            // и чем за это платит - решение принимается на месте, без догадок.
+                            SettingsDivider()
+                            Text(
+                                stringResource(R.string.settings_visuals_note),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)
+                            )
+                            VisualEffectToggle(
+                                title = stringResource(R.string.settings_poster_accent),
+                                description = stringResource(R.string.settings_poster_accent_description),
+                                checked = posterAccentOn,
+                                onCheckedChange = onPosterAccentEnabledChange
+                            )
+                            SettingsDivider()
+                            VisualEffectToggle(
+                                title = stringResource(R.string.settings_parallax),
+                                description = stringResource(R.string.settings_parallax_description),
+                                checked = parallaxOn,
+                                onCheckedChange = onParallaxEnabledChange
                             )
                             }
                         }
@@ -1682,6 +1750,23 @@ internal fun SettingsDivider(indented: Boolean = false) {
         // line doesn't cut across the icon column - the usual Material list treatment.
         modifier = Modifier.padding(start = if (indented) 72.dp else 16.dp, end = 16.dp),
         color = MaterialTheme.colorScheme.outlineVariant
+    )
+}
+
+/** Переключатель украшения: название, честная подпись «что даёт и чем платит», сам тумблер. */
+@Composable
+private fun VisualEffectToggle(
+    title: String,
+    description: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit
+) {
+    ListItem(
+        headlineContent = { Text(title) },
+        supportingContent = { Text(description) },
+        trailingContent = { TvAwareSwitch(checked = checked, onCheckedChange = onCheckedChange) },
+        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+        modifier = Modifier.fillMaxWidth()
     )
 }
 

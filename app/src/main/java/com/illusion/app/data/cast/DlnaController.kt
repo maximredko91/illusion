@@ -68,6 +68,27 @@ class DlnaController(private val device: DlnaDevice) {
         return DlnaPosition(position, duration)
     }
 
+    /** True when this renderer published a RenderingControl service at all - see [DlnaDevice]. */
+    val supportsVolume: Boolean get() = device.renderingControlUrl != null
+
+    /** Current volume as 0..1, or null if the renderer has no RenderingControl / didn't answer. */
+    suspend fun volume(): Float? {
+        val url = device.renderingControlUrl ?: return null
+        val body = soap(url, RENDERING_SERVICE_TYPE, "GetVolume", "<InstanceID>0</InstanceID><Channel>Master</Channel>")
+            ?: return null
+        val value = soapValue(body, "CurrentVolume")?.toIntOrNull() ?: return null
+        return (value / 100f).coerceIn(0f, 1f)
+    }
+
+    /** [volume] is 0..1; UPnP itself works in whole percent, which is also the step every renderer's
+     * own on-screen volume uses. */
+    suspend fun setVolume(volume: Float) {
+        val url = device.renderingControlUrl ?: return
+        val percent = (volume.coerceIn(0f, 1f) * 100).toInt()
+        soap(url, RENDERING_SERVICE_TYPE, "SetVolume",
+            "<InstanceID>0</InstanceID><Channel>Master</Channel><DesiredVolume>$percent</DesiredVolume>")
+    }
+
     suspend fun transportState(): DlnaTransportState? {
         val body = soap("GetTransportInfo", "<InstanceID>0</InstanceID>") ?: return null
         val state = soapValue(body, "CurrentTransportState") ?: return null
@@ -77,14 +98,22 @@ class DlnaController(private val device: DlnaDevice) {
     /** Returns the response body on success, null on any HTTP/SOAP failure - a renderer refusing
      * one command (Pause on a live stream, Seek before it has loaded) is normal and shouldn't
      * throw its way up into playback code. */
-    private suspend fun soap(action: String, arguments: String): String? = withContext(Dispatchers.IO) {
+    private suspend fun soap(action: String, arguments: String): String? =
+        soap(device.controlUrl, SERVICE_TYPE, action, arguments)
+
+    private suspend fun soap(
+        controlUrl: String,
+        serviceType: String,
+        action: String,
+        arguments: String
+    ): String? = withContext(Dispatchers.IO) {
         val envelope = """<?xml version="1.0" encoding="utf-8"?>""" +
             """<s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/" """ +
             """s:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/">""" +
-            "<s:Body><u:$action xmlns:u=\"$SERVICE_TYPE\">$arguments</u:$action></s:Body></s:Envelope>"
+            "<s:Body><u:$action xmlns:u=\"$serviceType\">$arguments</u:$action></s:Body></s:Envelope>"
         val request = Request.Builder()
-            .url(device.controlUrl)
-            .addHeader("SOAPAction", "\"$SERVICE_TYPE#$action\"")
+            .url(controlUrl)
+            .addHeader("SOAPAction", "\"$serviceType#$action\"")
             .post(envelope.toRequestBody("text/xml; charset=\"utf-8\"".toMediaType()))
             .build()
         runCatching {
@@ -96,6 +125,7 @@ class DlnaController(private val device: DlnaDevice) {
 
     private companion object {
         const val SERVICE_TYPE = "urn:schemas-upnp-org:service:AVTransport:1"
+        const val RENDERING_SERVICE_TYPE = "urn:schemas-upnp-org:service:RenderingControl:1"
         const val TIMEOUT_MS = 6000L
     }
 }

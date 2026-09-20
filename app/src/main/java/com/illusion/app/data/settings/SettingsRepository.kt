@@ -41,6 +41,8 @@ class SettingsRepository(private val context: Context) {
         val UI_MODE = stringPreferencesKey("ui_mode")
         val HAPTICS_ENABLED = booleanPreferencesKey("haptics_enabled")
         val GLASS_EFFECT_ENABLED = booleanPreferencesKey("glass_effect_enabled")
+        val POSTER_ACCENT_ENABLED = booleanPreferencesKey("poster_accent_enabled")
+        val PARALLAX_ENABLED = booleanPreferencesKey("parallax_enabled")
         val ACCENT_COLOR = stringPreferencesKey("accent_color")
         val THEME_MODE = stringPreferencesKey("theme_mode")
         val PLAYER_MODE = stringPreferencesKey("player_mode")
@@ -157,6 +159,23 @@ class SettingsRepository(private val context: Context) {
         context.dataStore.edit { it[Keys.GLASS_EFFECT_ENABLED] = value }
     }
 
+    /**
+     * Украшения интерфейса по отдельности (Настройки → Графика). Включены по умолчанию: на
+     * обычном телефоне они ничего заметно не стоят, а выключать их поштучно имеет смысл ровно
+     * тем, у кого они мешают - см. пояснения к каждому переключателю в настройках.
+     */
+    val posterAccentEnabled: Flow<Boolean> = context.dataStore.data.map { it[Keys.POSTER_ACCENT_ENABLED] ?: true }
+
+    suspend fun setPosterAccentEnabled(value: Boolean) {
+        context.dataStore.edit { it[Keys.POSTER_ACCENT_ENABLED] = value }
+    }
+
+    val parallaxEnabled: Flow<Boolean> = context.dataStore.data.map { it[Keys.PARALLAX_ENABLED] ?: true }
+
+    suspend fun setParallaxEnabled(value: Boolean) {
+        context.dataStore.edit { it[Keys.PARALLAX_ENABLED] = value }
+    }
+
     /** ILLUSION (the app's own brand crimson, matching the launcher icon/splash) is the actual out-of-box default - not AccentColor.DEFAULT, which would let Material You's wallpaper-based dynamic color override the brand on API 31+ and undercut the "one consistent style" the icon/splash rename was for. DEFAULT is still a real selectable option in Settings for anyone who wants dynamic color instead. */
     val accentColor: Flow<AccentColor> = context.dataStore.data.map {
         it[Keys.ACCENT_COLOR]?.let { name -> runCatching { AccentColor.valueOf(name) }.getOrNull() }
@@ -174,6 +193,36 @@ class SettingsRepository(private val context: Context) {
 
     suspend fun setThemeMode(mode: com.illusion.app.domain.model.ThemeMode) {
         context.dataStore.edit { it[Keys.THEME_MODE] = mode.name }
+        themeModeSnapshot = mode
+    }
+
+    /**
+     * Тема, прочитанная синхронно, без корутин: её нужно применить в Application.onCreate() до
+     * создания первой Activity (системный splash читает uiMode процесса), а первое обращение к
+     * DataStore блокировало главный поток на холодном старте - это и отметил аудит. DataStore
+     * остаётся источником истины, здесь лишь зеркало последнего значения; при расхождении
+     * (сброс настроек, правка из другого процесса) оно обновится из [themeMode] на первом же
+     * собранном значении.
+     */
+    var themeModeSnapshot: com.illusion.app.domain.model.ThemeMode
+        get() = snapshotPrefs.getString(THEME_MODE_SNAPSHOT_KEY, null)
+            ?.let { runCatching { com.illusion.app.domain.model.ThemeMode.valueOf(it) }.getOrNull() }
+            ?: com.illusion.app.domain.model.ThemeMode.SYSTEM
+        private set(value) {
+            snapshotPrefs.edit().putString(THEME_MODE_SNAPSHOT_KEY, value.name).apply()
+        }
+
+    /** Держит [themeModeSnapshot] в согласии с DataStore - вызывается один раз из IllusionApplication. */
+    fun keepThemeModeSnapshotFresh(scope: kotlinx.coroutines.CoroutineScope) {
+        scope.launch { themeMode.collect { themeModeSnapshot = it } }
+    }
+
+    private val snapshotPrefs by lazy {
+        context.getSharedPreferences("settings_snapshot", android.content.Context.MODE_PRIVATE)
+    }
+
+    private companion object {
+        const val THEME_MODE_SNAPSHOT_KEY = "theme_mode"
     }
 
     /** Which player handles playback - was a one-off "open in external player" action button inside the player itself, moved here as a persistent default per user feedback (choose once, not every time). */
@@ -388,8 +437,13 @@ class SettingsRepository(private val context: Context) {
             it.remove(Keys.UI_MODE)
             it.remove(Keys.HAPTICS_ENABLED)
             it.remove(Keys.GLASS_EFFECT_ENABLED)
+            it.remove(Keys.POSTER_ACCENT_ENABLED)
+            it.remove(Keys.PARALLAX_ENABLED)
             it.remove(Keys.ACCENT_COLOR)
             it.remove(Keys.THEME_MODE)
+            // Зеркало для синхронного чтения на старте - иначе сброс настроек не доехал бы до
+            // темы до следующего изменения.
+            snapshotPrefs.edit().remove(THEME_MODE_SNAPSHOT_KEY).apply()
             it.remove(Keys.PLAYER_MODE)
             it.remove(Keys.EXTERNAL_PLAYER_PACKAGE)
             it.remove(Keys.PREDICTIVE_BACK_ENABLED)

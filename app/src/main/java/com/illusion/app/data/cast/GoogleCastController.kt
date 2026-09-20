@@ -128,6 +128,15 @@ class GoogleCastController(
     /** Ignore stale receiver status from before LOAD, or content started by another sender. */
     fun ownsCurrentMedia(): Boolean = contentId != null && client?.mediaInfo?.contentId == contentId
 
+    /** Receiver volume as 0..1, or null when no session is connected. */
+    fun volume(): Float? = if (selected) sessions.currentCastSession?.volume?.toFloat() else null
+
+    /** Cast volume is the device's own, not the stream's - it moves the TV's volume bar. */
+    fun setVolume(volume: Float) {
+        if (!selected) return
+        runCatching { sessions.currentCastSession?.volume = volume.coerceIn(0f, 1f).toDouble() }
+    }
+
     fun toggle() {
         val remote = client ?: return
         val request = if (remote.isPlaying) remote.pause() else remote.play()

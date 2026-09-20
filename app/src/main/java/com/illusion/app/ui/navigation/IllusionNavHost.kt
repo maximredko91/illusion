@@ -175,6 +175,16 @@ fun IllusionNavHost(
         }
     }
     val glassEffectEnabled by app.settingsRepository.glassEffectEnabled.collectAsState(initial = false)
+    // Украшения интерфейса - каждое своим переключателем (Настройки → Графика). Значения по
+    // умолчанию здесь совпадают с дефолтами репозитория, чтобы до первой эмиссии ничего не мигало.
+    val posterAccentEnabled by app.settingsRepository.posterAccentEnabled.collectAsState(initial = true)
+    val parallaxEnabled by app.settingsRepository.parallaxEnabled.collectAsState(initial = true)
+    val visualEffects = remember(posterAccentEnabled, parallaxEnabled) {
+        com.illusion.app.ui.common.VisualEffects(
+            posterAccent = posterAccentEnabled,
+            parallax = parallaxEnabled
+        )
+    }
     val shimmerTransition = rememberInfiniteTransition(label = "shimmer")
     // Deliberately NOT unwrapped with `by` here - reading .value in this composable's own body
     // would make this whole scope (everything CompositionLocalProvider wraps, all the way down
@@ -229,6 +239,7 @@ fun IllusionNavHost(
         LocalHapticFeedback provides gatedHapticFeedback,
         com.illusion.app.ui.common.LocalEconomicalMode provides economicalMode,
         com.illusion.app.ui.common.LocalGlassEffectEnabled provides glassEffectEnabled,
+        com.illusion.app.ui.common.LocalVisualEffects provides visualEffects,
         com.illusion.app.ui.common.LocalTvSafeMarginInsets provides tvSafeInsets,
         com.illusion.app.ui.common.LocalTvSafeMarginDp provides tvSafeMarginDp
     ) {
@@ -1003,6 +1014,10 @@ private fun SettingsRoute(
         onPredictiveBackEnabledChange = settingsViewModel::setPredictiveBackEnabled,
         glassEffectEnabled = settingsViewModel.glassEffectEnabled,
         onGlassEffectEnabledChange = settingsViewModel::setGlassEffectEnabled,
+        posterAccentEnabled = settingsViewModel.posterAccentEnabled,
+        onPosterAccentEnabledChange = settingsViewModel::setPosterAccentEnabled,
+        parallaxEnabled = settingsViewModel.parallaxEnabled,
+        onParallaxEnabledChange = settingsViewModel::setParallaxEnabled,
         accentColor = settingsViewModel.accentColor,
         onAccentColorChange = settingsViewModel::setAccentColor,
         themeMode = settingsViewModel.themeMode,

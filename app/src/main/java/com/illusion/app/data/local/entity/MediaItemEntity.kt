@@ -52,6 +52,13 @@ data class MediaItemEntity(
     val nfoLastModified: Long? = null,
     val introStartMs: Long? = null,
     val introEndMs: Long? = null,
+    /**
+     * Where a post-credits scene starts, if this title has one (Marvel and friends). Marked by
+     * hand per item - unlike an intro, it's a property of the one film, and there's no second
+     * episode to compare against, so nothing can detect it automatically. Drives the "к сцене
+     * после титров" banner and holds back the skip-credits/autoplay path until the scene is past.
+     */
+    val postCreditsStartMs: Long? = null,
     val mpaa: String? = null,
     val tagline: String? = null,
     val studio: String? = null,

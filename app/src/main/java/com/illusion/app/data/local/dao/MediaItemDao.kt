@@ -169,6 +169,10 @@ interface MediaItemDao {
     @Query("UPDATE media_items SET outroStartMs = NULL WHERE stableId = :stableId")
     suspend fun clearOutroMarker(stableId: String)
 
+    /** Post-credits scenes are per item, not per season - see [MediaItemEntity.postCreditsStartMs]. */
+    @Query("UPDATE media_items SET postCreditsStartMs = :startMs WHERE stableId = :stableId")
+    suspend fun setPostCreditsMarker(stableId: String, startMs: Long?)
+
     @Query("UPDATE media_items SET outroStartMs = NULL WHERE seriesStableId = :seriesStableId AND seasonNumber = :seasonNumber")
     suspend fun clearOutroMarkerForSeason(seriesStableId: String, seasonNumber: Int)
 }

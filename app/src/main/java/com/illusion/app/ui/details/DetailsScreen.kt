@@ -129,6 +129,10 @@ import com.illusion.app.R
 import com.illusion.app.data.image.episodeThumbModel
 import com.illusion.app.data.image.fanartModel
 import com.illusion.app.data.image.posterModel
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.graphicsLayer
 import com.illusion.app.data.local.entity.DownloadEntity
 import com.illusion.app.data.local.entity.DownloadStatus
 import com.illusion.app.data.local.entity.MediaItemEntity
@@ -463,9 +467,36 @@ private fun DetailsContent(
     val liveStatusBarsTopDp = maxOf(ambientStatusBarsTopDp, viewStatusBarsTopDp)
     if (liveStatusBarsTopDp > statusBarsTopDp) statusBarsTopDp = liveStatusBarsTopDp
 
+    val detailsScrollState = rememberScrollState()
+    // Экран подкрашивается под сам фильм: цвет берётся из его постера (ui/common/PosterAccent).
+    // Только фон за шапкой, а не сам кадр - фанарт намеренно остаётся чистым, см. комментарий
+    // ниже про убранные градиенты поверх него.
+    val posterAccent = com.illusion.app.ui.common.rememberPosterAccent(item.posterModel, null)
+    // Было почти незаметно: слабая заливка в верхней трети, да ещё и под непрозрачным контентом.
+    // Теперь цвет ощутимый и тянется на высоту экрана, а не на 45% прокручиваемой колонки
+    // (которая на длинном описании в несколько экранов давала градиент высотой в пол-описания).
+    val accentBackground = posterAccent?.copy(alpha = if (isSystemInDarkTheme()) 0.55f else 0.38f)
+
     Column(
         modifier = Modifier
             .fillMaxSize()
+            // Подложка цветом фильма рисуется на всю площадь, включая полосу под верхней панелью:
+            // панель скруглена снизу, и в её углах должен просвечивать цвет фильма, а не чёрный
+            // фон экрана. Подрезать подложку по верхнему отступу пробовали - углы становились
+            // чёрными, и полоса читалась прямоугольной.
+            .then(
+                if (accentBackground == null) Modifier else Modifier.drawBehind {
+                    val fadeHeight = minOf(size.height, 1600f)
+                    drawRect(
+                        androidx.compose.ui.graphics.Brush.verticalGradient(
+                            0f to accentBackground,
+                            0.6f to accentBackground.copy(alpha = accentBackground.alpha * 0.35f),
+                            1f to androidx.compose.ui.graphics.Color.Transparent,
+                            endY = fadeHeight
+                        )
+                    )
+                }
+            )
             // Reserves the status bar's height from the scrollable VIEWPORT itself, not just as an
             // initial content offset - this padding must come before .verticalScroll() in the
             // chain. Padding placed after .verticalScroll() only offsets the content's starting
@@ -473,8 +504,10 @@ private fun DetailsContent(
             // down (description, cast, ...) ends up passing behind the status bar during a scroll.
             // With the viewport itself inset instead, nothing can ever render there regardless of
             // scroll position.
-            .padding(top = statusBarsTopDp + TOP_BAR_ROW_HEIGHT)
-            .verticalScroll(rememberScrollState())
+            // Минус скругление: фанарт заходит под полосу ровно на высоту её углов, так что в
+            // углах оказывается картинка, а полоса садится на неё, а не висит отдельной плашкой.
+            .padding(top = statusBarsTopDp + TOP_BAR_ROW_HEIGHT - TOP_BAR_OVERLAP)
+            .verticalScroll(detailsScrollState)
             .padding(horizontal = cutoutHorizontalDp)
     ) {
         val haptics = LocalHapticFeedback.current
@@ -516,12 +549,31 @@ private fun DetailsContent(
                     // it's drawn into, which is what made opening a card feel slow to load.
                     var fanartLoading by remember { mutableStateOf(true) }
                     var fanartFailed by remember { mutableStateOf(false) }
+                    // Фон уезжает медленнее содержимого - шапка перестаёт быть наклейкой поверх
+                    // списка и читается как слой под ним. Коэффициент маленький: кадр невысокий,
+                    // при большом сдвиге снизу вылезал бы пустой край.
+                    val parallaxEnabled = com.illusion.app.ui.common.LocalVisualEffects.current.parallax &&
+                        !com.illusion.app.ui.common.LocalEconomicalMode.current
                     AsyncImage(
                         model = fanart,
                         imageLoader = fanartImageLoader,
                         contentDescription = null,
                         contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize(),
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .then(
+                                if (!parallaxEnabled) Modifier else Modifier.graphicsLayer {
+                                    // Кадр «отстаёт» от прокрутки на 60% - меньше на невысокой
+                                    // шапке просто не читается как параллакс (проверка показала,
+                                    // что 35% незаметны). Плюс лёгкий наезд, чтобы при сдвиге
+                                    // снизу не появлялась пустая полоса.
+                                    val shift = detailsScrollState.value * 0.6f
+                                    translationY = shift
+                                    val zoom = 1f + (shift / size.height).coerceIn(0f, 0.5f)
+                                    scaleX = zoom
+                                    scaleY = zoom
+                                }
+                            ),
                         onLoading = { fanartLoading = true; fanartFailed = false },
                         onSuccess = { fanartLoading = false; fanartFailed = false },
                         onError = { fanartLoading = false; fanartFailed = true }

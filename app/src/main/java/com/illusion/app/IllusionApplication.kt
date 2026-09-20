@@ -116,6 +116,7 @@ class IllusionApplication : Application(), Configuration.Provider, SingletonImag
         // процесса. Без этого он следует только реальной теме ОС и не знает о выборе
         // пользователя внутри приложения (тот применяется later, на уровне Compose/IllusionTheme).
         applyPersistedThemeMode()
+        settingsRepository.keepThemeModeSnapshotFresh(applicationScope)
         CrashReporter.install(this)
         applicationScope.launch {
             settingsRepository.posterCachingEnabled.collect { PosterCacheSettings.cachingEnabled = it }
@@ -159,7 +160,12 @@ class IllusionApplication : Application(), Configuration.Provider, SingletonImag
      */
     fun generateThumbnailIfMissing(item: com.illusion.app.data.local.entity.MediaItemEntity) {
         applicationScope.launch {
-            if (thumbnailRepository.getForItem(item.stableId) != null) return@launch
+            val existing = thumbnailRepository.getForItem(item.stableId)
+            // Спрайт есть, но старого формата (мелкие клетки) - пересоздаём: иначе кадр в
+            // «Продолжить просмотр» так и остался бы мыльным у всех, кто уже смотрел фильм.
+            val outdated = existing != null &&
+                existing.frameWidth < com.illusion.app.data.scan.ThumbnailGenerator.FRAME_WIDTH
+            if (existing != null && !outdated) return@launch
             runCatching { thumbnailGenerator.generate(item) }.getOrNull()?.let { thumbnailRepository.save(it) }
         }
     }
@@ -179,11 +185,12 @@ class IllusionApplication : Application(), Configuration.Provider, SingletonImag
         }
     }
 
-    // Синхронное чтение (runBlocking), тот же паттерн, что и imageCacheLimitMb ниже - должно
-    // отработать до создания первой Activity, а DataStore тут работает с Flow, не с
-    // блокирующим API.
+    // Раньше здесь был runBlocking по DataStore - на холодном старте это блокировало главный
+    // поток на первом обращении к нему (аудит 2026-09-19). Теперь читается зеркало в
+    // SharedPreferences (см. SettingsRepository.themeModeSnapshot), а сам DataStore
+    // подхватывается асинхронно и обновляет зеркало на будущее.
     private fun applyPersistedThemeMode() {
-        val mode = kotlinx.coroutines.runBlocking { settingsRepository.themeMode.first() }
+        val mode = settingsRepository.themeModeSnapshot
         AppCompatDelegate.setDefaultNightMode(
             when (mode) {
                 com.illusion.app.domain.model.ThemeMode.LIGHT -> AppCompatDelegate.MODE_NIGHT_NO

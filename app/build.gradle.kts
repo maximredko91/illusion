@@ -7,6 +7,13 @@ plugins {
     alias(libs.plugins.ksp)
 }
 
+// Room пишет JSON-схему каждой версии БД в app/schemas (файлы коммитятся). Это и источник для
+// теста миграций (MigrationTest), и способ увидеть ошибку в миграции на ревью, а не на устройстве
+// пользователя - схема 22 версии появилась после того, как аудит показал, что экспорт не включён.
+ksp {
+    arg("room.schemaLocation", "$projectDir/schemas")
+}
+
 // Опциональное подключение локально собранного media3 decoder_ffmpeg .aar (DTS/AC3/TrueHD) -
 // см. scripts/build_ffmpeg_extension.sh. Путь задаётся в local.properties (не в системе контроля
 // версий, т.к. специфичен для машины) и берётся отсюда, а не из project properties, потому что
@@ -57,8 +64,8 @@ android {
         // 2026-08-25 once the repo went public and beta testers started using the in-app updater -
         // restarted the counter at beta1 rather than continuing the alpha sequence's number, since
         // jumping straight to "beta73" would misleadingly imply 72 prior beta builds existed.
-        versionCode = 155
-        versionName = "0.1.0-beta82"
+        versionCode = 165
+        versionName = "0.1.0-beta92"
 
         // The real bulk of a universal APK's size turned out to be native .so libs bundled per-ABI
         // (ML Kit's on-device tag-translation library alone is ~17MB *per architecture*) - R8
@@ -199,7 +206,11 @@ dependencies {
     implementation(libs.androidx.tv.material)
     implementation(libs.androidx.tv.foundation)
 
+    // Доминирующий цвет постера для тонирования экрана фильма - см. ui/common/PosterAccent.kt.
+    implementation(libs.androidx.palette)
     implementation(libs.androidx.room.runtime)
+    // Schemas are exported to app/schemas (committed) - that's what MigrationTest reads, and what
+    // makes a migration mistake visible in review instead of on a user's device.
     implementation(libs.androidx.room.ktx)
     ksp(libs.androidx.room.compiler)
 

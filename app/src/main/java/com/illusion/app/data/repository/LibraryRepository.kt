@@ -206,6 +206,11 @@ class LibraryRepository(private val dao: MediaItemDao) {
         }
     }
 
+    /** Marks where a post-credits scene starts on this one item - see [MediaItemEntity.postCreditsStartMs]. Pass null to clear. */
+    suspend fun markPostCreditsStart(item: MediaItemEntity, startMs: Long?) {
+        dao.setPostCreditsMarker(item.stableId, startMs)
+    }
+
     /** Same idea as [markIntroEnd] but for the credits at the end of an episode - only a start is needed since credits run to EOF. */
     suspend fun markCreditsStart(item: MediaItemEntity, startMs: Long) {
         val seriesId = item.seriesStableId

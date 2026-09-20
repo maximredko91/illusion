@@ -108,6 +108,10 @@ data class PlayerUiState(
     val canMarkCredits: Boolean = false,
     /** Mirrors [introMarkedEndMs] for the credits marker. */
     val outroMarkedStartMs: Long? = null,
+    /** Where this title's post-credits scene starts, if it was marked - see [MediaItemEntity.postCreditsStartMs]. */
+    val postCreditsMarkedStartMs: Long? = null,
+    /** "К сцене после титров" is showing: the credits are running and a marked scene is still ahead. */
+    val showSkipToPostCredits: Boolean = false,
     /** Non-null while a sleep timer is counting down - null means no timer is active. Survives episode/trailer transitions (see the playItem/playTrailerItem reconstructions), unlike the per-item intro/credits fields above. */
     val sleepTimerRemainingMs: Long? = null,
     val playbackSpeed: Float = 1f,
@@ -395,6 +399,9 @@ class PlayerViewModel(
                         durationMs = duration.takeIf { d -> d > 0 } ?: it.durationMs,
                         isPlaying = remote.isPlaying) }
                     maybeSaveProgress(position, _castState.value.durationMs)
+                    // Громкость телевизора может измениться и его собственным пультом - забираем
+                    // её тем же опросом, чтобы ползунок не расходился с реальностью.
+                    controller.volume()?.let { volume -> _castState.update { it.copy(volume = volume) } }
                     if (remote.playerState == com.google.android.gms.cast.MediaStatus.PLAYER_STATE_IDLE) {
                         val failed = remote.idleReason == com.google.android.gms.cast.MediaStatus.IDLE_REASON_ERROR
                         if (remote.idleReason == com.google.android.gms.cast.MediaStatus.IDLE_REASON_FINISHED || failed) {
@@ -473,6 +480,7 @@ class PlayerViewModel(
                 runCatching { controller.seekTo(startPositionMs) }
             }
             castController = controller
+            val initialVolume = if (controller.supportsVolume) runCatching { controller.volume() }.getOrNull() else null
             _castState.update {
                 it.copy(
                     isPickerOpen = false,
@@ -481,6 +489,7 @@ class PlayerViewModel(
                     isPlaying = true,
                     positionMs = startPositionMs,
                     durationMs = player.duration.takeIf { d -> d != C.TIME_UNSET } ?: 0L,
+                    volume = initialVolume,
                     error = null
                 )
             }
@@ -507,6 +516,10 @@ class PlayerViewModel(
                         )
                     }
                     maybeSaveProgress(position.positionMs, position.durationMs)
+                }
+                if (controller.supportsVolume) {
+                    runCatching { controller.volume() }.getOrNull()
+                        ?.let { volume -> _castState.update { it.copy(volume = volume) } }
                 }
                 if (transport != null) {
                     _castState.update { it.copy(isPlaying = transport.isPlaying) }
@@ -548,6 +561,44 @@ class PlayerViewModel(
     fun castSeekBy(deltaMs: Long) = castSeekTo(_castState.value.positionMs + deltaMs)
 
     /**
+     * The LAN HTTP bridge only exists for whoever is pulling from it. An external player is out of
+     * this app's sight once launched (hence that path's six-hour idle timeout), but a cast ending
+     * is a definite "nobody is reading any more" - close it right away rather than leave a port
+     * open on every interface for hours.
+     */
+    private fun stopStreamingBridge() {
+        runCatching { com.illusion.app.data.player.StreamingService.stop(appContext) }
+    }
+
+    /**
+     * Sets the TV's own volume, 0..1 - the receiver's device volume for Cast, RenderingControl's
+     * Master channel for DLNA. The local state is updated straight away rather than waiting for
+     * the next poll, or the slider would snap back under the finger.
+     */
+    fun castSetVolume(volume: Float) {
+        val target = volume.coerceIn(0f, 1f)
+        _castState.update { it.copy(volume = target) }
+        if (_castState.value.googleDeviceName != null) {
+            googleCast?.setVolume(target)
+            return
+        }
+        val controller = castController ?: return
+        viewModelScope.launch { runCatching { controller.setVolume(target) } }
+    }
+
+    /**
+     * Hardware volume keys while casting: they should move the TV, not this phone's own speaker,
+     * which is silent anyway (local playback is paused). Returns true when the key was consumed -
+     * see [PlayerKeyEvents] for how it reaches here.
+     */
+    fun castAdjustVolume(deltaSteps: Int): Boolean {
+        if (!_castState.value.isCasting) return false
+        val current = _castState.value.volume ?: return false
+        castSetVolume(current + deltaSteps * VOLUME_STEP)
+        return true
+    }
+
+    /**
      * Ends the cast. [resumeLocally] moves this device's own player to wherever the TV got to and
      * keeps playing there - what the "остановить трансляцию" button is for; the end-of-file case
      * passes false instead, since there's nothing left to resume.
@@ -565,6 +616,7 @@ class PlayerViewModel(
                 if (resumeLocally) player.play()
             }
             _castState.update { CastUiState(devices = it.devices, googleDevices = it.googleDevices) }
+            stopStreamingBridge()
             return
         }
         val controller = castController ?: return
@@ -575,6 +627,7 @@ class PlayerViewModel(
         viewModelScope.launch { runCatching { controller.stop() } }
         persistProgress(position, _castState.value.durationMs)
         _castState.update { CastUiState(devices = it.devices, googleDevices = it.googleDevices) }
+        stopStreamingBridge()
         if (resumeLocally && position > 0) {
             player.seekTo(position)
             player.play()
@@ -1073,6 +1126,7 @@ class PlayerViewModel(
                 introMarkedEndMs = item.introEndMs,
                 canMarkCredits = item.seriesStableId != null && item.seasonNumber != null,
                 outroMarkedStartMs = item.outroStartMs,
+                postCreditsMarkedStartMs = item.postCreditsStartMs,
                 sleepTimerRemainingMs = it.sleepTimerRemainingMs,
                 readyForInternalPlayback = it.readyForInternalPlayback
             )
@@ -1370,6 +1424,30 @@ class PlayerViewModel(
         viewModelScope.launch {
             libraryRepository.markCreditsStart(item, positionMs)
         }
+    }
+
+    /**
+     * Marks the current position as the start of this title's post-credits scene. Per item, not
+     * per season: it's a property of this one film (see [MediaItemEntity.postCreditsStartMs]).
+     */
+    fun markPostCreditsStart() {
+        val item = currentItem ?: return
+        val positionMs = player.currentPosition.coerceAtLeast(0)
+        currentItem = item.copy(postCreditsStartMs = positionMs)
+        _state.update { it.copy(postCreditsMarkedStartMs = positionMs) }
+        viewModelScope.launch { libraryRepository.markPostCreditsStart(item, positionMs) }
+    }
+
+    fun clearPostCreditsMarker() {
+        val item = currentItem ?: return
+        currentItem = item.copy(postCreditsStartMs = null)
+        _state.update { it.copy(postCreditsMarkedStartMs = null, showSkipToPostCredits = false) }
+        viewModelScope.launch { libraryRepository.markPostCreditsStart(item, null) }
+    }
+
+    /** Jumps straight to the marked post-credits scene - what the banner's own button does. */
+    fun skipToPostCredits() {
+        currentItem?.postCreditsStartMs?.let { seekTo(it) }
     }
 
     /** Undoes [markCreditsStart] for the whole season. */
@@ -1672,7 +1750,8 @@ class PlayerViewModel(
                         durationMs = if (duration > 0) duration else it.durationMs,
                         bufferedPositionMs = buffered,
                         showSkipIntro = isWithinIntro(position),
-                        showSkipCredits = isWithinOutro(position)
+                        showSkipCredits = isWithinOutro(position),
+                        showSkipToPostCredits = isBeforePostCredits(position)
                     )
                 }
                 maybeSaveProgress(position, duration)
@@ -1691,10 +1770,29 @@ class PlayerViewModel(
         return positionMs in start..end
     }
 
-    /** No upper bound needed (credits run to EOF) - gated on there actually being a next episode to skip to, otherwise the banner would offer to "skip" into nothing. */
+    /**
+     * No upper bound needed (credits run to EOF) - gated on there actually being a next episode to
+     * skip to, otherwise the banner would offer to "skip" into nothing. A title with a marked
+     * post-credits scene still ahead suppresses it: skipping to the next episode there would jump
+     * straight past the very scene the marker exists for.
+     */
     private fun isWithinOutro(positionMs: Long): Boolean {
         val start = currentItem?.outroStartMs ?: return false
+        if (isBeforePostCredits(positionMs)) return false
         return positionMs >= start && nextEpisode != null
+    }
+
+    /**
+     * True while the credits are rolling and a marked post-credits scene is still ahead - the
+     * window where "к сцене после титров" is the useful action. Without a marked credits start to
+     * anchor to, the banner appears [POST_CREDITS_BANNER_LEAD_MS] before the scene itself, which
+     * is about how long a film's credits run.
+     */
+    private fun isBeforePostCredits(positionMs: Long): Boolean {
+        val scene = currentItem?.postCreditsStartMs ?: return false
+        if (positionMs >= scene) return false
+        val from = currentItem?.outroStartMs ?: (scene - POST_CREDITS_BANNER_LEAD_MS)
+        return positionMs >= from
     }
 
     private fun maybeSaveProgress(position: Long, duration: Long) {
@@ -1750,6 +1848,12 @@ class PlayerViewModel(
 
         /** How often the cast session asks the renderer where it is - see [PlayerViewModel.startCastPolling]. */
         private const val CAST_POLL_INTERVAL_MS = 2_000L
+
+        /** One press of a volume key = 5% of the TV's range, roughly what a TV's own remote does. */
+        private const val VOLUME_STEP = 0.05f
+
+        /** How early the post-credits banner shows when the credits themselves weren't marked. */
+        private const val POST_CREDITS_BANNER_LEAD_MS = 8 * 60 * 1000L
 
         fun factory(
             libraryRepository: LibraryRepository,

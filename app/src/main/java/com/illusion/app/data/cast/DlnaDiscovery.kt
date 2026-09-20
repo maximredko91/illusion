@@ -144,6 +144,7 @@ internal fun parseDescription(xml: ByteArray, descriptionUrl: String): DlnaDevic
     var udn: String? = null
     var urlBase: String? = null
     var controlUrl: String? = null
+    var renderingControlUrl: String? = null
 
     // Service blocks carry their own serviceType/controlURL pair; only AVTransport's counts, and a
     // device can list several services before it.
@@ -169,11 +170,13 @@ internal fun parseDescription(xml: ByteArray, descriptionUrl: String): DlnaDevic
                 "controlurl" -> if (inService) currentControlUrl = parser.nextTextOrNull()
             }
             XmlPullParser.END_TAG -> if (parser.name.equals("service", ignoreCase = true)) {
-                if (controlUrl == null &&
-                    currentServiceType?.contains("AVTransport", ignoreCase = true) == true &&
-                    !currentControlUrl.isNullOrBlank()
-                ) {
-                    controlUrl = currentControlUrl
+                if (!currentControlUrl.isNullOrBlank()) {
+                    when {
+                        controlUrl == null && currentServiceType?.contains("AVTransport", ignoreCase = true) == true ->
+                            controlUrl = currentControlUrl
+                        renderingControlUrl == null && currentServiceType?.contains("RenderingControl", ignoreCase = true) == true ->
+                            renderingControlUrl = currentControlUrl
+                    }
                 }
                 inService = false
             }
@@ -188,7 +191,8 @@ internal fun parseDescription(xml: ByteArray, descriptionUrl: String): DlnaDevic
         friendlyName = friendlyName.orEmpty(),
         manufacturer = manufacturer,
         modelName = modelName,
-        controlUrl = absolute
+        controlUrl = absolute,
+        renderingControlUrl = renderingControlUrl?.let { resolveUpnpUrl(it, urlBase, descriptionUrl) }
     )
 }
 

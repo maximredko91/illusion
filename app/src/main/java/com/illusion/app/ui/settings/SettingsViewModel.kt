@@ -74,6 +74,8 @@ class SettingsViewModel(
     val hapticsEnabled: Flow<Boolean> = settingsRepository.hapticsEnabled
     val predictiveBackEnabled: Flow<Boolean> = settingsRepository.predictiveBackEnabled
     val glassEffectEnabled: Flow<Boolean> = settingsRepository.glassEffectEnabled
+    val posterAccentEnabled: Flow<Boolean> = settingsRepository.posterAccentEnabled
+    val parallaxEnabled: Flow<Boolean> = settingsRepository.parallaxEnabled
     val accentColor: Flow<com.illusion.app.domain.model.AccentColor> = settingsRepository.accentColor
     val themeMode: Flow<com.illusion.app.domain.model.ThemeMode> = settingsRepository.themeMode
     val playerMode: Flow<PlayerMode> = settingsRepository.playerMode
@@ -118,6 +120,14 @@ class SettingsViewModel(
 
     fun setPredictiveBackEnabled(enabled: Boolean) {
         viewModelScope.launch { settingsRepository.setPredictiveBackEnabled(enabled) }
+    }
+
+    fun setPosterAccentEnabled(enabled: Boolean) {
+        viewModelScope.launch { settingsRepository.setPosterAccentEnabled(enabled) }
+    }
+
+    fun setParallaxEnabled(enabled: Boolean) {
+        viewModelScope.launch { settingsRepository.setParallaxEnabled(enabled) }
     }
 
     fun setGlassEffectEnabled(enabled: Boolean) {

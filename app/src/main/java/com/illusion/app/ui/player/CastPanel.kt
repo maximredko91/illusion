@@ -13,6 +13,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.VolumeOff
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.Forward10
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
@@ -23,6 +25,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
@@ -54,6 +57,7 @@ fun CastDialog(
     onSelectGoogleDevice: (String) -> Unit,
     onTogglePlayPause: () -> Unit,
     onSeekBy: (Long) -> Unit,
+    onVolumeChange: (Float) -> Unit,
     onStopCast: () -> Unit
 ) {
     AlertDialog(
@@ -63,7 +67,7 @@ fun CastDialog(
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 state.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                 if (state.isCasting) {
-                    CastTransportControls(state, onTogglePlayPause, onSeekBy)
+                    CastTransportControls(state, onTogglePlayPause, onSeekBy, onVolumeChange)
                 } else {
                     CastDeviceList(state, onSelectDevice, onSelectGoogleDevice)
                 }
@@ -143,7 +147,12 @@ private fun CastDeviceList(state: CastUiState, onSelectDevice: (DlnaDevice) -> U
 }
 
 @Composable
-private fun CastTransportControls(state: CastUiState, onTogglePlayPause: () -> Unit, onSeekBy: (Long) -> Unit) {
+private fun CastTransportControls(
+    state: CastUiState,
+    onTogglePlayPause: () -> Unit,
+    onSeekBy: (Long) -> Unit,
+    onVolumeChange: (Float) -> Unit
+) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text(stringResource(R.string.player_cast_playing_on, state.deviceName))
         if (state.durationMs > 0) {
@@ -156,6 +165,26 @@ private fun CastTransportControls(state: CastUiState, onTogglePlayPause: () -> U
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+        }
+        // Громкость самого телевизора (Cast) или рендерера (DLNA RenderingControl). Ползунка нет
+        // вовсе, если устройство громкостью управлять не даёт - см. CastUiState.volume.
+        state.volume?.let { volume ->
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Icon(
+                    if (volume <= 0.01f) Icons.AutoMirrored.Filled.VolumeOff else Icons.AutoMirrored.Filled.VolumeUp,
+                    contentDescription = stringResource(R.string.player_cast_volume)
+                )
+                Slider(
+                    value = volume,
+                    onValueChange = onVolumeChange,
+                    modifier = Modifier.weight(1f)
+                )
+                Text(
+                    "${(volume * 100).toInt()}%",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         }
         Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
             Row(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {

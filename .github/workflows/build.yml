@@ -1,0 +1,49 @@
+name: Build & test
+
+# Тесты и сборка раньше запускались только вручную на машине разработчика - аудит 2026-09-19
+# отметил это как единственный незакрытый способ уронить main незамеченным. Нативные библиотеки
+# FFmpeg лежат в репозитории по ABI, так что отдельная сборка C/C++ тут не нужна: хватает обычной
+# debug-сборки и JVM-тестов.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Unit tests
+        run: ./gradlew :app:testDebugUnitTest
+
+      - name: Lint
+        run: ./gradlew :app:lintDebug
+
+      - name: Assemble debug
+        run: ./gradlew :app:assembleDebug
+
+      # Отчёты нужны именно при падении: локально их посмотреть уже нельзя, а в логе шага видно
+      # только первую строку ошибки.
+      - name: Upload reports
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: reports
+          path: |
+            app/build/reports/tests/**
+            app/build/reports/lint-results-debug.html
+          retention-days: 7

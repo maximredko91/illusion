@@ -153,7 +153,7 @@ class StreamingService : Service() {
     }
 
     companion object {
-        private const val ACTION_STOP = "com.illusion.app.streaming.STOP"
+        const val ACTION_STOP = "com.illusion.app.streaming.STOP"
 
         /** Set once by IllusionApplication at startup - a plain Service can't take constructor
          * args, and this only ever needs the one process-wide factory the rest of the app already
@@ -168,6 +168,15 @@ class StreamingService : Service() {
             newServer.start(NanoHTTPD.SOCKET_READ_TIMEOUT, false)
             server = newServer
             return newServer
+        }
+
+        /**
+         * Shuts the bridge down: stops the foreground service, which releases the server and its
+         * token with it. Called when a cast ends - until this existed the bridge kept listening on
+         * every interface for up to [IDLE_TIMEOUT_MS] (six hours) after the TV was done with it.
+         */
+        fun stop(context: Context) {
+            context.startService(Intent(context, StreamingService::class.java).setAction(ACTION_STOP))
         }
 
         /** Starts (or reuses) the streaming server + foreground service and returns the URL
