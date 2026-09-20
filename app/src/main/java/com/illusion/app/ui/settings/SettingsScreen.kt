@@ -596,12 +596,31 @@ fun SettingsScreen(
                                             )
                                             com.illusion.app.ui.common.TvAwareOutlinedButton(
                                                 onClick = {
+                                                    // По порядку: экран самой Play Защиты (он и
+                                                    // ругается на редкие APK), затем Play Маркет,
+                                                    // затем системная безопасность - на устройстве
+                                                    // без сервисов Google первых двух просто нет.
                                                     val intents = listOf(
+                                                        android.content.Intent().setComponent(
+                                                            android.content.ComponentName(
+                                                                "com.google.android.gms",
+                                                                "com.google.android.gms.security.settings.VerifyAppsSettingsActivity"
+                                                            )
+                                                        ),
+                                                        android.content.Intent(
+                                                            android.content.Intent.ACTION_VIEW,
+                                                            "https://play.google.com/store/apps/details?id=com.google.android.gms".toUri()
+                                                        ),
                                                         android.content.Intent(android.provider.Settings.ACTION_SECURITY_SETTINGS),
                                                         android.content.Intent(android.provider.Settings.ACTION_SETTINGS)
                                                     )
                                                     intents.firstOrNull { intent ->
-                                                        runCatching { installContext.startActivity(intent) }.isSuccess
+                                                        intent.resolveActivity(installContext.packageManager) != null &&
+                                                            runCatching {
+                                                                installContext.startActivity(
+                                                                    intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                                                                )
+                                                            }.isSuccess
                                                     }
                                                 },
                                                 modifier = Modifier.fillMaxWidth()

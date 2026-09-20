@@ -27,8 +27,8 @@
     <string name="settings_install_permission_granted">Разрешено. Обновления ставятся прямо из приложения</string>
     <string name="settings_install_permission_missing">Android не разрешает приложению устанавливать обновления. Без этого разрешения обновиться не получится</string>
     <string name="settings_install_permission_action">Разрешить установку</string>
-    <string name="settings_install_scan_hint">Если при установке обновления телефон всё равно показывает проверку безопасности — её выполняет прошивка, а не приложение. Отключается только в системных настройках (у Xiaomi: Безопасность → сканирование приложений).</string>
-    <string name="settings_install_scan_action">Открыть настройки безопасности</string>
+    <string name="settings_install_scan_hint">Предупреждение при установке показывает Google Play Защита: она не знает приложения, которых нет в Play Маркете, и предупреждает о каждой новой версии. Приложение на это не влияет — отключить проверку можно только в настройках Play Защиты.</string>
+    <string name="settings_install_scan_action">Настройки Play Защиты</string>
     <string name="settings_about_section">О программе</string>
     <string name="player_mode_ask_title">Как открыть?</string>
     <string name="player_mode_ask_internal">Внутренний плеер</string>
