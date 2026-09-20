@@ -43,12 +43,21 @@ class UpdateCheckWorker(
     override suspend fun doWork(): Result {
         val intervalHours = settingsRepository.updateCheckIntervalHours.first()
         val autoCheckDisabled = intervalHours <= 0
-        val effectiveIntervalHours = if (autoCheckDisabled) MANDATORY_FALLBACK_INTERVAL_HOURS else intervalHours
+        // В сеть ходим не реже раза в сутки при ЛЮБОЙ периодичности. Раньше запасной суточный
+        // интервал включался только при «Выключено», а при «раз в месяц» приложение месяц не
+        // спрашивало сервер вовсе - и обязательный релиз всё это время оставался невидимым.
+        // Периодичность из настроек решает не «когда проверять», а «когда беспокоить обычным
+        // обновлением» (см. ниже).
+        val pollIntervalHours = if (autoCheckDisabled) {
+            MANDATORY_FALLBACK_INTERVAL_HOURS
+        } else {
+            minOf(intervalHours, MANDATORY_FALLBACK_INTERVAL_HOURS)
+        }
         val now = System.currentTimeMillis()
         val lastCheckedAt = settingsRepository.lastBackgroundUpdateCheckAtMs.first()
         // An hour of slack: the periodic work itself fires roughly every 24 h, not to the minute, and
         // without it a daily interval would regularly land a few minutes short and skip a whole day.
-        if (now - lastCheckedAt < effectiveIntervalHours * HOUR_MS - HOUR_MS) return Result.success()
+        if (now - lastCheckedAt < pollIntervalHours * HOUR_MS - HOUR_MS) return Result.success()
 
         val result = when (settingsRepository.updateSource.first()) {
             UpdateSource.LOCAL -> {
@@ -63,12 +72,19 @@ class UpdateCheckWorker(
         if (result !is UpdateCheckResult.Available) return Result.success()
 
         val info = result.info
-        if (autoCheckDisabled && !info.mandatory) return Result.success()
-        if (!info.mandatory && settingsRepository.skippedUpdateVersionCode.first() == info.versionCode) return Result.success()
+        if (!info.mandatory) {
+            // Обычное обновление уважает и «Выключено», и выбранную периодичность, и «Пропустить
+            // версию». Обязательное не уважает ничего из этого - в том и смысл пометки.
+            if (autoCheckDisabled) return Result.success()
+            val lastShownAt = settingsRepository.lastRegularUpdateShownAtMs.first()
+            if (now - lastShownAt < intervalHours * HOUR_MS - HOUR_MS) return Result.success()
+            if (settingsRepository.skippedUpdateVersionCode.first() == info.versionCode) return Result.success()
+        }
         if (settingsRepository.lastNotifiedUpdateVersionCode.first() == info.versionCode) return Result.success()
 
         if (UpdateNotifications.notifyAvailable(applicationContext, info)) {
             settingsRepository.setLastNotifiedUpdateVersionCode(info.versionCode)
+            if (!info.mandatory) settingsRepository.setLastRegularUpdateShownAtMs(now)
         }
         return Result.success()
     }

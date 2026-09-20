@@ -153,9 +153,16 @@ class UpdateViewModel(
             val intervalHours = settingsRepository.updateCheckIntervalHours.first()
             val autoCheckDisabled = intervalHours <= 0
             if (!force) {
-                val effectiveIntervalHours = if (autoCheckDisabled) MANDATORY_FALLBACK_CHECK_INTERVAL_HOURS else intervalHours
+                // Сеть опрашивается не реже раза в сутки при любой периодичности - иначе
+                // обязательный релиз ждал бы выбранного интервала (при «раз в месяц» - месяц).
+                // Сама периодичность решает, когда показывать ОБЫЧНОЕ обновление, см. ниже.
+                val pollIntervalHours = if (autoCheckDisabled) {
+                    MANDATORY_FALLBACK_CHECK_INTERVAL_HOURS
+                } else {
+                    minOf(intervalHours, MANDATORY_FALLBACK_CHECK_INTERVAL_HOURS)
+                }
                 val lastCheckedAt = settingsRepository.lastUpdateCheckAtMs.first()
-                if (System.currentTimeMillis() - lastCheckedAt < effectiveIntervalHours * 60 * 60 * 1000L) return@launch
+                if (System.currentTimeMillis() - lastCheckedAt < pollIntervalHours * 60 * 60 * 1000L) return@launch
             }
             settingsRepository.setLastUpdateCheckAtMs(System.currentTimeMillis())
             val source = settingsRepository.updateSource.first()
@@ -194,12 +201,22 @@ class UpdateViewModel(
                     // reach the user regardless of what they'd rather not be bothered with for a
                     // routine one.
                     if (autoCheckDisabled && !force && !result.info.mandatory) return@launch
+                    // Обычное обновление показываем не чаще выбранной периодичности: проверка
+                    // теперь ходит в сеть чаще неё (ради обязательных релизов), и без этой
+                    // проверки диалог всплывал бы каждые сутки при «раз в месяц».
+                    val tooSoonForRegular = !force && !result.info.mandatory &&
+                        System.currentTimeMillis() - settingsRepository.lastRegularUpdateShownAtMs.first() <
+                        intervalHours * 60 * 60 * 1000L
+                    if (tooSoonForRegular) return@launch
                     // A "skip this version" from before a release was (re-)marked mandatory
                     // should never be able to suppress it once it is - see UpdateInfo.mandatory's
                     // own KDoc for why a mandatory release must always reach the user.
                     val previouslySkipped = !force && !result.info.mandatory &&
                         settingsRepository.skippedUpdateVersionCode.first() == result.info.versionCode
                     if (previouslySkipped) return@launch
+                    if (!result.info.mandatory) {
+                        settingsRepository.setLastRegularUpdateShownAtMs(System.currentTimeMillis())
+                    }
                     _state.update { it.copy(update = result.info) }
                 }
             }

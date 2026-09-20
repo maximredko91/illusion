@@ -596,7 +596,7 @@ fun SettingsScreen(
                                         }
                                     }
                                     SettingsDivider()
-                                    val currentUpdateCheckIntervalHours by updateCheckIntervalHours.collectAsState(initial = 720)
+                                    val currentUpdateCheckIntervalHours by updateCheckIntervalHours.collectAsState(initial = 24)
                                     SettingsActionCard(title = stringResource(R.string.settings_update_check_interval)) {
                                         UpdateCheckIntervalMenu(currentUpdateCheckIntervalHours, onUpdateCheckIntervalChange, modifier = Modifier.fillMaxWidth())
                                     }

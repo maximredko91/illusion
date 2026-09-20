@@ -60,6 +60,7 @@ class SettingsRepository(private val context: Context) {
         val LAST_BACKGROUND_UPDATE_CHECK_AT_MS = longPreferencesKey("last_background_update_check_at_ms")
         val LAST_NOTIFIED_UPDATE_VERSION_CODE = intPreferencesKey("last_notified_update_version_code")
         val UPDATE_CHECK_INTERVAL_HOURS = intPreferencesKey("update_check_interval_hours")
+        val LAST_REGULAR_UPDATE_SHOWN_AT_MS = longPreferencesKey("last_regular_update_shown_at_ms")
         val TV_OVERSCAN_MARGIN_PERCENT = intPreferencesKey("tv_overscan_margin_percent")
         val UPDATE_SOURCE = stringPreferencesKey("update_source")
         val LOCAL_UPDATE_SOURCE_ID = longPreferencesKey("local_update_source_id")
@@ -489,8 +490,30 @@ class SettingsRepository(private val context: Context) {
         context.dataStore.edit { it[Keys.LAST_NOTIFIED_UPDATE_VERSION_CODE] = versionCode }
     }
 
-    /** How often MainActivity's automatic on-launch check is allowed to hit the network - 0 disables it entirely (manual "Проверить обновления" in Settings still always works). Defaults to once a month (720h), same "0 = off" convention as [rescanIntervalHours]. */
-    val updateCheckIntervalHours: Flow<Int> = context.dataStore.data.map { it[Keys.UPDATE_CHECK_INTERVAL_HOURS] ?: 720 }
+    /**
+     * How often the automatic check (on launch and in [com.illusion.app.work.UpdateCheckWorker]) is
+     * allowed to hit the network - 0 disables it entirely (manual "Проверить обновления" in
+     * Settings still always works, which is why a too-long interval reads as "updates only appear
+     * when I check by hand").
+     *
+     * Was once a month (720h) - meaningless for a beta that ships several builds a day, and that's
+     * exactly how it showed up in practice: nothing ever arrived on its own. Now daily.
+     */
+    /**
+     * Когда пользователю в последний раз показали ОБЫЧНОЕ (необязательное) обновление - диалогом
+     * при запуске или уведомлением в фоне.
+     *
+     * Существует отдельно от времени самой проверки, потому что это разные вещи: в сеть ходим не
+     * реже раза в сутки (иначе обязательный релиз ждал бы выбранного интервала - при «раз в месяц»
+     * целый месяц), а беспокоим обычным обновлением ровно с выбранной периодичностью.
+     */
+    val lastRegularUpdateShownAtMs: Flow<Long> = context.dataStore.data.map { it[Keys.LAST_REGULAR_UPDATE_SHOWN_AT_MS] ?: 0L }
+
+    suspend fun setLastRegularUpdateShownAtMs(value: Long) {
+        context.dataStore.edit { it[Keys.LAST_REGULAR_UPDATE_SHOWN_AT_MS] = value }
+    }
+
+    val updateCheckIntervalHours: Flow<Int> = context.dataStore.data.map { it[Keys.UPDATE_CHECK_INTERVAL_HOURS] ?: 24 }
 
     suspend fun setUpdateCheckIntervalHours(hours: Int) {
         context.dataStore.edit { it[Keys.UPDATE_CHECK_INTERVAL_HOURS] = hours }
