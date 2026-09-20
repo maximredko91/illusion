@@ -582,6 +582,31 @@ fun SettingsScreen(
                                             else R.string.settings_install_permission_missing
                                         )
                                     ) {
+                                        if (canInstallUpdates) {
+                                            // Разрешение выдано, а проверка при установке всё равно
+                                            // показывается - её включает прошивка (у Xiaomi это
+                                            // «Проверка безопасности»), и выключить её из приложения
+                                            // нельзя: публичного API нет. Всё, что тут можно честно
+                                            // сделать - открыть нужный системный экран.
+                                            Text(
+                                                stringResource(R.string.settings_install_scan_hint),
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                modifier = Modifier.padding(bottom = 8.dp)
+                                            )
+                                            com.illusion.app.ui.common.TvAwareOutlinedButton(
+                                                onClick = {
+                                                    val intents = listOf(
+                                                        android.content.Intent(android.provider.Settings.ACTION_SECURITY_SETTINGS),
+                                                        android.content.Intent(android.provider.Settings.ACTION_SETTINGS)
+                                                    )
+                                                    intents.firstOrNull { intent ->
+                                                        runCatching { installContext.startActivity(intent) }.isSuccess
+                                                    }
+                                                },
+                                                modifier = Modifier.fillMaxWidth()
+                                            ) { Text(stringResource(R.string.settings_install_scan_action)) }
+                                        }
                                         if (!canInstallUpdates) {
                                             TvAwareButton(
                                                 onClick = {
