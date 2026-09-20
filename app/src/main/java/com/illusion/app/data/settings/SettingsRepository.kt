@@ -61,6 +61,7 @@ class SettingsRepository(private val context: Context) {
         val LAST_NOTIFIED_UPDATE_VERSION_CODE = intPreferencesKey("last_notified_update_version_code")
         val UPDATE_CHECK_INTERVAL_HOURS = intPreferencesKey("update_check_interval_hours")
         val LAST_REGULAR_UPDATE_SHOWN_AT_MS = longPreferencesKey("last_regular_update_shown_at_ms")
+        val SILENT_INSTALL_REJECTED = booleanPreferencesKey("silent_install_rejected")
         val TV_OVERSCAN_MARGIN_PERCENT = intPreferencesKey("tv_overscan_margin_percent")
         val UPDATE_SOURCE = stringPreferencesKey("update_source")
         val LOCAL_UPDATE_SOURCE_ID = longPreferencesKey("local_update_source_id")
@@ -507,6 +508,20 @@ class SettingsRepository(private val context: Context) {
      * реже раза в сутки (иначе обязательный релиз ждал бы выбранного интервала - при «раз в месяц»
      * целый месяц), а беспокоим обычным обновлением ровно с выбранной периодичностью.
      */
+    /**
+     * Прошивка отказала в тихой установке - больше не пробуем, сразу открываем системный
+     * установщик.
+     *
+     * Без этого каждое обновление начиналось с попытки, которую HyperOS отклоняет, и пользователь
+     * видел ошибку перед обычным установщиком. Один отказ - достаточный ответ: разрешение на
+     * тихую установку не появляется само.
+     */
+    val silentInstallRejected: Flow<Boolean> = context.dataStore.data.map { it[Keys.SILENT_INSTALL_REJECTED] ?: false }
+
+    suspend fun setSilentInstallRejected(value: Boolean) {
+        context.dataStore.edit { it[Keys.SILENT_INSTALL_REJECTED] = value }
+    }
+
     val lastRegularUpdateShownAtMs: Flow<Long> = context.dataStore.data.map { it[Keys.LAST_REGULAR_UPDATE_SHOWN_AT_MS] ?: 0L }
 
     suspend fun setLastRegularUpdateShownAtMs(value: Long) {

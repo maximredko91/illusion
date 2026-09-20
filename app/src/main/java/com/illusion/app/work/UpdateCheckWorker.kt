@@ -104,6 +104,16 @@ object UpdateNotifications {
     private const val NOTIFICATION_ID = 1101
 
     /** Returns false when nothing was posted (POST_NOTIFICATIONS denied on API 33+), so the caller can try again next time. */
+    /**
+     * Снимает висящее уведомление об обновлении. Оно живёт в шторке само по себе и после установки
+     * никуда не девается - пользователь обновился, а телефон продолжает звать его обновиться.
+     */
+    fun cancel(context: Context) {
+        runCatching {
+            androidx.core.app.NotificationManagerCompat.from(context).cancel(NOTIFICATION_ID)
+        }
+    }
+
     fun notifyAvailable(context: Context, info: UpdateInfo): Boolean {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
             ActivityCompat.checkSelfPermission(context, android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED

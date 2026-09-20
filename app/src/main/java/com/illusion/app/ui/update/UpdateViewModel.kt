@@ -70,6 +70,16 @@ class UpdateViewModel(
     val permissionSettingsIntent: Flow<Intent> = _permissionSettingsIntent.receiveAsFlow()
 
     init {
+        // Уведомление об обновлении живёт в шторке само по себе: оно не исчезает от того, что
+        // пользователь обновился (пришла жалоба - «пришло уведомление, хотя я уже установил»).
+        // Снимаем его на старте, если версия, о которой звали, уже стоит.
+        viewModelScope.launch {
+            val notifiedVersion = settingsRepository.lastNotifiedUpdateVersionCode.first()
+            if (notifiedVersion in 1..BuildConfig.VERSION_CODE) {
+                com.illusion.app.work.UpdateNotifications.cancel(appContext)
+                settingsRepository.setLastNotifiedUpdateVersionCode(0)
+            }
+        }
         viewModelScope.launch {
             WorkScheduler.updateDownloadWorkInfo(appContext).collect { info ->
                 when (info?.state) {
@@ -187,6 +197,8 @@ class UpdateViewModel(
                     }
                 }
                 is UpdateCheckResult.UpToDate -> {
+                    // Обновились - снимаем уведомление, если оно ещё висит в шторке.
+                    com.illusion.app.work.UpdateNotifications.cancel(appContext)
                     if (force) {
                         _upToDateMessage.value = if (result.checkedVersionInfo != null) {
                             "У вас последняя версия! (${result.checkedVersionInfo})"
@@ -285,7 +297,10 @@ class UpdateViewModel(
                 _permissionSettingsIntent.send(UpdateInstaller.installPermissionSettingsIntent(appContext))
                 return@launch
             }
-            if (!UpdateInstaller.installSilently(appContext, file)) {
+            // Прошивка уже отказывала в тихой установке - не тратим на неё попытку, иначе
+            // обновление снова начнётся с ошибки перед обычным установщиком.
+            val silentRejectedBefore = settingsRepository.silentInstallRejected.first()
+            if (silentRejectedBefore || !UpdateInstaller.installSilently(appContext, file)) {
                 _installIntent.send(UpdateInstaller.installIntent(appContext, file))
             }
         }
@@ -300,7 +315,10 @@ class UpdateViewModel(
      */
     fun installViaSystemInstaller() {
         val file = _state.value.downloadedFile ?: return
-        viewModelScope.launch { _installIntent.send(UpdateInstaller.installIntent(appContext, file)) }
+        viewModelScope.launch {
+            settingsRepository.setSilentInstallRejected(true)
+            _installIntent.send(UpdateInstaller.installIntent(appContext, file))
+        }
     }
 
     companion object {
