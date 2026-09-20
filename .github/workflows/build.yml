@@ -27,6 +27,12 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v4
 
+      # Бит исполняемости у gradlew проставлен в индексе git (update-index --chmod=+x), но на
+      # Windows он легко теряется при следующей правке файла - страховка, чтобы CI не падал
+      # с "Permission denied" вместо того, чтобы прогнать тесты.
+      - name: Make gradlew executable
+        run: chmod +x ./gradlew
+
       - name: Unit tests
         run: ./gradlew :app:testDebugUnitTest
 
