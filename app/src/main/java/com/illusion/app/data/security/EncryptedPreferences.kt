@@ -2,6 +2,8 @@ package com.illusion.app.data.security
 
 import android.content.Context
 import android.content.SharedPreferences
+import android.util.Log
+import androidx.core.content.edit
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 
@@ -23,14 +25,24 @@ internal fun openEncryptedPreferences(context: Context, name: String): SharedPre
         EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
         EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
     )
-    if (recovery.getBoolean(name, false)) return open("${name}_recovered")
-    return try {
+    // Сбой Keystore бывает временным (так было после обновления 2026-09-23: пароль NAS «пропал»,
+    // хотя исходный файл цел). Поэтому исходное хранилище пробуем всегда, даже после перехода
+    // на восстановленное, и возвращаемся к нему, если оно снова открывается и в нём есть данные.
+    val recovered = recovery.getBoolean(name, false)
+    val original = try {
         open(name)
     } catch (e: Exception) {
-        val fresh = open("${name}_recovered")
-        // См. BackupManager: нужен результат commit(), который KTX-шный edit {} не отдаёт.
-        @Suppress("UseKtx")
-        check(recovery.edit().putBoolean(name, true).commit()) { "Не удалось сохранить восстановление доступа" }
-        fresh
+        Log.w("EncryptedPreferences", "Не открылось хранилище $name", e)
+        null
     }
+    if (original != null && (!recovered || original.all.isNotEmpty())) {
+        if (recovered) recovery.edit { remove(name) }
+        return original
+    }
+    if (recovered) return open("${name}_recovered")
+    val fresh = open("${name}_recovered")
+    // См. BackupManager: нужен результат commit(), который KTX-шный edit {} не отдаёт.
+    @Suppress("UseKtx")
+    check(recovery.edit().putBoolean(name, true).commit()) { "Не удалось сохранить восстановление доступа" }
+    return fresh
 }
