@@ -71,32 +71,6 @@ class UpdateChecker(
         )
     }
 
-    /**
-     * A release is marked mandatory by starting its body with a `[MANDATORY]` or `[ОБЯЗАТЕЛЬНОЕ]`
-     * marker line (case-insensitive) - see UpdateInfo.mandatory's own KDoc for what that actually
-     * does in the UI. The marker itself is stripped out before the text is shown as release notes,
-     * so it never leaks into the "what's new" dialog as visible clutter.
-     */
-    private fun parseMandatory(body: String): Pair<Boolean, String> {
-        val firstLine = body.lineSequence().firstOrNull()?.trim().orEmpty()
-        val isMandatory = firstLine.equals("[MANDATORY]", ignoreCase = true) ||
-            firstLine.equals("[ОБЯЗАТЕЛЬНОЕ]", ignoreCase = true)
-        val notes = if (isMandatory) body.substringAfter('\n').trimStart('\n', '\r') else body
-        return isMandatory to notes
-    }
-
-    /**
-     * Was `release.tagName` directly - the tag only ever carries the versionCode digits (e.g.
-     * "v75"), so the "What's new" dialog showed "Доступно обновление v75" instead of the app's
-     * actual semantic version. The release title is published as "vNN (versionName)" (see
-     * PowerShell's `gh release create --title`) - pulls the parenthesized part out of that, and
-     * falls back to the tag if the title is missing/doesn't follow the convention rather than
-     * failing the whole check over a cosmetic string.
-     */
-    private fun versionNameFromRelease(release: GitHubRelease): String =
-        release.name?.let { title -> Regex("\\(([^)]+)\\)").find(title)?.groupValues?.get(1) }
-            ?: release.tagName
-
     private fun fetchLatestRelease(): GitHubRelease {
         val request = Request.Builder()
             .url("https://api.github.com/repos/$owner/$repo/releases/latest")
@@ -109,25 +83,62 @@ class UpdateChecker(
         }
     }
 
-    private fun versionCodeFromTag(tag: String): Int? =
-        tag.filter { it.isDigit() }.takeIf { it.isNotEmpty() }?.toIntOrNull()
+    internal companion object {
+        /**
+         * A release attaches one .apk per ABI (build.gradle.kts' `splits.abi`), so more than one
+         * .apk asset is the normal case, not an error. [Build.SUPPORTED_ABIS] lists every
+         * ABI this exact device can run, most-preferred first (e.g. a 64-bit device that can also run
+         * 32-bit code lists both, arm64 first) - matching against it in order means a device capable
+         * of more than one of this app's ABIs always gets its best one, not whichever happened to
+         * sort first among the release's assets. Falls back to the release's only .apk (or simply the
+         * first one, if for some reason none of the names match any supported ABI) rather than
+         * failing the whole check - an old single-file release, or an unmarked asset, should still be
+         * offered as an update instead of silently reporting up to date.
+         */
+        fun selectApkForDevice(
+            assets: List<GitHubReleaseAsset>,
+            supportedAbis: List<String> = Build.SUPPORTED_ABIS.toList()
+        ): GitHubReleaseAsset? {
+            val apks = assets.filter { it.name.endsWith(".apk", ignoreCase = true) }
+            if (apks.size <= 1) return apks.firstOrNull()
+            return supportedAbis.firstNotNullOfOrNull { abi ->
+                apks.firstOrNull { nameHasAbi(it.name, abi) }
+            } ?: apks.first()
+        }
 
-    /**
-     * A release attaches one .apk per ABI (build.gradle.kts' `splits.abi`), so more than one
-     * .apk asset is the normal case, not an error. [Build.SUPPORTED_ABIS] lists every
-     * ABI this exact device can run, most-preferred first (e.g. a 64-bit device that can also run
-     * 32-bit code lists both, arm64 first) - matching against it in order means a device capable
-     * of more than one of this app's ABIs always gets its best one, not whichever happened to
-     * sort first among the release's assets. Falls back to the release's only .apk (or simply the
-     * first one, if for some reason none of the names match any supported ABI) rather than
-     * failing the whole check - an old single-file release, or an unmarked asset, should still be
-     * offered as an update instead of silently reporting up to date.
-     */
-    private fun selectApkForDevice(assets: List<GitHubReleaseAsset>): GitHubReleaseAsset? {
-        val apks = assets.filter { it.name.endsWith(".apk", ignoreCase = true) }
-        if (apks.size <= 1) return apks.firstOrNull()
-        return Build.SUPPORTED_ABIS.firstNotNullOfOrNull { abi ->
-            apks.firstOrNull { it.name.contains(abi, ignoreCase = true) }
-        } ?: apks.first()
+        /** ABI must stand as its own part of the name: a plain substring check let "x86" match
+         * "illusion-x86_64.apk", handing an x86-only device the 64-bit build. */
+        private fun nameHasAbi(name: String, abi: String): Boolean =
+            Regex("(^|[^A-Za-z0-9_])${Regex.escape(abi)}([^A-Za-z0-9_-]|$)", RegexOption.IGNORE_CASE)
+                .containsMatchIn(name)
+
+        /**
+         * A release is marked mandatory by starting its body with a `[MANDATORY]` or `[ОБЯЗАТЕЛЬНОЕ]`
+         * marker line (case-insensitive) - see UpdateInfo.mandatory's own KDoc for what that actually
+         * does in the UI. The marker itself is stripped out before the text is shown as release notes,
+         * so it never leaks into the "what's new" dialog as visible clutter.
+         */
+        fun parseMandatory(body: String): Pair<Boolean, String> {
+            val firstLine = body.lineSequence().firstOrNull()?.trim().orEmpty()
+            val isMandatory = firstLine.equals("[MANDATORY]", ignoreCase = true) ||
+                firstLine.equals("[ОБЯЗАТЕЛЬНОЕ]", ignoreCase = true)
+            val notes = if (isMandatory) body.substringAfter('\n', "").trimStart('\n', '\r') else body
+            return isMandatory to notes
+        }
+
+        /**
+         * Was `release.tagName` directly - the tag only ever carries the versionCode digits (e.g.
+         * "v75"), so the "What's new" dialog showed "Доступно обновление v75" instead of the app's
+         * actual semantic version. The release title is published as "vNN (versionName)" (see
+         * PowerShell's `gh release create --title`) - pulls the parenthesized part out of that, and
+         * falls back to the tag if the title is missing/doesn't follow the convention rather than
+         * failing the whole check over a cosmetic string.
+         */
+        fun versionNameFromRelease(release: GitHubRelease): String =
+            release.name?.let { title -> Regex("\\(([^)]+)\\)").find(title)?.groupValues?.get(1) }
+                ?: release.tagName
+
+        fun versionCodeFromTag(tag: String): Int? =
+            tag.filter { it.isDigit() }.takeIf { it.isNotEmpty() }?.toIntOrNull()
     }
 }

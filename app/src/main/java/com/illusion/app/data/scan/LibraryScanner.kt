@@ -328,46 +328,12 @@ class LibraryScanner(
             .map { it.path }
         val categoryMatch = categorize(file.path)
         val category = categoryMatch.category
-        // Group by the show's own folder (one level under whichever folder matched the category),
-        // not just the immediate parent - shows are commonly split into per-season subfolders
-        // (.../Сериалы/ShowName/Сезон 1/...), and grouping by immediate parent alone would treat
-        // each season as a separate "series".
-        val seriesStableId = if (category == Category.TV_SHOWS || category == Category.CARTOON_SERIES) {
-            val segments = file.path.split('\\')
-            val showFolderIndex = categoryMatch.categoryFolderIndex + 1
-            if (showFolderIndex < segments.size - 1) {
-                "${source.id}|${segments.take(showFolderIndex + 1).joinToString("\\")}"
-            } else {
-                null
-            }
-        } else {
-            null
-        }
+        val showFolder = showFolderOf(file.path, categoryMatch)
+        val seriesStableId = showFolder?.let { "${source.id}|$it" }
         // Look for poster/fanart next to the video first (how movies are usually organized), then
         // fall back to the show's own root folder - a season subfolder rarely has its own poster,
         // that normally sits at .../Сериалы/ShowName/poster.jpg, one level above "Сезон N".
-        val showFolder = seriesStableId?.substringAfter('|')
         val imageSearchFolders = listOfNotNull(videoFolder, showFolder).distinct()
-        // Beyond a plain "poster.jpg"/"fanart.jpg", also match Kodi/tinyMediaManager's
-        // "<video name>-fanart.jpg" convention and numbered extrafanart variants like
-        // "fanart1.jpg"/"fanart-02.jpg" - picking the lowest-numbered/first alphabetically when
-        // several exist, so the choice is at least deterministic across rescans.
-        fun findImage(names: Set<String>): SmbFileRef? {
-            fun matches(ref: SmbFileRef): Boolean {
-                val refBase = ref.baseName.lowercase()
-                if (refBase in names) return true
-                if (names.any { refBase == "${baseName.lowercase()}-$it" }) return true
-                return names.any { name ->
-                    refBase.startsWith(name) && refBase.length > name.length &&
-                        refBase.substring(name.length).all { it.isDigit() || it == '-' || it == '_' }
-                }
-            }
-            return imageSearchFolders.firstNotNullOfOrNull { folder ->
-                imageFiles
-                    .filter { it.path.substringBeforeLast('\\') == folder && matches(it) }
-                    .minByOrNull { it.name }
-            }
-        }
         // Radarr/Sonarr-style libraries drop poster.jpg/fanart.jpg as real files rather than
         // pointing <thumb> at something reachable over SMB - prefer those; a <thumb> value is only
         // usable as a fallback when it's a real scraper URL, not a path from the machine that wrote
@@ -375,8 +341,8 @@ class LibraryScanner(
         // fast path below can compute them without touching the .nfo at all - it falls back to
         // whatever was resolved last scan (including a metadata-URL fallback) when no local file is
         // found, which is exactly equivalent to recomputing it since the .nfo hasn't changed either.
-        val localPosterPath = findImage(setOf("poster", "folder", "cover"))?.path
-        val localFanartPath = findImage(setOf("fanart", "backdrop", "background"))?.path
+        val localPosterPath = findImage(imageFiles, imageSearchFolders, baseName, POSTER_NAMES)?.path
+        val localFanartPath = findImage(imageFiles, imageSearchFolders, baseName, FANART_NAMES)?.path
         // Per-episode screenshot - Kodi/tinyMediaManager write these as "<video name>-thumb.jpg"
         // next to the video, distinct from the show's own poster.jpg at the show root (which
         // `posterPath` above already resolves to for every episode, since findImage checks
@@ -392,53 +358,7 @@ class LibraryScanner(
         } else {
             null
         }
-        // "<basename>-trailer[N]" (this exact episode/movie) wins over a season trailer, which in
-        // turn wins over a bare "trailer[N]" shared by the folder.
-        fun isNumberedSuffix(rest: String) = rest.all { it.isDigit() || it == '-' || it == '_' }
-
-        fun matchesOwnTrailer(ref: SmbFileRef): Boolean {
-            val refBase = ref.baseName.lowercase()
-            val prefix = "${baseName.lowercase()}-trailer"
-            return refBase == prefix || (refBase.startsWith(prefix) && isNumberedSuffix(refBase.substring(prefix.length)))
-        }
-
-        fun matchesBareTrailer(ref: SmbFileRef): Boolean {
-            val refBase = ref.baseName.lowercase()
-            return refBase == "trailer" ||
-                (refBase.startsWith("trailer") && isNumberedSuffix(refBase.substring("trailer".length)))
-        }
-
-        // Per-season trailer, named "<whatever>-S<n>-trailer[N].ext" ("Название-S1-trailer.mp4").
-        // Unlike the two forms above it may also live at the show root rather than beside the
-        // episodes, since one file covers a whole season.
-        fun matchesSeasonTrailer(ref: SmbFileRef, season: Int): Boolean {
-            val refBase = ref.baseName.lowercase()
-            val markerIndex = SEASON_TRAILER_PATTERN.find(refBase)
-                ?.takeIf { it.groupValues[1].toIntOrNull() == season }
-                ?.range?.last ?: return false
-            return isNumberedSuffix(refBase.substring(markerIndex + 1))
-        }
-
-        // The season number an episode belongs to. metadata?.season is the authoritative source but
-        // isn't parsed yet at this point (and doesn't exist at all without a .nfo), so callers pass
-        // whatever they know and this fills in from the usual "S01E02" shape in the file name.
-        fun seasonFromFileName(): Int? =
-            SEASON_EPISODE_PATTERN.find(baseName)?.groupValues?.get(1)?.toIntOrNull()
-
-        fun resolveTrailer(season: Int?): SmbFileRef? {
-            val inVideoFolder = trailerFiles.filter { it.path.substringBeforeLast('\\') == videoFolder }
-            inVideoFolder.filter { matchesOwnTrailer(it) }.minByOrNull { it.name }?.let { return it }
-            val effectiveSeason = season ?: seasonFromFileName()
-            if (effectiveSeason != null) {
-                val seasonSearchFolders = listOfNotNull(videoFolder, showFolder).distinct()
-                seasonSearchFolders.firstNotNullOfOrNull { folder ->
-                    trailerFiles
-                        .filter { it.path.substringBeforeLast('\\') == folder && matchesSeasonTrailer(it, effectiveSeason) }
-                        .minByOrNull { it.name }
-                }?.let { return it }
-            }
-            return inVideoFolder.filter { matchesBareTrailer(it) }.minByOrNull { it.name }
-        }
+        fun trailerFor(season: Int?) = resolveTrailer(trailerFiles, videoFolder, showFolder, baseName, season)
 
         // Fields that only ever come from an SMB read of the video itself (content-hash stableId)
         // or its .nfo (everything metadata-shaped) never need re-deriving when neither has changed
@@ -453,7 +373,7 @@ class LibraryScanner(
             previous.lastModified == file.lastModified &&
             previous.nfoLastModified == nfoRef?.lastModified
         if (unchanged) {
-            val trailerFile = resolveTrailer(previous!!.seasonNumber)
+            val trailerFile = trailerFor(previous!!.seasonNumber)
             return previous.copy(
                 category = category,
                 posterPath = localPosterPath ?: previous.posterPath,
@@ -482,7 +402,7 @@ class LibraryScanner(
         // genre/year on any item, which silently disables the Library genre/year filter chips
         // (they only render when at least one item in the category has a value).
         val showMetadata = showFolder?.let { fetchShowNfo(connection, it, showNfoCache) }
-        val trailerFile = resolveTrailer(metadata?.season)
+        val trailerFile = trailerFor(metadata?.season)
 
         return MediaItemEntity(
             stableId = stableId,
@@ -568,43 +488,7 @@ class LibraryScanner(
         }
     }
 
-    /**
-     * Looks for a "<Name> (Коллекция)" path segment anywhere between the source root and the
-     * video file - the fallback for a franchise organized as a real NAS folder (e.g.
-     * "Люди в чёрном (Коллекция)\Люди в чёрном (1997)\movie.mp4") whose individual movies' own
-     * .nfo files don't (or can't consistently) carry a matching <set> tag - a sequel/reboot's .nfo
-     * commonly has an empty or differently-worded <set>, or none at all, which is exactly why
-     * that film silently fails to group under the app's original nfo-only matching. Purely a path
-     * string check on data the directory walk already has in memory - no extra SMB round trip.
-     */
-    private fun collectionFolderName(path: String): String? =
-        path.split('\\').firstNotNullOfOrNull { segment ->
-            COLLECTION_FOLDER_REGEX.find(segment)?.groupValues?.get(1)?.trim()?.takeIf { it.isNotBlank() }
-        }
-
-    private data class CategoryMatch(val category: Category, val categoryFolderIndex: Int)
-
-    /**
-     * Scans every path segment (not just the first) for a category keyword, since the category
-     * folder isn't necessarily the top of the share - e.g. "Movies\Сериалы\ShowName\Сезон 1\...".
-     * "мультсериал" is checked before the plain "сериал" match since it contains "сериал" as a
-     * substring and would otherwise always be misread as a TV show folder.
-     */
-    private fun categorize(path: String): CategoryMatch {
-        val segments = path.split('\\').map { it.lowercase() }
-        segments.indexOfFirst { "мультсериал" in it }
-            .takeIf { it >= 0 }
-            ?.let { return CategoryMatch(Category.CARTOON_SERIES, it) }
-        segments.indexOfFirst { "сериал" in it || it == "tv" || "tv shows" in it }
-            .takeIf { it >= 0 }
-            ?.let { return CategoryMatch(Category.TV_SHOWS, it) }
-        segments.indexOfFirst { "мультфильм" in it || "cartoon" in it }
-            .takeIf { it >= 0 }
-            ?.let { return CategoryMatch(Category.CARTOONS, it) }
-        return CategoryMatch(Category.MOVIES, -1)
-    }
-
-    companion object {
+    internal companion object {
         private const val FILE_DISCOVERY_PROGRESS_STEP = 20
 
         // Each connection is only ever touched by one coroutine at a time (borrowed from this
@@ -621,5 +505,127 @@ class LibraryScanner(
 
         /** Usual "S01E02" episode naming, used to place an episode in a season when it has no .nfo. */
         private val SEASON_EPISODE_PATTERN = Regex("""s(\d{1,2})[-_. ]?e\d{1,3}""", RegexOption.IGNORE_CASE)
+
+        val POSTER_NAMES = setOf("poster", "folder", "cover")
+        val FANART_NAMES = setOf("fanart", "backdrop", "background")
+
+        /**
+         * Group by the show's own folder (one level under whichever folder matched the category),
+         * not just the immediate parent - shows are commonly split into per-season subfolders
+         * (.../Сериалы/ShowName/Сезон 1/...), and grouping by immediate parent alone would treat
+         * each season as a separate "series". Null for movies/cartoons, and for a video lying
+         * directly in the category folder.
+         */
+        fun showFolderOf(path: String, categoryMatch: CategoryMatch): String? {
+            if (categoryMatch.category != Category.TV_SHOWS && categoryMatch.category != Category.CARTOON_SERIES) return null
+            val segments = path.split('\\')
+            val showFolderIndex = categoryMatch.categoryFolderIndex + 1
+            return if (showFolderIndex < segments.size - 1) segments.take(showFolderIndex + 1).joinToString("\\") else null
+        }
+
+        private fun isNumberedSuffix(rest: String) = rest.all { it.isDigit() || it == '-' || it == '_' }
+
+        /**
+         * Beyond a plain "poster.jpg"/"fanart.jpg", also matches Kodi/tinyMediaManager's
+         * "<video name>-fanart.jpg" convention and numbered extrafanart variants like
+         * "fanart1.jpg"/"fanart-02.jpg" - picking the first alphabetically when several exist, so
+         * the choice is at least deterministic across rescans. [folders] are tried in order.
+         */
+        fun findImage(imageFiles: List<SmbFileRef>, folders: List<String>, baseName: String, names: Set<String>): SmbFileRef? {
+            fun matches(ref: SmbFileRef): Boolean {
+                val refBase = ref.baseName.lowercase()
+                if (refBase in names) return true
+                if (names.any { refBase == "${baseName.lowercase()}-$it" }) return true
+                return names.any { name ->
+                    refBase.startsWith(name) && refBase.length > name.length && isNumberedSuffix(refBase.substring(name.length))
+                }
+            }
+            return folders.firstNotNullOfOrNull { folder ->
+                imageFiles
+                    .filter { it.path.substringBeforeLast('\\') == folder && matches(it) }
+                    .minByOrNull { it.name }
+            }
+        }
+
+        /**
+         * "<basename>-trailer[N]" (this exact episode/movie) wins over a season trailer
+         * ("<whatever>-S<n>-trailer[N]", which may also sit at the show root since one file covers
+         * a whole season), which in turn wins over a bare "trailer[N]" shared by the folder.
+         * [season] is the .nfo's value when known; otherwise it comes from "S01E02" in the name.
+         */
+        fun resolveTrailer(
+            trailerFiles: List<SmbFileRef>,
+            videoFolder: String,
+            showFolder: String?,
+            baseName: String,
+            season: Int?
+        ): SmbFileRef? {
+            val base = baseName.lowercase()
+            fun matchesOwn(ref: SmbFileRef): Boolean {
+                val refBase = ref.baseName.lowercase()
+                val prefix = "$base-trailer"
+                return refBase == prefix || (refBase.startsWith(prefix) && isNumberedSuffix(refBase.substring(prefix.length)))
+            }
+            fun matchesBare(ref: SmbFileRef): Boolean {
+                val refBase = ref.baseName.lowercase()
+                return refBase == "trailer" ||
+                    (refBase.startsWith("trailer") && isNumberedSuffix(refBase.substring("trailer".length)))
+            }
+            fun matchesSeason(ref: SmbFileRef, season: Int): Boolean {
+                val refBase = ref.baseName.lowercase()
+                val markerIndex = SEASON_TRAILER_PATTERN.find(refBase)
+                    ?.takeIf { it.groupValues[1].toIntOrNull() == season }
+                    ?.range?.last ?: return false
+                return isNumberedSuffix(refBase.substring(markerIndex + 1))
+            }
+
+            val inVideoFolder = trailerFiles.filter { it.path.substringBeforeLast('\\') == videoFolder }
+            inVideoFolder.filter { matchesOwn(it) }.minByOrNull { it.name }?.let { return it }
+            val effectiveSeason = season ?: SEASON_EPISODE_PATTERN.find(baseName)?.groupValues?.get(1)?.toIntOrNull()
+            if (effectiveSeason != null) {
+                listOfNotNull(videoFolder, showFolder).distinct().firstNotNullOfOrNull { folder ->
+                    trailerFiles
+                        .filter { it.path.substringBeforeLast('\\') == folder && matchesSeason(it, effectiveSeason) }
+                        .minByOrNull { it.name }
+                }?.let { return it }
+            }
+            return inVideoFolder.filter { matchesBare(it) }.minByOrNull { it.name }
+        }
+
+        /**
+         * Scans every path segment (not just the first) for a category keyword, since the category
+         * folder isn't necessarily the top of the share - e.g. "Movies\Сериалы\ShowName\Сезон 1\...".
+         * "мультсериал" is checked before the plain "сериал" match since it contains "сериал" as a
+         * substring and would otherwise always be misread as a TV show folder.
+         */
+        fun categorize(path: String): CategoryMatch {
+            val segments = path.split('\\').map { it.lowercase() }
+            segments.indexOfFirst { "мультсериал" in it }
+                .takeIf { it >= 0 }
+                ?.let { return CategoryMatch(Category.CARTOON_SERIES, it) }
+            segments.indexOfFirst { "сериал" in it || it == "tv" || "tv shows" in it }
+                .takeIf { it >= 0 }
+                ?.let { return CategoryMatch(Category.TV_SHOWS, it) }
+            segments.indexOfFirst { "мультфильм" in it || "cartoon" in it }
+                .takeIf { it >= 0 }
+                ?.let { return CategoryMatch(Category.CARTOONS, it) }
+            return CategoryMatch(Category.MOVIES, -1)
+        }
+
+        /**
+         * Looks for a "<Name> (Коллекция)" path segment anywhere between the source root and the
+         * video file - the fallback for a franchise organized as a real NAS folder (e.g.
+         * "Люди в чёрном (Коллекция)\Люди в чёрном (1997)\movie.mp4") whose individual movies' own
+         * .nfo files don't (or can't consistently) carry a matching <set> tag - a sequel/reboot's .nfo
+         * commonly has an empty or differently-worded <set>, or none at all, which is exactly why
+         * that film silently fails to group under the app's original nfo-only matching. Purely a path
+         * string check on data the directory walk already has in memory - no extra SMB round trip.
+         */
+        fun collectionFolderName(path: String): String? =
+            path.split('\\').firstNotNullOfOrNull { segment ->
+                COLLECTION_FOLDER_REGEX.find(segment)?.groupValues?.get(1)?.trim()?.takeIf { it.isNotBlank() }
+            }
     }
+
+    internal data class CategoryMatch(val category: Category, val categoryFolderIndex: Int)
 }
