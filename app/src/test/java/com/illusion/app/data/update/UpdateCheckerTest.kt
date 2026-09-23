@@ -85,5 +85,7 @@ class UpdateCheckerTest {
         assertEquals("0.1.0-beta98", versionNameFromRelease(release))
         assertEquals("v170", versionNameFromRelease(release.copy(name = "Бета")))
         assertEquals("v170", versionNameFromRelease(release.copy(name = null)))
+        // The format releases are actually published with: versionCode in the parentheses.
+        assertEquals("0.1.0-beta99", versionNameFromRelease(release.copy(name = "0.1.0-beta99 (172)")))
     }
 }

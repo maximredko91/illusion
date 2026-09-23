@@ -134,9 +134,16 @@ class UpdateChecker(
          * falls back to the tag if the title is missing/doesn't follow the convention rather than
          * failing the whole check over a cosmetic string.
          */
-        fun versionNameFromRelease(release: GitHubRelease): String =
-            release.name?.let { title -> Regex("\\(([^)]+)\\)").find(title)?.groupValues?.get(1) }
-                ?: release.tagName
+        fun versionNameFromRelease(release: GitHubRelease): String {
+            // Releases are actually titled the other way round - "0.1.0-beta99 (172)", versionCode
+            // in the parentheses - so taking the parenthesized part showed "Доступно обновление
+            // 172". Whichever side is not just the digits is the version name.
+            val match = RELEASE_TITLE.find(release.name?.trim().orEmpty()) ?: return release.tagName
+            val (outside, inside) = match.destructured
+            return if (inside.all { it.isDigit() } && outside.isNotBlank()) outside else inside
+        }
+
+        private val RELEASE_TITLE = Regex("""^(.*?)\s*\(([^)]+)\)\s*$""")
 
         fun versionCodeFromTag(tag: String): Int? =
             tag.filter { it.isDigit() }.takeIf { it.isNotEmpty() }?.toIntOrNull()
