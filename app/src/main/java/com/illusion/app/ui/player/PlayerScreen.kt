@@ -1443,22 +1443,25 @@ private fun GestureIndicator(
     val accentColor = MaterialTheme.colorScheme.primary
     Column(
         modifier = modifier
-            .background(Color.Black.copy(alpha = 0.5f), RoundedCornerShape(20.dp))
-            .padding(horizontal = 12.dp, vertical = 14.dp),
+            .background(Color.Black.copy(alpha = 0.5f), RoundedCornerShape(16.dp))
+            // Fixed width: sized by its label, the pill jumped between "5%" and "100%" mid-drag.
+            .width(44.dp)
+            .padding(vertical = 10.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+        verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
         Icon(
             imageVector = icon,
             contentDescription = contentDescription,
             tint = Color.White,
-            modifier = Modifier.size(22.dp)
+            modifier = Modifier.size(18.dp)
         )
+        // Was a 36x120dp capsule - read as a huge block over the picture (user feedback).
         Box(
             modifier = Modifier
-                .width(36.dp)
-                .height(120.dp)
-                .clip(RoundedCornerShape(18.dp))
+                .width(8.dp)
+                .height(96.dp)
+                .clip(RoundedCornerShape(4.dp))
                 .background(Color.White.copy(alpha = 0.22f)),
             contentAlignment = Alignment.BottomCenter
         ) {
@@ -1466,14 +1469,14 @@ private fun GestureIndicator(
                 modifier = Modifier
                     .fillMaxWidth()
                     .fillMaxHeight(fraction.coerceIn(0f, 1f))
-                    .clip(RoundedCornerShape(18.dp))
+                    .clip(RoundedCornerShape(4.dp))
                     .background(accentColor)
             )
         }
         Text(
             text = "${(fraction * 100).roundToInt()}%",
             color = Color.White,
-            style = MaterialTheme.typography.titleMedium
+            style = MaterialTheme.typography.labelMedium
         )
     }
 }

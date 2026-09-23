@@ -388,6 +388,8 @@ class PlayerViewModel(
                 // even once, isPlaying is always false, so the ticker never ran and the percent
                 // could never appear (reported on-device: spinner with no number, on every file).
                 if (playbackState == Player.STATE_BUFFERING) startTicker()
+                if (playbackState == Player.STATE_BUFFERING) watchBufferStall() else bufferStallJob?.cancel()
+                if (playbackState == Player.STATE_READY) bufferStallRecoveries = 0
                 if (playbackState == Player.STATE_ENDED) onPlaybackEnded()
             }
 
@@ -831,6 +833,53 @@ class PlayerViewModel(
     // overlapping requests coalesce into one follow-up reload instead of firing concurrently -
     // safe to coalesce since reloadPlayer() always reads the *current* _state.value/currentItem
     // fresh, never stale captured values.
+    /**
+     * Mid-playback, the buffer sometimes stops growing for good at a few percent and only a manual
+     * seek gets it going again (user report, 2026-09-23). The router's NAS drops an SMB session that
+     * sat idle for ~15-25 s - exactly what happens whenever the buffer is full - and SmbDataSource
+     * reconnects on the next read; that normally works (seen in logcat), but a load that never makes
+     * progress afterwards is not something Media3 itself ever gives up on. A seek helps because it
+     * reopens the source, so this does the same automatically: BUFFERING with a bufferedPosition
+     * that hasn't moved for [BUFFER_STALL_TIMEOUT_MS] rebuilds the player at the same position via
+     * [reloadPlayer]. Capped at [MAX_BUFFER_STALL_RECOVERIES] in a row (reset once playback is
+     * READY again) so a truly unreachable NAS ends in the normal error instead of reload loops. Stays
+     * out of the way while the first-play Cues watchdog ([stallWatchdogJob]) is still armed.
+     */
+    private var bufferStallJob: Job? = null
+    private var bufferStallRecoveries = 0
+
+    private fun watchBufferStall() {
+        bufferStallJob?.cancel()
+        bufferStallJob = viewModelScope.launch {
+            var lastBuffered = player.bufferedPosition
+            var unchangedSinceMs = android.os.SystemClock.elapsedRealtime()
+            while (isActive) {
+                delay(1_000)
+                val current = player
+                if (current.playbackState != Player.STATE_BUFFERING) return@launch
+                val now = android.os.SystemClock.elapsedRealtime()
+                val buffered = current.bufferedPosition
+                val waitingOnPurpose = !current.playWhenReady || cast.state.value.isCasting ||
+                    isReloading || stallWatchdogJob?.isActive == true
+                if (buffered != lastBuffered || waitingOnPurpose) {
+                    lastBuffered = buffered
+                    unchangedSinceMs = now
+                    continue
+                }
+                if (now - unchangedSinceMs < BUFFER_STALL_TIMEOUT_MS) continue
+                if (bufferStallRecoveries >= MAX_BUFFER_STALL_RECOVERIES) return@launch
+                bufferStallRecoveries++
+                android.util.Log.w(
+                    "PlayerViewModel",
+                    "Buffer stalled at ${current.currentPosition} ms (buffered to $buffered ms) - reopening, attempt $bufferStallRecoveries"
+                )
+                bufferStallJob = null
+                reloadPlayer()
+                return@launch
+            }
+        }
+    }
+
     private var isReloading = false
     private var reloadRequestedAgain = false
 
@@ -1344,6 +1393,11 @@ class PlayerViewModel(
 
         /** How long a first-ever play is allowed to sit in BUFFERING at/near its start position before [playItem] assumes it's the Cues-table hang, not just a slow network - generous on purpose since falsely tripping it permanently disables seeking for that file. */
         private const val STALL_WATCHDOG_TIMEOUT_MS = 30_000L
+
+        /** How long BUFFERING may go without the buffer growing at all before [watchBufferStall] reopens the file. */
+        private const val BUFFER_STALL_TIMEOUT_MS = 12_000L
+
+        private const val MAX_BUFFER_STALL_RECOVERIES = 3
 
         /** How early the post-credits banner shows when the credits themselves weren't marked. */
         private const val POST_CREDITS_BANNER_LEAD_MS = 8 * 60 * 1000L
