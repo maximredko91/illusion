@@ -297,342 +297,18 @@ class PlayerViewModel(
 
     private var introDetectJob: Job? = null
 
-    // ---- DLNA casting (see data/cast/*) -------------------------------------------------------
+    // ---- Casting to a TV (see PlayerCastSession, data/cast/*) ---------------------------------
 
-    private val _castState = MutableStateFlow(CastUiState())
-    val castState: StateFlow<CastUiState> = _castState.asStateFlow()
-
-    private val dlnaDiscovery by lazy { com.illusion.app.data.cast.DlnaDiscovery(appContext) }
-    private var castController: com.illusion.app.data.cast.DlnaController? = null
-    private var castPollJob: Job? = null
-    private var castSearchJob: Job? = null
-    private var googleCast: com.illusion.app.data.cast.GoogleCastController? = null
-    private var castConnectJob: Job? = null
-    private var pendingGoogleItem: MediaItemEntity? = null
-
-    private fun ensureGoogleCast(): com.illusion.app.data.cast.GoogleCastController? {
-        googleCast?.let { return it }
-        return runCatching {
-            com.illusion.app.data.cast.GoogleCastController(
-                appContext,
-                onDevices = { devices -> _castState.update { it.copy(googleDevices = devices) } },
-                onConnected = ::loadGoogleCastMedia,
-                onDisconnected = {
-                    castConnectJob?.cancel()
-                    castPollJob?.cancel()
-                    pendingGoogleItem = null
-                    val old = _castState.value
-                    if (old.googleDeviceName != null) {
-                        persistProgress(old.positionMs, old.durationMs)
-                        player.seekTo(old.positionMs)
-                    }
-                    _castState.update { it.copy(googleDeviceName = null, isConnecting = false, isPlaying = false) }
-                },
-                onError = { code ->
-                    castConnectJob?.cancel()
-                    pendingGoogleItem = null
-                    _castState.update { it.copy(isPickerOpen = true, isConnecting = false,
-                        error = appContext.getString(com.illusion.app.R.string.player_cast_google_error, code)) }
-                }
-            ).also { googleCast = it }
-        }.getOrElse {
-            _castState.update { it.copy(error = appContext.getString(com.illusion.app.R.string.player_cast_google_unavailable)) }
-            null
-        }
-    }
-
-    fun castToGoogle(deviceId: String) {
-        if (_castState.value.isConnecting || _castState.value.isCasting) return
-        val item = currentItem ?: currentTrailerItem ?: return
-        val controller = ensureGoogleCast() ?: return
-        pendingGoogleItem = item
-        _castState.update { it.copy(isConnecting = true, error = null) }
-        castConnectJob?.cancel()
-        castConnectJob = viewModelScope.launch {
-            delay(30_000)
-            controller.stop()
-            pendingGoogleItem = null
-            _castState.update { it.copy(isPickerOpen = true, isConnecting = false,
-                error = appContext.getString(com.illusion.app.R.string.player_cast_error_failed)) }
-        }
-        controller.connect(deviceId)
-    }
-
-    private fun loadGoogleCastMedia(deviceName: String) {
-        val item = pendingGoogleItem ?: return
-        val controller = googleCast ?: return
-        val path = if (currentItem == null) item.trailerPath ?: item.filePath else item.filePath
-        val position = player.currentPosition.coerceAtLeast(0)
-        runCatching {
-            val url = com.illusion.app.data.player.StreamingService.lanStreamUrl(
-                appContext, item.sourceId, path, if (currentItem == null) -1L else item.sizeBytes
-            ) ?: error(appContext.getString(com.illusion.app.R.string.player_cast_error_no_network))
-            controller.load(url, item.title,
-                com.illusion.app.data.player.mimeTypeForExtension(path.substringAfterLast('.', "")), position) {
-                castConnectJob?.cancel()
-                pendingGoogleItem = null
-                player.pause()
-                controller.stopDiscovery()
-                _castState.update { it.copy(isPickerOpen = false, isConnecting = false,
-                    googleDeviceName = deviceName, isPlaying = true, positionMs = position,
-                    durationMs = player.duration.takeIf { d -> d != C.TIME_UNSET } ?: 0L, error = null) }
-                startGoogleCastPolling()
-            }
-        }.onFailure { error ->
-            castConnectJob?.cancel()
-            pendingGoogleItem = null
-            controller.stop()
-            _castState.update { it.copy(isConnecting = false, error = error.message) }
-        }
-    }
-
-    private fun startGoogleCastPolling() {
-        castPollJob?.cancel()
-        castPollJob = viewModelScope.launch {
-            while (isActive) {
-                val controller = googleCast ?: break
-                val remote = controller.client
-                if (remote != null && controller.ownsCurrentMedia()) {
-                    val position = remote.approximateStreamPosition.coerceAtLeast(0)
-                    val duration = remote.streamDuration.coerceAtLeast(0)
-                    _castState.update { it.copy(positionMs = position,
-                        durationMs = duration.takeIf { d -> d > 0 } ?: it.durationMs,
-                        isPlaying = remote.isPlaying) }
-                    maybeSaveProgress(position, _castState.value.durationMs)
-                    // Громкость телевизора может измениться и его собственным пультом - забираем
-                    // её тем же опросом, чтобы ползунок не расходился с реальностью.
-                    controller.volume()?.let { volume -> _castState.update { it.copy(volume = volume) } }
-                    if (remote.playerState == com.google.android.gms.cast.MediaStatus.PLAYER_STATE_IDLE) {
-                        val failed = remote.idleReason == com.google.android.gms.cast.MediaStatus.IDLE_REASON_ERROR
-                        if (remote.idleReason == com.google.android.gms.cast.MediaStatus.IDLE_REASON_FINISHED || failed) {
-                            stopCast(resumeLocally = false)
-                            if (failed) _castState.update { it.copy(isPickerOpen = true,
-                                error = appContext.getString(com.illusion.app.R.string.player_cast_google_format_error)) }
-                            break
-                        }
-                    }
-                }
-                delay(CAST_POLL_INTERVAL_MS)
-            }
-        }
-    }
-
-    fun openCastPicker() {
-        _castState.update { it.copy(isPickerOpen = true, error = null) }
-        refreshCastDevices()
-    }
-
-    fun closeCastPicker() {
-        castSearchJob?.cancel()
-        googleCast?.stopDiscovery()
-        _castState.update { it.copy(isPickerOpen = false, isSearching = false) }
-    }
-
-    fun refreshCastDevices() {
-        if (_castState.value.isCasting || _castState.value.isConnecting) return
-        castSearchJob?.cancel()
-        _castState.update { it.copy(isSearching = true, error = null) }
-        ensureGoogleCast()?.startDiscovery()
-        castSearchJob = viewModelScope.launch {
-            val found = runCatching { dlnaDiscovery.discover() }.getOrDefault(emptyList())
-            _castState.update { it.copy(isSearching = false, devices = found) }
-        }
-    }
-
-    /**
-     * Hands the currently playing file to [device] and pauses local playback.
-     *
-     * The renderer fetches the file from this app's own [com.illusion.app.data.player.StreamingService]
-     * over the LAN - the TV can't read SMB itself, which is exactly why casting needed that bridge
-     * first. A downloaded copy isn't used even when one exists: the bridge serves SMB paths, and
-     * re-exposing app-private storage is a separate thing not worth building for this.
-     *
-     * Renderers need a moment between accepting a URL and being able to seek in it, hence the
-     * delay before resuming at the local position - seeking too early is simply ignored by most.
-     */
-    fun castTo(device: com.illusion.app.data.cast.DlnaDevice) {
-        if (_castState.value.isConnecting || _castState.value.isCasting) return
-        val item = currentItem ?: currentTrailerItem
-        if (item == null) {
-            _castState.update { it.copy(error = appContext.getString(com.illusion.app.R.string.player_cast_error_no_item)) }
-            return
-        }
-        val startPositionMs = player.currentPosition.coerceAtLeast(0)
-        viewModelScope.launch {
-            _castState.update { it.copy(isConnecting = true, error = null) }
-            val url = com.illusion.app.data.player.StreamingService.lanStreamUrl(
-                appContext, item.sourceId, item.filePath, item.sizeBytes
-            )
-            if (url == null) {
-                _castState.update { it.copy(isConnecting = false, error = appContext.getString(com.illusion.app.R.string.player_cast_error_no_network)) }
-                return@launch
-            }
-            player.pause()
-            val controller = com.illusion.app.data.cast.DlnaController(device)
-            val mimeType = com.illusion.app.data.player.mimeTypeForExtension(item.filePath.substringAfterLast('.', ""))
-            runCatching { controller.playUrl(url, item.title, mimeType) }
-                .onFailure {
-                    _castState.update { state -> state.copy(isConnecting = false, error = appContext.getString(com.illusion.app.R.string.player_cast_error_failed)) }
-                    return@launch
-                }
-            if (startPositionMs > 5_000) {
-                delay(1_500)
-                runCatching { controller.seekTo(startPositionMs) }
-            }
-            castController = controller
-            val initialVolume = if (controller.supportsVolume) runCatching { controller.volume() }.getOrNull() else null
-            _castState.update {
-                it.copy(
-                    isPickerOpen = false,
-                    isConnecting = false,
-                    device = device,
-                    isPlaying = true,
-                    positionMs = startPositionMs,
-                    durationMs = player.duration.takeIf { d -> d != C.TIME_UNSET } ?: 0L,
-                    volume = initialVolume,
-                    error = null
-                )
-            }
-            startCastPolling()
-        }
-    }
-
-    /** Asks the renderer where it is every couple of seconds - there's no push channel short of
-     * subscribing to UPnP eventing (a whole callback HTTP server), and a 2 s cadence is plenty for
-     * a progress bar. Watch progress is written from these reports too, so stopping the cast or
-     * closing the player leaves the item resumable at the right spot. */
-    private fun startCastPolling() {
-        castPollJob?.cancel()
-        castPollJob = viewModelScope.launch {
-            while (isActive) {
-                val controller = castController ?: break
-                val position = runCatching { controller.position() }.getOrNull()
-                val transport = runCatching { controller.transportState() }.getOrNull()
-                if (position != null) {
-                    _castState.update {
-                        it.copy(
-                            positionMs = position.positionMs,
-                            durationMs = if (position.durationMs > 0) position.durationMs else it.durationMs
-                        )
-                    }
-                    maybeSaveProgress(position.positionMs, position.durationMs)
-                }
-                if (controller.supportsVolume) {
-                    runCatching { controller.volume() }.getOrNull()
-                        ?.let { volume -> _castState.update { it.copy(volume = volume) } }
-                }
-                if (transport != null) {
-                    _castState.update { it.copy(isPlaying = transport.isPlaying) }
-                    // The renderer reaching the end is the cast's own "finished" signal - the local
-                    // player never played those last minutes, so nothing else would notice.
-                    if (transport.isStopped && _castState.value.positionMs > 0) {
-                        stopCast(resumeLocally = false)
-                        break
-                    }
-                }
-                delay(CAST_POLL_INTERVAL_MS)
-            }
-        }
-    }
-
-    fun castTogglePlayPause() {
-        if (_castState.value.googleDeviceName != null) {
-            googleCast?.toggle()
-            return
-        }
-        val controller = castController ?: return
-        val playing = _castState.value.isPlaying
-        _castState.update { it.copy(isPlaying = !playing) }
-        viewModelScope.launch { runCatching { if (playing) controller.pause() else controller.play() } }
-    }
-
-    fun castSeekTo(positionMs: Long) {
-        if (_castState.value.googleDeviceName != null) {
-            val duration = _castState.value.durationMs
-            googleCast?.seek(positionMs.coerceIn(0, duration.takeIf { it > 0 } ?: Long.MAX_VALUE))
-            return
-        }
-        val controller = castController ?: return
-        val target = positionMs.coerceAtLeast(0)
-        _castState.update { it.copy(positionMs = target) }
-        viewModelScope.launch { runCatching { controller.seekTo(target) } }
-    }
-
-    fun castSeekBy(deltaMs: Long) = castSeekTo(_castState.value.positionMs + deltaMs)
-
-    /**
-     * The LAN HTTP bridge only exists for whoever is pulling from it. An external player is out of
-     * this app's sight once launched (hence that path's six-hour idle timeout), but a cast ending
-     * is a definite "nobody is reading any more" - close it right away rather than leave a port
-     * open on every interface for hours.
-     */
-    private fun stopStreamingBridge() {
-        runCatching { com.illusion.app.data.player.StreamingService.stop(appContext) }
-    }
-
-    /**
-     * Sets the TV's own volume, 0..1 - the receiver's device volume for Cast, RenderingControl's
-     * Master channel for DLNA. The local state is updated straight away rather than waiting for
-     * the next poll, or the slider would snap back under the finger.
-     */
-    fun castSetVolume(volume: Float) {
-        val target = volume.coerceIn(0f, 1f)
-        _castState.update { it.copy(volume = target) }
-        if (_castState.value.googleDeviceName != null) {
-            googleCast?.setVolume(target)
-            return
-        }
-        val controller = castController ?: return
-        viewModelScope.launch { runCatching { controller.setVolume(target) } }
-    }
-
-    /**
-     * Hardware volume keys while casting: they should move the TV, not this phone's own speaker,
-     * which is silent anyway (local playback is paused). Returns true when the key was consumed -
-     * see [PlayerKeyEvents] for how it reaches here.
-     */
-    fun castAdjustVolume(deltaSteps: Int): Boolean {
-        if (!_castState.value.isCasting) return false
-        val current = _castState.value.volume ?: return false
-        castSetVolume(current + deltaSteps * VOLUME_STEP)
-        return true
-    }
-
-    /**
-     * Ends the cast. [resumeLocally] moves this device's own player to wherever the TV got to and
-     * keeps playing there - what the "остановить трансляцию" button is for; the end-of-file case
-     * passes false instead, since there's nothing left to resume.
-     */
-    fun stopCast(resumeLocally: Boolean = true) {
-        if (_castState.value.googleDeviceName != null || pendingGoogleItem != null) {
-            val old = _castState.value
-            castConnectJob?.cancel()
-            castPollJob?.cancel()
-            pendingGoogleItem = null
-            googleCast?.stop()
-            if (old.googleDeviceName != null) {
-                persistProgress(old.positionMs, old.durationMs)
-                player.seekTo(old.positionMs)
-                if (resumeLocally) player.play()
-            }
-            _castState.update { CastUiState(devices = it.devices, googleDevices = it.googleDevices) }
-            stopStreamingBridge()
-            return
-        }
-        val controller = castController ?: return
-        val position = _castState.value.positionMs
-        castPollJob?.cancel()
-        castPollJob = null
-        castController = null
-        viewModelScope.launch { runCatching { controller.stop() } }
-        persistProgress(position, _castState.value.durationMs)
-        _castState.update { CastUiState(devices = it.devices, googleDevices = it.googleDevices) }
-        stopStreamingBridge()
-        if (resumeLocally && position > 0) {
-            player.seekTo(position)
-            player.play()
-        }
-    }
+    val cast = PlayerCastSession(
+        appContext = appContext,
+        scope = viewModelScope,
+        player = { player },
+        currentItem = { currentItem },
+        currentTrailerItem = { currentTrailerItem },
+        persistProgress = ::persistProgress,
+        maybeSaveProgress = ::maybeSaveProgress
+    )
+    val castState: StateFlow<CastUiState> get() = cast.state
 
     /** Whether [player] (the CURRENT instance) was built with Cues-based seeking disabled - see [createPlayer]. */
     private var cuesSeekDisabledForCurrentPlayer = false
@@ -958,7 +634,7 @@ class PlayerViewModel(
     }
 
     fun load(stableId: String, playTrailer: Boolean = false) {
-        if (_castState.value.isCasting || pendingGoogleItem != null) stopCast(resumeLocally = false)
+        if (cast.isBusy) cast.stopCast(resumeLocally = false)
         viewModelScope.launch {
             val item = libraryRepository.getById(stableId) ?: run {
                 _state.update { it.copy(error = "Файл не найден в библиотеке", isLoading = false) }
@@ -1176,7 +852,7 @@ class PlayerViewModel(
         val duration = old.duration.takeIf { it != C.TIME_UNSET }?.coerceAtLeast(0) ?: 0L
         val item = currentItem
         val trailerItem = currentTrailerItem
-        if (item != null && !_castState.value.isCasting) persistProgress(position, duration)
+        if (item != null && !cast.state.value.isCasting) persistProgress(position, duration)
 
         old.release()
         // Preserves whichever mode (normal / Cues-seek-disabled) the player was already in -
@@ -1369,18 +1045,18 @@ class PlayerViewModel(
     }
 
     fun togglePlayPause() {
-        if (_castState.value.isCasting) { castTogglePlayPause(); return }
+        if (cast.state.value.isCasting) { cast.castTogglePlayPause(); return }
         if (player.isPlaying) player.pause() else player.play()
     }
 
     fun seekBy(deltaMs: Long) {
-        if (_castState.value.isCasting) { castSeekBy(deltaMs); return }
+        if (cast.state.value.isCasting) { cast.castSeekBy(deltaMs); return }
         val duration = player.duration.takeIf { it != C.TIME_UNSET } ?: Long.MAX_VALUE
         player.seekTo((player.currentPosition + deltaMs).coerceIn(0, duration))
     }
 
     fun seekTo(positionMs: Long) {
-        if (_castState.value.isCasting) { castSeekTo(positionMs); return }
+        if (cast.state.value.isCasting) { cast.castSeekTo(positionMs); return }
         player.seekTo(positionMs.coerceAtLeast(0))
     }
 
@@ -1526,108 +1202,14 @@ class PlayerViewModel(
         viewModelScope.launch { settingsRepository.setDecoderMode(mode) }
     }
 
-    private fun decoderKindLabel(decoderName: String): String =
-        if (com.illusion.app.data.player.isHardwareDecoder(decoderName)) "аппаратный" else "программный"
-
-    fun currentVideoFormatSummary(): String {
-        val format = player.videoFormat
-        val item = currentItem ?: currentTrailerItem
-        val audio = player.audioFormat
-
-        return buildString {
-            item?.let {
-                appendLine("Файл: ${it.filePath.substringAfterLast('\\')}")
-                appendLine("Размер: ${formatFileSize(it.sizeBytes)}")
-            }
-            if (player.duration > 0) appendLine("Длительность: ${formatTime(player.duration)}")
-
-            if (format == null) {
-                appendLine()
-                appendLine("Видеодорожка ещё не определена")
-                // When the renderer never gets a video format, the interesting question is whether
-                // the container even exposed a video track and whether this device can decode it -
-                // "no video track at all" and "track present but unsupported codec" look identical
-                // on screen (an endless buffering spinner) but mean completely different things.
-                val videoGroups = player.currentTracks.groups.filter { it.type == C.TRACK_TYPE_VIDEO }
-                if (videoGroups.isEmpty()) {
-                    appendLine("В контейнере не найдено ни одной видеодорожки")
-                } else {
-                    for (group in videoGroups) {
-                        for (i in 0 until group.length) {
-                            val trackFormat = group.getTrackFormat(i)
-                            val supported = if (group.isTrackSupported(i)) "поддерживается" else "НЕ поддерживается"
-                            appendLine(
-                                "Дорожка: ${trackFormat.sampleMimeType ?: "—"} " +
-                                    "${trackFormat.width}x${trackFormat.height} - $supported" +
-                                    if (group.isTrackSelected(i)) ", выбрана" else ""
-                            )
-                        }
-                    }
-                }
-            } else {
-                val color = format.colorInfo
-                val dvProfile = format.codecs
-                    ?.takeIf { it.startsWith("dvhe") || it.startsWith("dvh1") || it.startsWith("dva1") || it.startsWith("dvav") }
-                    ?.split(".")
-                    ?.getOrNull(1)
-                    ?.toIntOrNull()
-                val dynamicRange = when {
-                    dvProfile != null -> "Dolby Vision (Profile $dvProfile)"
-                    color?.colorTransfer == C.COLOR_TRANSFER_ST2084 -> "HDR10/HDR10+"
-                    color?.colorTransfer == C.COLOR_TRANSFER_HLG -> "HLG"
-                    else -> "SDR"
-                }
-                appendLine()
-                appendLine("Видео")
-                appendLine("Кодек: ${format.sampleMimeType ?: "—"} (${format.codecs ?: "—"})")
-                videoDecoderName?.let { appendLine("Декодер: $it (${decoderKindLabel(it)})") }
-                appendLine("Разрешение: ${format.width}x${format.height}")
-                if (format.frameRate > 0) appendLine("Частота кадров: ${"%.2f".format(format.frameRate)} fps")
-                if (format.bitrate > 0) appendLine("Битрейт: ${format.bitrate / 1000} кбит/с")
-                appendLine("Динамический диапазон: $dynamicRange")
-                appendLine("Цвет: пространство=${color?.colorSpace ?: "—"}, transfer=${color?.colorTransfer ?: "—"}, range=${color?.colorRange ?: "—"}")
-                if (dvProfile == 7) {
-                    appendLine(
-                        "⚠ Profile 7 хранит доп. детализацию в отдельном enhancement-layer потоке. " +
-                            "Плеер показывает только базовый слой — картинка корректна, но без этой детализации."
-                    )
-                }
-            }
-
-            if (audio != null) {
-                appendLine()
-                appendLine("Аудио")
-                appendLine("Кодек: ${audio.sampleMimeType ?: "—"} (${audio.codecs ?: "—"})")
-                audioDecoderName?.let { appendLine("Декодер: $it (${decoderKindLabel(it)})") }
-                if (audio.channelCount != androidx.media3.common.Format.NO_VALUE) appendLine("Каналы: ${audio.channelCount}")
-                if (audio.sampleRate != androidx.media3.common.Format.NO_VALUE) appendLine("Частота дискретизации: ${audio.sampleRate} Гц")
-                if (audio.bitrate > 0) appendLine("Битрейт: ${audio.bitrate / 1000} кбит/с")
-            }
-
-            if (_state.value.audioTracks.size > 1) {
-                appendLine()
-                appendLine("Все аудиодорожки: ${_state.value.audioTracks.joinToString(", ") { it.label }}")
-            }
-            if (_state.value.subtitleTracks.isNotEmpty()) {
-                appendLine("Субтитры: ${_state.value.subtitleTracks.joinToString(", ") { it.label }}")
-            } else {
-                appendLine()
-                appendLine("Субтитры: нет")
-            }
-        }.trim()
-    }
-
-    private fun formatFileSize(bytes: Long): String {
-        if (bytes <= 0) return "—"
-        val units = arrayOf("Б", "КБ", "МБ", "ГБ")
-        var value = bytes.toDouble()
-        var unitIndex = 0
-        while (value >= 1024 && unitIndex < units.lastIndex) {
-            value /= 1024
-            unitIndex++
-        }
-        return "%.1f %s".format(value, units[unitIndex])
-    }
+    fun currentVideoFormatSummary(): String = buildVideoFormatSummary(
+        player = player,
+        item = currentItem ?: currentTrailerItem,
+        videoDecoderName = videoDecoderName,
+        audioDecoderName = audioDecoderName,
+        audioTracks = _state.value.audioTracks,
+        subtitleTracks = _state.value.subtitleTracks
+    )
 
     fun retry() {
         _state.update { it.copy(error = null) }
@@ -1636,99 +1218,16 @@ class PlayerViewModel(
     }
 
     private fun updateTracksFromPlayer(tracks: Tracks) {
-        val audio = mutableListOf<TrackOption>()
-        val subtitles = mutableListOf<TrackOption>()
-        for (group in tracks.groups) {
-            for (i in 0 until group.length) {
-                val format = group.getTrackFormat(i)
-                // format.language is a raw ISO code ("ru") - it was winning over format.label and
-                // showing up verbatim in the track picker. Prefer the embedded human label, and
-                // otherwise turn the code into its Russian display name ("Русский").
-                val label = format.label
-                    ?: format.language?.let { code ->
-                        java.util.Locale.forLanguageTag(code)
-                            .getDisplayLanguage(java.util.Locale("ru"))
-                            .takeIf { it.isNotBlank() && !it.equals(code, ignoreCase = true) }
-                            ?.replaceFirstChar { c -> c.uppercase() }
-                            ?: code
-                    }
-                    ?: "Дорожка ${i + 1}"
-                when (group.type) {
-                    C.TRACK_TYPE_AUDIO -> audio += TrackOption(group, i, label, group.isTrackSelected(i))
-                    C.TRACK_TYPE_TEXT -> subtitles += TrackOption(group, i, label, group.isTrackSelected(i))
-                    else -> Unit
-                }
-            }
-        }
+        val (audio, subtitles) = trackOptionsFrom(tracks)
         _state.update { it.copy(audioTracks = audio, subtitleTracks = subtitles) }
-        updateAspectRatioFromTracks(tracks)
-    }
-
-    /**
-     * The GL effects pipeline (i.e. sharpen on) never fires onVideoSizeChanged - its implementation
-     * is a deliberate upstream no-op in Media3 1.11.0 (TODO b/292111083), which is why aspect-ratio
-     * cycling used to go dead for the rest of the session once sharpen had been switched on. The
-     * selected video track's own Format carries width/height/pixelWidthHeightRatio regardless of
-     * which render path is in use, so read the ratio from there instead and hand it to the UI,
-     * which applies it to PlayerView's content frame itself (see PlayerScreen).
-     */
-    private fun updateAspectRatioFromTracks(tracks: Tracks) {
-        for (group in tracks.groups) {
-            if (group.type != C.TRACK_TYPE_VIDEO) continue
-            for (i in 0 until group.length) {
-                if (!group.isTrackSelected(i)) continue
-                val format = group.getTrackFormat(i)
-                if (format.width <= 0 || format.height <= 0) continue
-                val pixelRatio = if (format.pixelWidthHeightRatio > 0f) format.pixelWidthHeightRatio else 1f
-                // A 90/270-degree rotation swaps the displayed dimensions.
-                val rotated = format.rotationDegrees == 90 || format.rotationDegrees == 270
-                val width = (if (rotated) format.height else format.width).toFloat()
-                val height = (if (rotated) format.width else format.height).toFloat()
-                val ratio = if (rotated) width / (height * pixelRatio) else (width * pixelRatio) / height
-                if (ratio > 0f) _state.update { it.copy(videoAspectRatio = ratio) }
-                return
-            }
-        }
-    }
-
-    private fun buildSubtitleConfig(sourceId: Long, path: String): MediaItem.SubtitleConfiguration =
-        buildSubtitleConfig(SmbMediaUri.build(sourceId, path), path)
-
-    /** [remotePath] is only used to derive mime type/language/label from its filename - the actual bytes are read from [uri], which may be the live SMB path or a downloaded local copy. */
-    private fun buildSubtitleConfig(uri: Uri, remotePath: String): MediaItem.SubtitleConfiguration {
-        val extension = remotePath.substringAfterLast('.', "").lowercase()
-        val mimeType = when (extension) {
-            "ass" -> MimeTypes.TEXT_SSA
-            "vtt" -> MimeTypes.TEXT_VTT
-            else -> MimeTypes.APPLICATION_SUBRIP
-        }
-        val fileName = remotePath.substringAfterLast('\\')
-        val language = guessLanguage(fileName)
-        return MediaItem.SubtitleConfiguration.Builder(uri)
-            .setMimeType(mimeType)
-            .setLanguage(language)
-            .setLabel(language ?: fileName)
-            // Without a selection flag, ExoPlayer's default track selector never auto-picks a text
-            // track on its own - subtitlesEnabled=true in the UI state only means the track TYPE
-            // isn't disabled, it doesn't mean any specific track actually gets selected/rendered.
-            // Sidecar subtitles found during scanning are exactly the case a viewer wants shown
-            // automatically (unlike embedded tracks in other languages they didn't ask for).
-            .setSelectionFlags(C.SELECTION_FLAG_DEFAULT)
-            .build()
-    }
-
-    private fun guessLanguage(fileName: String): String? {
-        val parts = fileName.split('.')
-        if (parts.size < 3) return null
-        val candidate = parts[parts.size - 2]
-        return candidate.takeIf { it.length in 2..3 && it.all { c -> c.isLetter() } }?.lowercase()
+        videoAspectRatioFrom(tracks)?.let { ratio -> _state.update { it.copy(videoAspectRatio = ratio) } }
     }
 
     private fun startTicker() {
         tickerJob?.cancel()
         tickerJob = viewModelScope.launch {
             while (isActive) {
-                val cast = _castState.value
+                val cast = cast.state.value
                 val position = if (cast.isCasting) cast.positionMs else player.currentPosition.coerceAtLeast(0)
                 val duration = if (cast.isCasting) cast.durationMs else player.duration.takeIf { it != C.TIME_UNSET }?.coerceAtLeast(0) ?: 0L
                 val buffered = player.bufferedPosition.coerceAtLeast(0)
@@ -1820,7 +1319,7 @@ class PlayerViewModel(
         PlaybackActivity.isActive = false
         val item = currentItem
         if (item != null) {
-            val cast = _castState.value
+            val cast = cast.state.value
             val position = if (cast.isCasting) cast.positionMs else player.currentPosition.coerceAtLeast(0)
             val duration = if (cast.isCasting) cast.durationMs else player.duration.takeIf { it != C.TIME_UNSET }?.coerceAtLeast(0) ?: 0L
             // Та же защита, что и в persistProgress - выход из плеера, который так и не начал
@@ -1830,7 +1329,7 @@ class PlayerViewModel(
                 persistFinalWatchProgress(item.stableId, position, duration, watched, System.currentTimeMillis())
             }
         }
-        googleCast?.release()
+        cast.release()
         if (playbackServiceStarted) {
             playbackService?.detachPlayer()
             runCatching { appContext.unbindService(playbackServiceConnection) }
@@ -1845,12 +1344,6 @@ class PlayerViewModel(
 
         /** How long a first-ever play is allowed to sit in BUFFERING at/near its start position before [playItem] assumes it's the Cues-table hang, not just a slow network - generous on purpose since falsely tripping it permanently disables seeking for that file. */
         private const val STALL_WATCHDOG_TIMEOUT_MS = 30_000L
-
-        /** How often the cast session asks the renderer where it is - see [PlayerViewModel.startCastPolling]. */
-        private const val CAST_POLL_INTERVAL_MS = 2_000L
-
-        /** One press of a volume key = 5% of the TV's range, roughly what a TV's own remote does. */
-        private const val VOLUME_STEP = 0.05f
 
         /** How early the post-credits banner shows when the credits themselves weren't marked. */
         private const val POST_CREDITS_BANNER_LEAD_MS = 8 * 60 * 1000L

@@ -465,8 +465,8 @@ fun PlayerScreen(
             // телефона: локальное воспроизведение в этот момент стоит на паузе и всё равно молчит.
             if (castState.isCasting) {
                 when (event.keyCode) {
-                    android.view.KeyEvent.KEYCODE_VOLUME_UP -> if (viewModel.castAdjustVolume(1)) return@handler true
-                    android.view.KeyEvent.KEYCODE_VOLUME_DOWN -> if (viewModel.castAdjustVolume(-1)) return@handler true
+                    android.view.KeyEvent.KEYCODE_VOLUME_UP -> if (viewModel.cast.castAdjustVolume(1)) return@handler true
+                    android.view.KeyEvent.KEYCODE_VOLUME_DOWN -> if (viewModel.cast.castAdjustVolume(-1)) return@handler true
                 }
             }
             if (isInPip || isLocked) return@handler false
@@ -743,7 +743,7 @@ fun PlayerScreen(
                         onOpenAudioTracks = { bumpInteraction(); showAudioDialog = true },
                         onCycleAspectRatio = { bumpInteraction(); cycleResizeMode() },
                         onOpenSettings = { bumpInteraction(); showSpeedDialog = true },
-                        onOpenCast = { bumpInteraction(); castPermissionGate { viewModel.openCastPicker() } },
+                        onOpenCast = { bumpInteraction(); castPermissionGate { viewModel.cast.openCastPicker() } },
                         isCasting = castState.isCasting,
                         decoderMode = uiState.decoderMode,
                         onDecoderModeChange = { mode -> bumpInteraction(); viewModel.setDecoderMode(mode) },
@@ -886,14 +886,14 @@ fun PlayerScreen(
         if (castState.isPickerOpen && !isInPip) {
             CastDialog(
                 state = castState,
-                onDismiss = viewModel::closeCastPicker,
-                onRefresh = viewModel::refreshCastDevices,
-                onSelectDevice = viewModel::castTo,
-                onSelectGoogleDevice = viewModel::castToGoogle,
-                onTogglePlayPause = viewModel::castTogglePlayPause,
-                onSeekBy = viewModel::castSeekBy,
-                onVolumeChange = viewModel::castSetVolume,
-                onStopCast = { viewModel.stopCast() }
+                onDismiss = viewModel.cast::closeCastPicker,
+                onRefresh = viewModel.cast::refreshCastDevices,
+                onSelectDevice = viewModel.cast::castTo,
+                onSelectGoogleDevice = viewModel.cast::castToGoogle,
+                onTogglePlayPause = viewModel.cast::castTogglePlayPause,
+                onSeekBy = viewModel.cast::castSeekBy,
+                onVolumeChange = viewModel.cast::castSetVolume,
+                onStopCast = { viewModel.cast.stopCast() }
             )
         }
 
