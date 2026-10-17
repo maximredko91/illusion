@@ -27,3 +27,6 @@ jobs:
           name: ffmpeg-android
           path: ffmpeg-android
           if-no-files-found: error
+          # .so сразу коммитятся в репозиторий, артефакт нужен только чтобы их оттуда забрать;
+          # 90 дней по умолчанию впустую занимают квоту Actions storage.
+          retention-days: 7
