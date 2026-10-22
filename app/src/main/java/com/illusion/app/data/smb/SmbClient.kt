@@ -256,7 +256,16 @@ class SmbRandomAccessWriteFile internal constructor(
     override fun close() { runCatching { file.close() } }
 }
 
-class SmbClient {
+/**
+ * [localAddresses] - this device's own IPv4 addresses, used only to turn a bare connect timeout
+ * into "адрес X не в текущей сети" (see [subnetMismatchHint]). A lambda rather than a Context so
+ * [SmbClient] stays constructible in plain JVM tests, and so the answer is read at failure time -
+ * the phone may well have changed networks since the client was built.
+ */
+class SmbClient(private val localAddresses: () -> List<LocalIpv4> = { emptyList() }) {
+    /** Exposed for [com.illusion.app.data.scan.LibraryScanner], which classifies its own per-source failures. */
+    fun localIpv4(): List<LocalIpv4> = localAddresses()
+
     // smbj's default socket timeout is 0 (= wait forever), so an unreachable host or a
     // firewall that silently drops packets hangs connect() indefinitely - an explicit
     // timeout here plus the withTimeout() backstop below are both needed to fail fast.
@@ -292,11 +301,12 @@ class SmbClient {
             Result.success(Unit)
         } catch (e: Exception) {
             Log.e(TAG, "testConnection failed", e)
-            Result.failure(mapConnectionError(e))
+            Result.failure(mapConnectionError(e, info.host))
         }
     }
 
-    private fun mapConnectionError(e: Throwable): Exception = Exception(classifySmbError(e))
+    private fun mapConnectionError(e: Throwable, host: String): Exception =
+        Exception(classifySmbError(e, host, localAddresses()))
 
     companion object {
         private const val TAG = "SmbClient"
@@ -319,11 +329,25 @@ class MissingSmbCredentialException(sourceName: String) : Exception(
     "Не сохранён пароль для источника «$sourceName» — откройте его настройки и введите пароль заново"
 )
 
-/** Shared by [SmbClient.testConnection]'s error dialog and [com.illusion.app.data.scan.LibraryScanner]'s per-source scan-failure reporting - one place classifying the same handful of SMB failure shapes into a Russian message the user can act on. */
-fun classifySmbError(e: Throwable): String = when (e) {
+/**
+ * Shared by [SmbClient.testConnection]'s error dialog and [com.illusion.app.data.scan.LibraryScanner]'s
+ * per-source scan-failure reporting - one place classifying the same handful of SMB failure shapes
+ * into a Russian message the user can act on.
+ *
+ * [host] and [localAddresses] are optional because only the timeout branch can use them, and only
+ * to replace the generic "проверьте адрес и что телефон в той же сети" with the specific answer
+ * when the app can already tell which of the two it is - see [subnetMismatchHint].
+ */
+fun classifySmbError(e: Throwable, host: String? = null, localAddresses: List<LocalIpv4> = emptyList()): String = when (e) {
     is MissingSmbCredentialException -> e.message!!
-    is TimeoutCancellationException, is SocketTimeoutException ->
-        "Не удалось подключиться: сервер не отвечает (проверьте адрес и что телефон в той же сети)"
+    is TimeoutCancellationException, is SocketTimeoutException -> {
+        val mismatch = host?.let { subnetMismatchHint(it, localAddresses) }
+        if (mismatch != null) {
+            "Не удалось подключиться: $mismatch — исправьте адрес сервера в настройках источника"
+        } else {
+            "Не удалось подключиться: сервер не отвечает (проверьте адрес и что телефон в той же сети)"
+        }
+    }
     is java.net.UnknownHostException ->
         "Не удалось найти хост «${e.message}» — проверьте адрес сервера"
     is java.net.ConnectException ->

@@ -30,6 +30,7 @@ import com.illusion.app.data.scan.ThumbnailGenerator
 import com.illusion.app.data.security.DevAccessStore
 import com.illusion.app.data.settings.SettingsRepository
 import com.illusion.app.data.smb.SmbClient
+import com.illusion.app.data.smb.localIpv4Addresses
 import com.illusion.app.data.smb.SmbCredentialStore
 import com.illusion.app.data.tmdb.TmdbClient
 import com.illusion.app.work.IllusionWorkerFactory
@@ -46,7 +47,7 @@ class IllusionApplication : Application(), Configuration.Provider, SingletonImag
 
     val database: AppDatabase by lazy { AppDatabase.getInstance(this) }
     val credentialStore: SmbCredentialStore by lazy { SmbCredentialStore(this) }
-    val smbClient: SmbClient by lazy { SmbClient() }
+    val smbClient: SmbClient by lazy { SmbClient { localIpv4Addresses(this) } }
     val nfoParser: NfoParser by lazy { NfoParser() }
 
     val smbSourceRepository: SmbSourceRepository by lazy {

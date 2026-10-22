@@ -73,7 +73,7 @@ class LibraryScanner(
         val newlyAdded = mutableListOf<String>()
         val total = sources.foldIndexed(0) { index, sum, source ->
             val outcome = runCatching { scanSource(source, index, sources.size, force, onProgress) }
-            outcome.exceptionOrNull()?.let { errors += SourceScanError(source.displayName, classifySmbError(it)) }
+            outcome.exceptionOrNull()?.let { errors += SourceScanError(source.displayName, classifySmbError(it, source.host, smbClient.localIpv4())) }
             outcome.getOrNull()?.let { newlyAdded += it.newlyAddedStableIds }
             sum + (outcome.getOrNull()?.indexed ?: 0)
         }
