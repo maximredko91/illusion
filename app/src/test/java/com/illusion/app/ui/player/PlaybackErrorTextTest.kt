@@ -58,5 +58,33 @@ class PlaybackErrorTextTest {
         assertEquals("Не удалось воспроизвести файл. Проверьте, что сервер включён и телефон в домашней сети", message)
     }
 
+    @Test
+    fun `таймаут с чужой подсетью называет адрес`() {
+        val message = humanPlaybackError(
+            java.net.SocketTimeoutException("failed to connect to /192.168.1.1 (port 445)"),
+            "Source error",
+            subnetHint = "адрес 192.168.1.1 не в текущей сети (телефон в 192.168.2.0/24)"
+        )
+        assertTrue(message, message.contains("192.168.1.1"))
+        assertTrue(message, message.contains("Источники SMB"))
+    }
+
+    @Test
+    fun `таймаут без подсказки оставляет прежний текст`() {
+        val message = humanPlaybackError(java.net.SocketTimeoutException(), "Source error")
+        assertEquals("Сервер не отвечает. Проверьте, что он включён, а телефон подключён к домашней сети", message)
+    }
+
+    @Test
+    fun `подсказка не лезет в ошибки кроме таймаута`() {
+        // Сервер ответил - значит, достучались, и адрес ни при чём, даже если подсеть другая.
+        val message = humanPlaybackError(
+            IllegalStateException("STATUS_LOGON_FAILURE"),
+            null,
+            subnetHint = "адрес 192.168.1.1 не в текущей сети (телефон в 192.168.2.0/24)"
+        )
+        assertFalse(message.contains("192.168.1.1"))
+    }
+
     private fun assertFalse(condition: Boolean) = assertTrue(!condition)
 }

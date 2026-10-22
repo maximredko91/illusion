@@ -24,6 +24,9 @@ class LibraryRepository(private val dao: MediaItemDao) {
     suspend fun getAllImagePaths(): List<com.illusion.app.data.local.dao.ImagePathsProjection> = dao.getAllImagePaths()
     suspend fun getBySource(sourceId: Long): List<MediaItemEntity> = dao.getBySource(sourceId)
     suspend fun clearAll() = dao.deleteAll()
+
+    /** См. [MediaItemDao.deleteSourceContent] - вызывается при удалении источника, чтобы его элементы не остались сиротами. */
+    suspend fun deleteBySource(sourceId: Long) = dao.deleteSourceContent(sourceId)
     fun observeByCategory(category: Category, sort: SortOrder, ascending: Boolean): Flow<List<MediaItemEntity>> =
         dao.observeByCategory(category, sort.name, ascending)
 

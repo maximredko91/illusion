@@ -51,7 +51,7 @@ class IllusionApplication : Application(), Configuration.Provider, SingletonImag
     val nfoParser: NfoParser by lazy { NfoParser() }
 
     val smbSourceRepository: SmbSourceRepository by lazy {
-        SmbSourceRepository(database.smbSourceDao(), credentialStore, smbClient)
+        SmbSourceRepository(database.smbSourceDao(), credentialStore, smbClient, libraryRepository)
     }
     val libraryRepository: LibraryRepository by lazy { LibraryRepository(database.mediaItemDao()) }
     val watchProgressRepository: WatchProgressRepository by lazy {

@@ -10,7 +10,14 @@ package com.illusion.app.ui.player
  * а неузнанные остаются с общим текстом (техническая деталь при этом не показывается вовсе -
  * пользы от неё на экране нет, а в logcat она остаётся).
  */
-fun humanPlaybackError(cause: Throwable?, fallbackMessage: String?): String {
+/**
+ * [subnetHint] - готовая фраза от [com.illusion.app.data.smb.subnetMismatchHint], когда адрес
+ * источника заведомо не из той сети, где сейчас телефон. Приходит уже посчитанной, чтобы этот
+ * файл остался простым разбором текста ошибки и не знал ни про SMB, ни про сетевые интерфейсы.
+ * Касается только таймаута: при любой другой причине адрес ни при чём, даже если он из другой
+ * подсети, - раз сервер ответил, значит, достучались.
+ */
+fun humanPlaybackError(cause: Throwable?, fallbackMessage: String?, subnetHint: String? = null): String {
     val text = buildString {
         append(cause?.message.orEmpty())
         append(' ')
@@ -43,7 +50,11 @@ fun humanPlaybackError(cause: Throwable?, fallbackMessage: String?): String {
             "Не удалось найти сервер по адресу из настроек. Проверьте адрес и что телефон в домашней сети"
 
         has("SocketTimeout", "TimeoutCancellation", "ETIMEDOUT", "timed out") ->
-            "Сервер не отвечает. Проверьте, что он включён, а телефон подключён к домашней сети"
+            if (subnetHint != null) {
+                "Сервер не отвечает: $subnetHint — исправьте адрес сервера в настройках, раздел «Источники SMB»"
+            } else {
+                "Сервер не отвечает. Проверьте, что он включён, а телефон подключён к домашней сети"
+            }
 
         has("ConnectException", "ECONNREFUSED", "Connection refused") ->
             "Сервер отказал в подключении. Возможно, он ещё загружается или общий доступ выключен"

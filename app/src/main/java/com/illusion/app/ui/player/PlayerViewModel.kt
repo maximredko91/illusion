@@ -43,6 +43,8 @@ import com.illusion.app.data.repository.WatchProgressRepository
 import com.illusion.app.data.settings.SHARPEN_AMOUNT_DEFAULT
 import com.illusion.app.data.settings.SettingsRepository
 import com.illusion.app.data.smb.SmbCredentialStore
+import com.illusion.app.data.smb.localIpv4Addresses
+import com.illusion.app.data.smb.subnetMismatchHint
 import com.illusion.app.domain.model.PlayerMode
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -148,6 +150,13 @@ class PlayerViewModel(
 ) : ViewModel() {
 
     private val appContext = context.applicationContext
+
+    /** Хост источника текущего элемента - см. [currentSourceSubnetHint]. */
+    private var currentSourceHost: String? = null
+
+    /** Адреса телефона читаются в момент ошибки, а не при создании плеера: сеть могла смениться по дороге. */
+    private fun currentSourceSubnetHint(): String? =
+        currentSourceHost?.let { subnetMismatchHint(it, localIpv4Addresses(appContext)) }
 
     /**
      * [disableCuesSeek] turns off MatroskaExtractor's own jump to the Cues, which is what hangs these
@@ -406,7 +415,7 @@ class PlayerViewModel(
                 android.util.Log.w("PlayerViewModel", "Playback error", error)
                 _state.update {
                     it.copy(
-                        error = humanPlaybackError(error.cause, error.message),
+                        error = humanPlaybackError(error.cause, error.message, currentSourceSubnetHint()),
                         isLoading = false
                     )
                 }
@@ -743,6 +752,9 @@ class PlayerViewModel(
         // See PlaybackActivity's own KDoc - lets ThumbnailGenerator back off from the shared
         // hardware video decoder while real playback needs it.
         PlaybackActivity.isActive = true
+        // Адрес источника запоминается здесь, пока можно сходить в базу: onPlayerError не suspend,
+        // а подсказку про чужую подсеть он должен уметь собрать сам.
+        currentSourceHost = smbSourceRepository.getById(item.sourceId)?.host
         val download = completedDownload(item.stableId)
         val uri = download?.let { it.contentUri.toUri() } ?: SmbMediaUri.build(item.sourceId, item.filePath, item.sizeBytes)
         val subtitleConfigs = if (download != null && download.subtitles.isNotEmpty()) {

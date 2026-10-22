@@ -26,7 +26,9 @@ class BackupRestoreTest {
         }
         val db = Room.inMemoryDatabaseBuilder(context, AppDatabase::class.java).build()
         try {
-            val sources = SmbSourceRepository(db.smbSourceDao(), SmbCredentialStore(context), SmbClient())
+            val sources = SmbSourceRepository(
+                db.smbSourceDao(), SmbCredentialStore(context), SmbClient(), LibraryRepository(db.mediaItemDao())
+            )
             val progress = WatchProgressRepository(db.watchProgressDao(), db.favoriteDao())
             val library = LibraryRepository(db.mediaItemDao())
             fun manager() = BackupManager(context, sources, progress, library)

@@ -5,6 +5,7 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.RawQuery
+import androidx.room.Transaction
 import androidx.sqlite.db.SupportSQLiteQuery
 import com.illusion.app.data.local.entity.MediaItemEntity
 import com.illusion.app.domain.model.Category
@@ -20,6 +21,36 @@ interface MediaItemDao {
 
     @Query("DELETE FROM media_items")
     suspend fun deleteAll()
+
+    @Query("DELETE FROM media_items WHERE sourceId = :sourceId")
+    suspend fun deleteBySource(sourceId: Long)
+
+    // Эти три таблицы ссылаются на элементы по stableId, поэтому чистятся ДО самих элементов -
+    // после удаления строк media_items подзапрос уже ничего не найдёт.
+    @Query("DELETE FROM watch_progress WHERE mediaItemStableId IN (SELECT stableId FROM media_items WHERE sourceId = :sourceId)")
+    suspend fun deleteWatchProgressBySource(sourceId: Long)
+
+    @Query("DELETE FROM favorites WHERE mediaItemStableId IN (SELECT stableId FROM media_items WHERE sourceId = :sourceId)")
+    suspend fun deleteFavoritesBySource(sourceId: Long)
+
+    @Query("DELETE FROM thumbnail_sprites WHERE mediaItemStableId IN (SELECT stableId FROM media_items WHERE sourceId = :sourceId)")
+    suspend fun deleteThumbnailSpritesBySource(sourceId: Long)
+
+    /**
+     * Всё, что осталось в библиотеке от одного источника. Ничего, кроме удаления источника,
+     * элементы не удаляет - сканирование только добавляет и обновляет, - поэтому раньше удалённый
+     * источник оставлял их навсегда: карточки видны, а открыть их нечем, потому что sourceId
+     * больше ни на что не указывает. Прогресс, избранное и спрайты уходят вместе с элементами:
+     * они адресуются по stableId, который без своего элемента недостижим, а новое сканирование
+     * той же шары выдаст другие stableId (см. StableIdGenerator - в хеш входит sourceId).
+     */
+    @Transaction
+    suspend fun deleteSourceContent(sourceId: Long) {
+        deleteWatchProgressBySource(sourceId)
+        deleteFavoritesBySource(sourceId)
+        deleteThumbnailSpritesBySource(sourceId)
+        deleteBySource(sourceId)
+    }
 
     // actors/director are stored as a JSON string array (Converters.fromStringList) - matching
     // against a quoted name (`"Name"`) avoids a false positive on a name that's merely a substring

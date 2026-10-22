@@ -12,7 +12,8 @@ import kotlinx.coroutines.flow.first
 class SmbSourceRepository(
     private val dao: SmbSourceDao,
     private val credentialStore: SmbCredentialStore,
-    private val smbClient: SmbClient
+    private val smbClient: SmbClient,
+    private val libraryRepository: LibraryRepository
 ) {
     fun observeSources(): Flow<List<SmbSourceEntity>> = dao.observeAll()
 
@@ -20,7 +21,7 @@ class SmbSourceRepository(
 
     suspend fun getEnabledSources(): List<SmbSourceEntity> = dao.getEnabled()
 
-    /** Toggles whether [source] is included the next time [scanAll][com.illusion.app.data.scan.LibraryScanner.scanAll] runs - lets the user pick which of several connected SMB sources actually contribute to the library, without deleting/re-adding a source's saved connection details. Already-scanned items from a disabled source stay in the library until the next rescan removes them (same as any other scan-time source change). */
+    /** Toggles whether [source] is included the next time [scanAll][com.illusion.app.data.scan.LibraryScanner.scanAll] runs - lets the user pick which of several connected SMB sources actually contribute to the library, without deleting/re-adding a source's saved connection details. Уже проиндексированные элементы отключённого источника остаются в библиотеке и продолжают открываться через него: ни сканирование, ни этот флаг их не удаляют, а воспроизведение ищет источник по sourceId элемента и про enabled не спрашивает. Убирает их только [deleteSource]. */
     suspend fun setEnabled(id: Long, enabled: Boolean) = dao.setEnabled(id, enabled)
 
     suspend fun addSource(source: SmbSourceEntity, password: String): Long {
@@ -34,7 +35,9 @@ class SmbSourceRepository(
         if (password != null) credentialStore.setPassword(source.id, password)
     }
 
+    /** Удаляет и всё, что этот источник внёс в библиотеку - иначе его элементы остаются навсегда: открыть их нечем, а почистить нечем тем более (см. [LibraryRepository.deleteBySource]). */
     suspend fun deleteSource(source: SmbSourceEntity) {
+        libraryRepository.deleteBySource(source.id)
         dao.delete(source)
         credentialStore.removePassword(source.id)
     }
