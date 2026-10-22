@@ -22,6 +22,10 @@ interface FavoriteDao {
     @Query("SELECT * FROM favorites ORDER BY addedAt DESC")
     fun observeAll(): Flow<List<FavoriteEntity>>
 
+    /** Всё избранное разом - для объединения источников (см. [com.illusion.app.data.repository.favoriteTransfers]). */
+    @Query("SELECT * FROM favorites")
+    suspend fun getAll(): List<FavoriteEntity>
+
     @Query("DELETE FROM favorites")
     suspend fun deleteAll()
 }

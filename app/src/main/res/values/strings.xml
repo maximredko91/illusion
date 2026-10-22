@@ -453,6 +453,37 @@
     <string name="settings_no_sources">Источники не добавлены</string>
     <string name="settings_source_missing_password">Нет сохранённого пароля — откройте и введите заново</string>
     <string name="settings_source_wrong_subnet">Недоступен из этой сети: %1$s</string>
+    <string name="settings_merge_title">Объединить источники</string>
+    <string name="settings_merge_summary">«%1$s» будет удалён, а его отметки перенесены на совпадающие файлы источника «%2$s». Файлы сопоставляются по пути и размеру.</string>
+    <string name="settings_merge_no_matches">Совпадающих файлов не найдено — похоже, это разные шары, объединять их не следует</string>
+    <string name="settings_merge_confirm">Объединить</string>
+    <string name="settings_merge_action">Объединить источники</string>
+    <string name="settings_merge_pick">Какой источник оставить? Его история просмотра сохранится, а отметки второго переедут на совпадающие файлы.</string>
+    <string name="settings_merge_keep">Оставить «%1$s»</string>
+    <plurals name="settings_merge_matched">
+        <item quantity="one">%1$d совпадающий файл</item>
+        <item quantity="few">%1$d совпадающих файла</item>
+        <item quantity="many">%1$d совпадающих файлов</item>
+        <item quantity="other">%1$d совпадающих файла</item>
+    </plurals>
+    <plurals name="settings_merge_progress">
+        <item quantity="one">Переедет %1$d отметка просмотра</item>
+        <item quantity="few">Переедет %1$d отметки просмотра</item>
+        <item quantity="many">Переедет %1$d отметок просмотра</item>
+        <item quantity="other">Переедет %1$d отметки просмотра</item>
+    </plurals>
+    <plurals name="settings_merge_favorites">
+        <item quantity="one">Переедет %1$d отметка «избранное»</item>
+        <item quantity="few">Переедет %1$d отметки «избранное»</item>
+        <item quantity="many">Переедет %1$d отметок «избранное»</item>
+        <item quantity="other">Переедет %1$d отметки «избранное»</item>
+    </plurals>
+    <plurals name="settings_merge_unmatched">
+        <item quantity="one">%1$d элемент будет удалён без переноса: двойника ему не нашлось</item>
+        <item quantity="few">%1$d элемента будут удалены без переноса: двойника им не нашлось</item>
+        <item quantity="many">%1$d элементов будут удалены без переноса: двойника им не нашлось</item>
+        <item quantity="other">%1$d элемента будут удалены без переноса: двойника им не нашлось</item>
+    </plurals>
     <plurals name="settings_source_item_count">
         <item quantity="one">%1$d элемент библиотеки открывается через этот источник</item>
         <item quantity="few">%1$d элемента библиотеки открываются через этот источник</item>

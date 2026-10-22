@@ -10,7 +10,6 @@ import coil3.SingletonImageLoader
 import com.illusion.app.R
 import com.illusion.app.data.backup.BackupManager
 import com.illusion.app.data.backup.BackupSource
-import com.illusion.app.data.local.entity.SmbSourceEntity
 import com.illusion.app.data.repository.DownloadRepository
 import com.illusion.app.data.repository.LibraryRepository
 import com.illusion.app.data.repository.SmbSourceRepository
@@ -18,6 +17,11 @@ import com.illusion.app.data.repository.ThumbnailRepository
 import com.illusion.app.data.repository.WatchProgressRepository
 import com.illusion.app.data.security.DevAccessStore
 import com.illusion.app.data.settings.SettingsRepository
+import com.illusion.app.data.local.entity.SmbSourceEntity
+import com.illusion.app.data.repository.buildMergePlan
+import com.illusion.app.data.repository.favoriteTransfers
+import com.illusion.app.data.repository.pairItemsByFile
+import com.illusion.app.data.repository.progressTransfers
 import com.illusion.app.data.smb.LocalIpv4
 import com.illusion.app.data.smb.subnetMismatchHint
 import com.illusion.app.domain.model.PlayerMode
@@ -83,6 +87,45 @@ class SettingsViewModel(
     /** Сколько элементов библиотеки открывается через каждый источник - отключённый источник с тысячами элементов иначе выглядит безобидно. */
     val sourceItemCounts: StateFlow<Map<Long, Int>> = libraryRepository.observeItemCountsBySource()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
+
+    private val _mergePlan = MutableStateFlow<SourceMergeState?>(null)
+    /** Предпросмотр объединения: показывается диалогом, пока пользователь не подтвердит или не откажется. */
+    val mergePlan: StateFlow<SourceMergeState?> = _mergePlan.asStateFlow()
+
+    /** Считает, что даст объединение, и ничего не меняет - в базу пишет только [applyMerge]. */
+    fun previewMerge(from: SmbSourceEntity, into: SmbSourceEntity) {
+        viewModelScope.launch {
+            val plan = buildMergePlan(
+                from = libraryRepository.getBySource(from.id),
+                into = libraryRepository.getBySource(into.id),
+                progressByItem = watchProgressRepository.getAllProgress().associateBy { it.mediaItemStableId },
+                favoritesByItem = watchProgressRepository.getAllFavorites().associateBy { it.mediaItemStableId }
+            )
+            _mergePlan.update { SourceMergeState(from, into, plan) }
+        }
+    }
+
+    fun dismissMerge() = _mergePlan.update { null }
+
+    /**
+     * Переносит отметки на двойников и удаляет объединяемый источник вместе с его элементами.
+     * Порядок обязателен: [SmbSourceRepository.deleteSource] уносит и прогресс с избранным
+     * удаляемых элементов, так что переносить надо ДО удаления, иначе переносить будет нечего.
+     */
+    fun applyMerge(state: SourceMergeState) {
+        viewModelScope.launch {
+            val pairs = pairItemsByFile(
+                from = libraryRepository.getBySource(state.from.id),
+                into = libraryRepository.getBySource(state.into.id)
+            )
+            val progress = watchProgressRepository.getAllProgress().associateBy { it.mediaItemStableId }
+            val favorites = watchProgressRepository.getAllFavorites().associateBy { it.mediaItemStableId }
+            watchProgressRepository.restoreProgress(progressTransfers(pairs, progress))
+            watchProgressRepository.restoreFavorites(favoriteTransfers(pairs, favorites))
+            smbSourceRepository.deleteSource(state.from)
+            _mergePlan.update { null }
+        }
+    }
 
     val imageCacheLimitMb: Flow<Int> = settingsRepository.imageCacheLimitMb
 

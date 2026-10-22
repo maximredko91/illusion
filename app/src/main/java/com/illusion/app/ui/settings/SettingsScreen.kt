@@ -247,6 +247,10 @@ fun SettingsScreen(
     sources: List<SmbSourceEntity>,
     sourcesMissingPassword: Set<Long> = emptySet(),
     sourcesInWrongSubnet: Map<Long, String> = emptyMap(),
+    mergePlan: SourceMergeState? = null,
+    onMergeSources: (keep: SmbSourceEntity, remove: SmbSourceEntity) -> Unit = { _, _ -> },
+    onApplyMerge: (SourceMergeState) -> Unit = {},
+    onDismissMerge: () -> Unit = {},
     sourceItemCounts: Map<Long, Int> = emptyMap(),
     playerMode: Flow<com.illusion.app.domain.model.PlayerMode>,
     onPlayerModeChange: (com.illusion.app.domain.model.PlayerMode) -> Unit,
@@ -351,6 +355,7 @@ fun SettingsScreen(
     // library) had less friction than clearing a poster cache. Mirrors the confirm-dialog pattern
     // already used for cache clearing / history removal elsewhere in the app.
     var pendingDeleteSource by remember { mutableStateOf<SmbSourceEntity?>(null) }
+    var showMergePicker by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val noFileAppMessage = stringResource(R.string.settings_downloads_no_file_app)
     val folderPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
@@ -517,6 +522,7 @@ fun SettingsScreen(
                         sources = sources,
                         sourcesMissingPassword = sourcesMissingPassword,
                         sourcesInWrongSubnet = sourcesInWrongSubnet,
+                        onMergeSources = { showMergePicker = true },
                         sourceItemCounts = sourceItemCounts,
                         onAddSource = onAddSource,
                         onEditSource = onEditSource,
@@ -961,6 +967,19 @@ fun SettingsScreen(
         }
     }
 
+    if (showMergePicker && sources.size == 2) {
+        SourceMergePickerDialog(
+            sources = sources,
+            onPick = { keep, remove ->
+                showMergePicker = false
+                onMergeSources(keep, remove)
+            },
+            onDismiss = { showMergePicker = false }
+        )
+    }
+    mergePlan?.let { plan ->
+        SourceMergeDialog(state = plan, onConfirm = onApplyMerge, onDismiss = onDismissMerge)
+    }
     pendingDeleteSource?.let { source ->
         AlertDialog(
             onDismissRequest = { pendingDeleteSource = null },

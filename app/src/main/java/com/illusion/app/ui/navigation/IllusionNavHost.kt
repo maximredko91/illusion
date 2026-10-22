@@ -971,6 +971,7 @@ private fun SettingsRoute(
     val sources by settingsViewModel.sources.collectAsState()
     val sourcesMissingPassword by settingsViewModel.sourcesMissingPassword.collectAsState()
     val sourcesInWrongSubnet by settingsViewModel.sourcesInWrongSubnet.collectAsState()
+    val mergePlan by settingsViewModel.mergePlan.collectAsState()
     val sourceItemCounts by settingsViewModel.sourceItemCounts.collectAsState()
     val cacheSizeBytes by settingsViewModel.cacheSizeBytes.collectAsState()
     val downloadsSizeBytes by settingsViewModel.downloadsSizeBytes.collectAsState()
@@ -995,6 +996,10 @@ private fun SettingsRoute(
         sources = sources,
         sourcesMissingPassword = sourcesMissingPassword,
         sourcesInWrongSubnet = sourcesInWrongSubnet,
+        mergePlan = mergePlan,
+        onMergeSources = { keep, remove -> settingsViewModel.previewMerge(from = remove, into = keep) },
+        onApplyMerge = { settingsViewModel.applyMerge(it) },
+        onDismissMerge = { settingsViewModel.dismissMerge() },
         sourceItemCounts = sourceItemCounts,
         playerMode = settingsViewModel.playerMode,
         onPlayerModeChange = settingsViewModel::setPlayerMode,

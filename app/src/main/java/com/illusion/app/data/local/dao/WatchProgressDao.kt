@@ -31,6 +31,10 @@ interface WatchProgressDao {
     @Query("SELECT * FROM watch_progress ORDER BY updatedAt DESC")
     fun observeHistory(): Flow<List<WatchProgressEntity>>
 
+    /** Все отметки разом - для объединения источников (см. [com.illusion.app.data.repository.progressTransfers]). */
+    @Query("SELECT * FROM watch_progress")
+    suspend fun getAll(): List<WatchProgressEntity>
+
     @Query("DELETE FROM watch_progress WHERE mediaItemStableId = :stableId")
     suspend fun deleteForItem(stableId: String)
 

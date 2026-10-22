@@ -70,4 +70,9 @@ class WatchProgressRepository(
     suspend fun clearFavorites() = favoriteDao.deleteAll()
 
     suspend fun restoreProgress(entries: List<WatchProgressEntity>) = entries.forEach { progressDao.upsert(it) }
+
+    /** Все отметки и всё избранное разом - для объединения источников, которому нужно сопоставить их по парам элементов. */
+    suspend fun getAllProgress(): List<WatchProgressEntity> = progressDao.getAll()
+
+    suspend fun getAllFavorites(): List<FavoriteEntity> = favoriteDao.getAll()
 }

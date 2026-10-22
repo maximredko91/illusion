@@ -33,6 +33,8 @@ import com.illusion.app.R
 import com.illusion.app.data.local.entity.SmbSourceEntity
 import com.illusion.app.ui.common.TvAwareButton
 import com.illusion.app.ui.common.TvAwareSwitch
+import com.illusion.app.ui.common.TvAwareTextButton
+import com.illusion.app.ui.common.tick
 import com.illusion.app.ui.common.focusHighlight
 import com.illusion.app.ui.common.reject
 import com.illusion.app.ui.common.segmentTick
@@ -48,7 +50,8 @@ internal fun ColumnScope.SettingsSourcesCategory(
     onAddSource: () -> Unit,
     onEditSource: (SmbSourceEntity) -> Unit,
     onSourceEnabledChange: (SmbSourceEntity, Boolean) -> Unit,
-    onRequestDelete: (SmbSourceEntity) -> Unit
+    onRequestDelete: (SmbSourceEntity) -> Unit,
+    onMergeSources: () -> Unit
 ) {
     val haptics = LocalHapticFeedback.current
     SettingsGroup {
@@ -156,6 +159,21 @@ internal fun ColumnScope.SettingsSourcesCategory(
                         .focusHighlight(rowSource)
                         .clickable(interactionSource = rowSource, indication = LocalIndication.current) { onEditSource(source) }
                 )
+            }
+            // Ровно два источника - это случай «один диск заведён дважды», ради которого
+            // объединение и сделано. При большем числе «объединить» перестаёт быть одним
+            // понятным действием, поэтому кнопка не показывается.
+            if (sources.size == 2) {
+                SettingsDivider()
+                TvAwareTextButton(
+                    onClick = {
+                        haptics.tick()
+                        onMergeSources()
+                    },
+                    modifier = Modifier.fillMaxWidth().padding(8.dp)
+                ) {
+                    Text(stringResource(R.string.settings_merge_action))
+                }
             }
         }
     }
