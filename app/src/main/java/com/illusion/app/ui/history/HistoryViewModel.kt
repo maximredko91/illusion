@@ -23,7 +23,7 @@ class HistoryViewModel(
     val entries: StateFlow<List<HistoryEntry>> = watchProgressRepository.observeHistory()
         .map { history ->
             history.mapNotNull { progress ->
-                libraryRepository.getById(progress.mediaItemStableId)?.let { HistoryEntry(it, progress) }
+                libraryRepository.getVisibleById(progress.mediaItemStableId)?.let { HistoryEntry(it, progress) }
             }
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())

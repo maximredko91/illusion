@@ -21,7 +21,7 @@ class SmbSourceRepository(
 
     suspend fun getEnabledSources(): List<SmbSourceEntity> = dao.getEnabled()
 
-    /** Toggles whether [source] is included the next time [scanAll][com.illusion.app.data.scan.LibraryScanner.scanAll] runs - lets the user pick which of several connected SMB sources actually contribute to the library, without deleting/re-adding a source's saved connection details. Уже проиндексированные элементы отключённого источника остаются в библиотеке и продолжают открываться через него: ни сканирование, ни этот флаг их не удаляют, а воспроизведение ищет источник по sourceId элемента и про enabled не спрашивает. Убирает их только [deleteSource]. */
+    /** Toggles whether [source] is included the next time [scanAll][com.illusion.app.data.scan.LibraryScanner.scanAll] runs - lets the user pick which of several connected SMB sources actually contribute to the library, without deleting/re-adding a source's saved connection details. Отключённый источник не сканируется, и его элементы скрыты со всех экранов библиотеки - запросы в [com.illusion.app.data.local.dao.MediaItemDao] отбирают только элементы включённых источников. Из базы они при этом никуда не деваются: включили обратно - вернулись вместе с прогрессом и избранным. Удаляет их насовсем только [deleteSource]. */
     suspend fun setEnabled(id: Long, enabled: Boolean) = dao.setEnabled(id, enabled)
 
     suspend fun addSource(source: SmbSourceEntity, password: String): Long {

@@ -19,6 +19,12 @@ interface MediaItemDao {
     @Query("SELECT * FROM media_items WHERE stableId = :stableId")
     suspend fun getById(stableId: String): MediaItemEntity?
 
+    /** Как [getById], но только если источник элемента включён - для экранов, которые показывают
+     * библиотеку (продолжить просмотр, история). Само воспроизведение ходит через [getById]:
+     * элемент, открытый по прямой ссылке, прятать уже поздно и незачем. */
+    @Query("SELECT * FROM media_items WHERE stableId = :stableId AND sourceId IN (SELECT id FROM smb_sources WHERE enabled = 1)")
+    suspend fun getVisibleById(stableId: String): MediaItemEntity?
+
     @Query("DELETE FROM media_items")
     suspend fun deleteAll()
 
@@ -65,7 +71,7 @@ interface MediaItemDao {
     @Query(
         """
         SELECT * FROM media_items
-        WHERE actors LIKE '%"' || :name || '"%' OR director LIKE '%"' || :name || '"%'
+        WHERE sourceId IN (SELECT id FROM smb_sources WHERE enabled = 1) AND (actors LIKE '%"' || :name || '"%' OR director LIKE '%"' || :name || '"%')
         """
     )
     suspend fun getFilmography(name: String): List<MediaItemEntity>
@@ -77,7 +83,7 @@ interface MediaItemDao {
     // already used per-column.
     @Query(
         """
-        SELECT * FROM media_items WHERE category = :category AND isOrphanedDownload = 0
+        SELECT * FROM media_items WHERE category = :category AND isOrphanedDownload = 0 AND sourceId IN (SELECT id FROM smb_sources WHERE enabled = 1)
         ORDER BY
             CASE WHEN :sort = 'YEAR' AND :ascending THEN year END ASC,
             CASE WHEN :sort = 'YEAR' AND NOT :ascending THEN year END DESC,
@@ -89,7 +95,7 @@ interface MediaItemDao {
     )
     fun observeByCategory(category: Category, sort: String, ascending: Boolean): Flow<List<MediaItemEntity>>
 
-    @Query("SELECT * FROM media_items WHERE isOrphanedDownload = 0 ORDER BY dateAdded DESC LIMIT :limit")
+    @Query("SELECT * FROM media_items WHERE isOrphanedDownload = 0 AND sourceId IN (SELECT id FROM smb_sources WHERE enabled = 1) ORDER BY dateAdded DESC LIMIT :limit")
     fun observeRecentlyAdded(limit: Int = 20): Flow<List<MediaItemEntity>>
 
     // Title/originalTitle matches are ranked first (rankMatch = 0), everything else (plot, actors,
@@ -107,7 +113,7 @@ interface MediaItemDao {
         """
         SELECT *, CASE WHEN title LIKE '%' || :query || '%' OR originalTitle LIKE '%' || :query || '%' THEN 0 ELSE 1 END AS rankMatch
         FROM media_items
-        WHERE isOrphanedDownload = 0 AND (
+        WHERE isOrphanedDownload = 0 AND sourceId IN (SELECT id FROM smb_sources WHERE enabled = 1) AND (
            title LIKE '%' || :query || '%'
            OR originalTitle LIKE '%' || :query || '%'
            OR plot LIKE '%' || :query || '%'
@@ -122,27 +128,27 @@ interface MediaItemDao {
     )
     fun search(query: String, translatedGenre: String?): Flow<List<MediaItemEntity>>
 
-    @Query("SELECT * FROM media_items WHERE seriesStableId = :seriesStableId ORDER BY seasonNumber, episodeNumber")
+    @Query("SELECT * FROM media_items WHERE seriesStableId = :seriesStableId AND sourceId IN (SELECT id FROM smb_sources WHERE enabled = 1) ORDER BY seasonNumber, episodeNumber")
     fun observeEpisodes(seriesStableId: String): Flow<List<MediaItemEntity>>
 
     /** One-shot counterpart of [observeEpisodes], narrowed to a season - the intro detector needs
      * a neighbouring episode once, not a subscription. */
-    @Query("SELECT * FROM media_items WHERE seriesStableId = :seriesStableId AND seasonNumber = :seasonNumber ORDER BY episodeNumber")
+    @Query("SELECT * FROM media_items WHERE seriesStableId = :seriesStableId AND seasonNumber = :seasonNumber AND sourceId IN (SELECT id FROM smb_sources WHERE enabled = 1) ORDER BY episodeNumber")
     suspend fun getSeasonEpisodes(seriesStableId: String, seasonNumber: Int): List<MediaItemEntity>
 
     /** .nfo <set>-based - Details' own "Другие части" row. */
-    @Query("SELECT * FROM media_items WHERE collectionName = :collectionName AND isOrphanedDownload = 0")
+    @Query("SELECT * FROM media_items WHERE collectionName = :collectionName AND isOrphanedDownload = 0 AND sourceId IN (SELECT id FROM smb_sources WHERE enabled = 1)")
     fun observeByCollection(collectionName: String): Flow<List<MediaItemEntity>>
 
     /** "<Name> (Коллекция)" NAS-folder-based - Details' own "Коллекция" row, deliberately separate from the .nfo-based [observeByCollection] above (see MediaItemEntity.folderCollectionName's own KDoc for why). */
-    @Query("SELECT * FROM media_items WHERE folderCollectionName = :folderCollectionName AND isOrphanedDownload = 0")
+    @Query("SELECT * FROM media_items WHERE folderCollectionName = :folderCollectionName AND isOrphanedDownload = 0 AND sourceId IN (SELECT id FROM smb_sources WHERE enabled = 1)")
     fun observeByFolderCollection(folderCollectionName: String): Flow<List<MediaItemEntity>>
 
     /** Every item that belongs to some folder-based collection, for the Home "Коллекции" row - grouped and reduced to one representative + a count per folderCollectionName in [LibraryRepository.observeCollections], not here, since that grouping logic is shared with nothing else SQL-side would make simpler. Deliberately narrower than a full-table observeAll() - most libraries have far fewer collection members than total items. Folder-based (not .nfo <set>-based) since that's the reliable, physically-organized signal a franchise-browsing row should key off. */
-    @Query("SELECT * FROM media_items WHERE folderCollectionName IS NOT NULL AND isOrphanedDownload = 0")
+    @Query("SELECT * FROM media_items WHERE folderCollectionName IS NOT NULL AND isOrphanedDownload = 0 AND sourceId IN (SELECT id FROM smb_sources WHERE enabled = 1)")
     fun observeAllInFolderCollections(): Flow<List<MediaItemEntity>>
 
-    @Query("SELECT * FROM media_items WHERE category = :category AND isOrphanedDownload = 0")
+    @Query("SELECT * FROM media_items WHERE category = :category AND isOrphanedDownload = 0 AND sourceId IN (SELECT id FROM smb_sources WHERE enabled = 1)")
     suspend fun getByCategory(category: Category): List<MediaItemEntity>
 
     /**
@@ -163,7 +169,7 @@ interface MediaItemDao {
     // powers Home's random picks and several other broad "everything in the library" scans, none
     // of which a metadata-less recovered row should ever appear in. [getById] deliberately has no
     // such filter - Downloads/Player still need to find it by id directly.
-    @Query("SELECT * FROM media_items WHERE isOrphanedDownload = 0")
+    @Query("SELECT * FROM media_items WHERE isOrphanedDownload = 0 AND sourceId IN (SELECT id FROM smb_sources WHERE enabled = 1)")
     suspend fun getAll(): List<MediaItemEntity>
 
     /**
@@ -171,10 +177,10 @@ interface MediaItemDao {
      * MediaItemEntity rows for these meant JSON-decoding a dozen TEXT columns per item across a
      * 3000+ row library, which is the actually expensive part - not the query.
      */
-    @Query("SELECT tags FROM media_items WHERE tags IS NOT NULL AND tags != '[]'")
+    @Query("SELECT tags FROM media_items WHERE tags IS NOT NULL AND tags != '[]' AND sourceId IN (SELECT id FROM smb_sources WHERE enabled = 1)")
     suspend fun getAllTags(): List<String>
 
-    @Query("SELECT actors, director FROM media_items")
+    @Query("SELECT actors, director FROM media_items WHERE sourceId IN (SELECT id FROM smb_sources WHERE enabled = 1)")
     suspend fun getAllCredits(): List<CreditsProjection>
 
     @Query("SELECT sourceId, posterPath, fanartPath, episodeThumbPath FROM media_items")

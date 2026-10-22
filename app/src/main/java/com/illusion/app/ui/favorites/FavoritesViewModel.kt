@@ -17,7 +17,7 @@ class FavoritesViewModel(
     watchProgressRepository: WatchProgressRepository
 ) : ViewModel() {
     val items: StateFlow<List<MediaItemEntity>> = watchProgressRepository.observeFavorites()
-        .map { favorites -> favorites.mapNotNull { libraryRepository.getById(it.mediaItemStableId) } }
+        .map { favorites -> favorites.mapNotNull { libraryRepository.getVisibleById(it.mediaItemStableId) } }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     companion object {

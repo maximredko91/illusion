@@ -460,10 +460,10 @@
         <item quantity="other">%1$d элемента библиотеки открываются через этот источник</item>
     </plurals>
     <plurals name="settings_source_item_count_disabled">
-        <item quantity="one">%1$d элемент библиотеки всё равно открывается через него: «Отключён» влияет только на сканирование</item>
-        <item quantity="few">%1$d элемента библиотеки всё равно открываются через него: «Отключён» влияет только на сканирование</item>
-        <item quantity="many">%1$d элементов библиотеки всё равно открываются через него: «Отключён» влияет только на сканирование</item>
-        <item quantity="other">%1$d элемента библиотеки всё равно открываются через него: «Отключён» влияет только на сканирование</item>
+        <item quantity="one">%1$d элемент библиотеки скрыт, пока источник отключён</item>
+        <item quantity="few">%1$d элемента библиотеки скрыты, пока источник отключён</item>
+        <item quantity="many">%1$d элементов библиотеки скрыто, пока источник отключён</item>
+        <item quantity="other">%1$d элемента библиотеки скрыто, пока источник отключён</item>
     </plurals>
     <string name="settings_delete_source">Удалить</string>
     <string name="settings_delete_source_confirm_title">Удалить источник?</string>

@@ -14,6 +14,9 @@ class LibraryRepository(private val dao: MediaItemDao) {
 
     suspend fun getAll(): List<MediaItemEntity> = dao.getAll()
 
+    /** Элемент для экранов библиотеки - null, если его источник отключён. См. [MediaItemDao.getVisibleById]. */
+    suspend fun getVisibleById(stableId: String): MediaItemEntity? = dao.getVisibleById(stableId)
+
     /** Tags of every item, still JSON-encoded per row - see [MediaItemDao.getAllTags]. */
     suspend fun getAllTags(): List<List<String>> = dao.getAllTags().map { json ->
         runCatching { kotlinx.serialization.json.Json.decodeFromString<List<String>>(json) }.getOrDefault(emptyList())
@@ -139,7 +142,11 @@ class LibraryRepository(private val dao: MediaItemDao) {
         val genreClauses = genreVariants.joinToString(" OR ") { "genres LIKE ?" }
         val args: Array<Any> = (listOf(item.category.name) + genreVariants.map { "%\"$it\"%" }).toTypedArray()
         val candidates = dao.getByCategoryMatchingAnyGenre(
-            SimpleSQLiteQuery("SELECT * FROM media_items WHERE category = ? AND ($genreClauses)", args)
+            SimpleSQLiteQuery(
+                "SELECT * FROM media_items WHERE category = ? AND ($genreClauses)" +
+                    " AND sourceId IN (SELECT id FROM smb_sources WHERE enabled = 1)",
+                args
+            )
         )
         val itemGenresCanonical = item.genres.map { canonicalGenre(it) }.toSet()
         return candidates

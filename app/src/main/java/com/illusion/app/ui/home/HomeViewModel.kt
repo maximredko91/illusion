@@ -35,7 +35,7 @@ class HomeViewModel(
     val continueWatching: StateFlow<List<ContinueWatchingItem>> = watchProgressRepository.observeContinueWatching()
         .map { progressList ->
             progressList.mapNotNull { progress ->
-                val item = libraryRepository.getById(progress.mediaItemStableId) ?: return@mapNotNull null
+                val item = libraryRepository.getVisibleById(progress.mediaItemStableId) ?: return@mapNotNull null
                 val fraction = if (progress.durationMs > 0) {
                     (progress.positionMs.toFloat() / progress.durationMs).coerceIn(0f, 1f)
                 } else {
