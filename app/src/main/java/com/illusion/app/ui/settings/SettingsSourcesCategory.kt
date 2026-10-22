@@ -26,6 +26,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.illusion.app.R
@@ -42,6 +43,8 @@ import androidx.compose.foundation.layout.ColumnScope
 internal fun ColumnScope.SettingsSourcesCategory(
     sources: List<SmbSourceEntity>,
     sourcesMissingPassword: Set<Long>,
+    sourcesInWrongSubnet: Map<Long, String>,
+    sourceItemCounts: Map<Long, Int>,
     onAddSource: () -> Unit,
     onEditSource: (SmbSourceEntity) -> Unit,
     onSourceEnabledChange: (SmbSourceEntity, Boolean) -> Unit,
@@ -71,7 +74,16 @@ internal fun ColumnScope.SettingsSourcesCategory(
                                 if (root.isBlank()) "\\\\${source.host}\\${source.share}"
                                 else "\\\\${source.host}\\${source.share}\\$root"
                             )
-                            if (source.id in sourcesMissingPassword) {
+                            val itemCount = sourceItemCounts[source.id] ?: 0
+                            // Адрес из чужой подсети важнее отсутствующего пароля: до пароля дело
+                            // просто не дойдёт, соединение умрёт на таймауте раньше.
+                            val wrongSubnet = sourcesInWrongSubnet[source.id]
+                            if (wrongSubnet != null) {
+                                Text(
+                                    stringResource(R.string.settings_source_wrong_subnet, wrongSubnet),
+                                    color = MaterialTheme.colorScheme.error
+                                )
+                            } else if (source.id in sourcesMissingPassword) {
                                 Text(
                                     stringResource(R.string.settings_source_missing_password),
                                     color = MaterialTheme.colorScheme.error
@@ -84,6 +96,22 @@ internal fun ColumnScope.SettingsSourcesCategory(
                                     ),
                                     color = if (source.enabled) MaterialTheme.colorScheme.primary
                                     else MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            // «Отключён» говорит только про сканирование: уже найденные элементы
+                            // открываются через свой источник в любом случае - воспроизведение
+                            // ищет его по sourceId элемента и про enabled не спрашивает. Без этой
+                            // строки отключённый источник с тысячами элементов выглядит
+                            // безобидно, а на деле от него зависит половина библиотеки.
+                            if (itemCount > 0) {
+                                Text(
+                                    pluralStringResource(
+                                        if (source.enabled) R.plurals.settings_source_item_count
+                                        else R.plurals.settings_source_item_count_disabled,
+                                        itemCount,
+                                        itemCount
+                                    ),
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
                         }

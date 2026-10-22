@@ -452,6 +452,19 @@
     <string name="settings_add_source">Добавить источник</string>
     <string name="settings_no_sources">Источники не добавлены</string>
     <string name="settings_source_missing_password">Нет сохранённого пароля — откройте и введите заново</string>
+    <string name="settings_source_wrong_subnet">Недоступен: %1$s — откройте и исправьте адрес</string>
+    <plurals name="settings_source_item_count">
+        <item quantity="one">%1$d элемент библиотеки открывается через этот источник</item>
+        <item quantity="few">%1$d элемента библиотеки открываются через этот источник</item>
+        <item quantity="many">%1$d элементов библиотеки открываются через этот источник</item>
+        <item quantity="other">%1$d элемента библиотеки открываются через этот источник</item>
+    </plurals>
+    <plurals name="settings_source_item_count_disabled">
+        <item quantity="one">%1$d элемент библиотеки всё равно открывается через него: «Отключён» влияет только на сканирование</item>
+        <item quantity="few">%1$d элемента библиотеки всё равно открываются через него: «Отключён» влияет только на сканирование</item>
+        <item quantity="many">%1$d элементов библиотеки всё равно открываются через него: «Отключён» влияет только на сканирование</item>
+        <item quantity="other">%1$d элемента библиотеки всё равно открываются через него: «Отключён» влияет только на сканирование</item>
+    </plurals>
     <string name="settings_delete_source">Удалить</string>
     <string name="settings_delete_source_confirm_title">Удалить источник?</string>
     <string name="settings_delete_source_confirm_message">«%1$s» будет удалён. Всё, что было отсканировано из этого источника, пропадёт из библиотеки.</string>

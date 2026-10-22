@@ -25,6 +25,10 @@ interface MediaItemDao {
     @Query("DELETE FROM media_items WHERE sourceId = :sourceId")
     suspend fun deleteBySource(sourceId: Long)
 
+    /** Сколько элементов библиотеки зависит от каждого источника - см. [com.illusion.app.ui.settings.SettingsSourcesCategory]. */
+    @Query("SELECT sourceId, COUNT(*) AS itemCount FROM media_items GROUP BY sourceId")
+    fun observeCountsBySource(): Flow<List<SourceItemCount>>
+
     // Эти три таблицы ссылаются на элементы по stableId, поэтому чистятся ДО самих элементов -
     // после удаления строк media_items подзапрос уже ничего не найдёт.
     @Query("DELETE FROM watch_progress WHERE mediaItemStableId IN (SELECT stableId FROM media_items WHERE sourceId = :sourceId)")
@@ -207,6 +211,12 @@ interface MediaItemDao {
     @Query("UPDATE media_items SET outroStartMs = NULL WHERE seriesStableId = :seriesStableId AND seasonNumber = :seasonNumber")
     suspend fun clearOutroMarkerForSeason(seriesStableId: String, seasonNumber: Int)
 }
+
+/** Сколько элементов принадлежит одному источнику - см. [MediaItemDao.observeCountsBySource]. */
+data class SourceItemCount(
+    val sourceId: Long,
+    val itemCount: Int
+)
 
 /** Just the two credit columns - see [MediaItemDao.getAllCredits]. */
 data class CreditsProjection(

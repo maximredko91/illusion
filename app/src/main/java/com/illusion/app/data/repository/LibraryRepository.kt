@@ -27,6 +27,10 @@ class LibraryRepository(private val dao: MediaItemDao) {
 
     /** См. [MediaItemDao.deleteSourceContent] - вызывается при удалении источника, чтобы его элементы не остались сиротами. */
     suspend fun deleteBySource(sourceId: Long) = dao.deleteSourceContent(sourceId)
+
+    /** Сколько элементов библиотеки открывается через каждый источник, по его id. */
+    fun observeItemCountsBySource(): Flow<Map<Long, Int>> =
+        dao.observeCountsBySource().map { rows -> rows.associate { it.sourceId to it.itemCount } }
     fun observeByCategory(category: Category, sort: SortOrder, ascending: Boolean): Flow<List<MediaItemEntity>> =
         dao.observeByCategory(category, sort.name, ascending)
 

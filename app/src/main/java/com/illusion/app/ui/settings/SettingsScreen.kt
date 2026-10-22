@@ -246,6 +246,8 @@ fun SettingsScreen(
     onOpenCategory: (String) -> Unit,
     sources: List<SmbSourceEntity>,
     sourcesMissingPassword: Set<Long> = emptySet(),
+    sourcesInWrongSubnet: Map<Long, String> = emptyMap(),
+    sourceItemCounts: Map<Long, Int> = emptyMap(),
     playerMode: Flow<com.illusion.app.domain.model.PlayerMode>,
     onPlayerModeChange: (com.illusion.app.domain.model.PlayerMode) -> Unit,
     externalPlayerPackage: Flow<String?>,
@@ -514,6 +516,8 @@ fun SettingsScreen(
                     "smb_sources" -> SettingsSourcesCategory(
                         sources = sources,
                         sourcesMissingPassword = sourcesMissingPassword,
+                        sourcesInWrongSubnet = sourcesInWrongSubnet,
+                        sourceItemCounts = sourceItemCounts,
                         onAddSource = onAddSource,
                         onEditSource = onEditSource,
                         onSourceEnabledChange = onSourceEnabledChange,

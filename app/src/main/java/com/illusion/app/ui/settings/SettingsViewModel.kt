@@ -18,6 +18,8 @@ import com.illusion.app.data.repository.ThumbnailRepository
 import com.illusion.app.data.repository.WatchProgressRepository
 import com.illusion.app.data.security.DevAccessStore
 import com.illusion.app.data.settings.SettingsRepository
+import com.illusion.app.data.smb.LocalIpv4
+import com.illusion.app.data.smb.subnetMismatchHint
 import com.illusion.app.domain.model.PlayerMode
 import com.illusion.app.domain.model.SortOrder
 import com.illusion.app.domain.model.UiMode
@@ -42,7 +44,9 @@ class SettingsViewModel(
     private val backupManager: BackupManager,
     private val devAccessStore: DevAccessStore,
     private val libraryRepository: LibraryRepository,
-    private val watchProgressRepository: WatchProgressRepository
+    private val watchProgressRepository: WatchProgressRepository,
+    /** Адреса этого устройства. Лямбдой, а не Context, как и в [com.illusion.app.data.smb.SmbClient]: сеть может смениться, пока экран открыт. */
+    private val localAddresses: () -> List<LocalIpv4> = { emptyList() }
 ) : ViewModel() {
     fun hasDevPassword(): Boolean = devAccessStore.hasPassword
     fun generateDevPassword(): String = devAccessStore.generatePassword()
@@ -57,6 +61,24 @@ class SettingsViewModel(
     val sourcesMissingPassword: StateFlow<Set<Long>> = smbSourceRepository.observeSources()
         .map { list -> list.filterNot { smbSourceRepository.hasStoredPassword(it.id) }.map { it.id }.toSet() }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptySet())
+
+    /**
+     * Источники, чей адрес заведомо не из той сети, где сейчас телефон, с готовой фразой-причиной
+     * (см. [subnetMismatchHint]). Такой источник не сообщает о себе ничем: сканирование его
+     * пропускает или молча не достукивается, а элементы, которые он когда-то проиндексировал,
+     * продолжают через него открываться и отваливаются по таймауту уже в плеере. Пока этого не
+     * было видно в списке, «не грузится ничего» выглядело как поломка всего приложения.
+     */
+    val sourcesInWrongSubnet: StateFlow<Map<Long, String>> = smbSourceRepository.observeSources()
+        .map { list ->
+            val local = localAddresses()
+            list.mapNotNull { source -> subnetMismatchHint(source.host, local)?.let { source.id to it } }.toMap()
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
+
+    /** Сколько элементов библиотеки открывается через каждый источник - отключённый источник с тысячами элементов иначе выглядит безобидно. */
+    val sourceItemCounts: StateFlow<Map<Long, Int>> = libraryRepository.observeItemCountsBySource()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
 
     val imageCacheLimitMb: Flow<Int> = settingsRepository.imageCacheLimitMb
 
@@ -372,7 +394,8 @@ class SettingsViewModel(
             backupManager: BackupManager,
             devAccessStore: DevAccessStore,
             libraryRepository: LibraryRepository,
-            watchProgressRepository: WatchProgressRepository
+            watchProgressRepository: WatchProgressRepository,
+            localAddresses: () -> List<LocalIpv4>
         ) = viewModelFactory {
             initializer {
                 SettingsViewModel(
@@ -383,7 +406,8 @@ class SettingsViewModel(
                     backupManager,
                     devAccessStore,
                     libraryRepository,
-                    watchProgressRepository
+                    watchProgressRepository,
+                    localAddresses
                 )
             }
         }

@@ -109,6 +109,7 @@ import com.illusion.app.ui.search.SearchScreen
 import com.illusion.app.ui.search.TagsScreen
 import com.illusion.app.ui.settings.CacheScreen
 import com.illusion.app.ui.settings.SettingsScreen
+import com.illusion.app.data.smb.localIpv4Addresses
 import com.illusion.app.ui.settings.SettingsViewModel
 import com.illusion.app.ui.smbsource.AddSmbSourceScreen
 import com.illusion.app.ui.smbsource.EditSmbSourceScreen
@@ -570,7 +571,7 @@ private fun IllusionNavGraph(app: IllusionApplication, navController: NavHostCon
             composable<Destination.Cache> {
                 val context = LocalContext.current
                 val settingsViewModel: SettingsViewModel = viewModel(
-                    factory = SettingsViewModel.factory(app.smbSourceRepository, app.settingsRepository, app.thumbnailRepository, app.downloadRepository, app.backupManager, app.devAccessStore, app.libraryRepository, app.watchProgressRepository)
+                    factory = SettingsViewModel.factory(app.smbSourceRepository, app.settingsRepository, app.thumbnailRepository, app.downloadRepository, app.backupManager, app.devAccessStore, app.libraryRepository, app.watchProgressRepository) { localIpv4Addresses(app) }
                 )
                 val cacheSizeBytes by settingsViewModel.cacheSizeBytes.collectAsState()
                 val posterCacheSizeBytes by settingsViewModel.posterCacheSizeBytes.collectAsState()
@@ -965,10 +966,12 @@ private fun SettingsRoute(
 ) {
     val context = LocalContext.current
     val settingsViewModel: SettingsViewModel = viewModel(
-        factory = SettingsViewModel.factory(app.smbSourceRepository, app.settingsRepository, app.thumbnailRepository, app.downloadRepository, app.backupManager, app.devAccessStore, app.libraryRepository, app.watchProgressRepository)
+        factory = SettingsViewModel.factory(app.smbSourceRepository, app.settingsRepository, app.thumbnailRepository, app.downloadRepository, app.backupManager, app.devAccessStore, app.libraryRepository, app.watchProgressRepository) { localIpv4Addresses(app) }
     )
     val sources by settingsViewModel.sources.collectAsState()
     val sourcesMissingPassword by settingsViewModel.sourcesMissingPassword.collectAsState()
+    val sourcesInWrongSubnet by settingsViewModel.sourcesInWrongSubnet.collectAsState()
+    val sourceItemCounts by settingsViewModel.sourceItemCounts.collectAsState()
     val cacheSizeBytes by settingsViewModel.cacheSizeBytes.collectAsState()
     val downloadsSizeBytes by settingsViewModel.downloadsSizeBytes.collectAsState()
     val recoveredDownloadsCount by settingsViewModel.recoveredDownloadsCount.collectAsState()
@@ -991,6 +994,8 @@ private fun SettingsRoute(
         onOpenCategory = { key -> navController.navigate(Destination.SettingsCategory(key)) },
         sources = sources,
         sourcesMissingPassword = sourcesMissingPassword,
+        sourcesInWrongSubnet = sourcesInWrongSubnet,
+        sourceItemCounts = sourceItemCounts,
         playerMode = settingsViewModel.playerMode,
         onPlayerModeChange = settingsViewModel::setPlayerMode,
         externalPlayerPackage = settingsViewModel.externalPlayerPackage,
