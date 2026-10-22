@@ -23,6 +23,7 @@ import com.illusion.app.data.repository.favoriteTransfers
 import com.illusion.app.data.repository.pairItemsByFile
 import com.illusion.app.data.repository.progressTransfers
 import com.illusion.app.data.smb.LocalIpv4
+import com.illusion.app.data.smb.chooseReachableHost
 import com.illusion.app.data.smb.subnetMismatchHint
 import com.illusion.app.domain.model.PlayerMode
 import com.illusion.app.domain.model.SortOrder
@@ -80,7 +81,13 @@ class SettingsViewModel(
     val sourcesInWrongSubnet: StateFlow<Map<Long, String>> = smbSourceRepository.observeSources()
         .map { list ->
             val local = localAddresses()
-            list.mapNotNull { source -> subnetMismatchHint(source.host, local)?.let { source.id to it } }.toMap()
+            // Проверяем выбранный адрес, а не основной: у источника с запасными адресами основной
+            // вполне может быть из другой сети, и это не повод ругаться - подключение пойдёт не
+            // через него.
+            list.mapNotNull { source ->
+                val host = chooseReachableHost(source.host, source.alternateHosts, local)
+                subnetMismatchHint(host, local)?.let { source.id to it }
+            }.toMap()
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
 

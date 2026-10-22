@@ -46,6 +46,7 @@ fun AddSmbSourceScreen(
                 state = state,
                 onDisplayNameChange = viewModel::updateDisplayName,
                 onHostChange = viewModel::updateHost,
+                onAlternateHostsChange = viewModel::updateAlternateHosts,
                 onShareChange = viewModel::updateShare,
                 onRootPathChange = viewModel::updateRootPath,
                 onDomainChange = viewModel::updateDomain,

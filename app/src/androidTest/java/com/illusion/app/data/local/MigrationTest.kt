@@ -69,6 +69,27 @@ class MigrationTest {
         }
     }
 
+    @Test
+    fun migrate22To23KeepsSourcesAndDefaultsAlternateHosts() {
+        helper.createDatabase(TEST_DB, 22).use { db ->
+            db.execSQL(
+                """
+                INSERT INTO smb_sources (id, displayName, host, share, rootPath, domain, username, enabled)
+                VALUES (1, 'NAS', '192.168.2.1', 'Movies', 'Movies', '', 'user', 1)
+                """.trimIndent()
+            )
+        }
+
+        val migrated = helper.runMigrationsAndValidate(TEST_DB, 23, true, AppDatabase.MIGRATION_22_23)
+
+        migrated.query("SELECT host, alternateHosts FROM smb_sources").use { cursor ->
+            assertTrue("миграция потеряла источник", cursor.moveToFirst())
+            assertEquals("192.168.2.1", cursor.getString(0))
+            // Пустой JSON-массив, а не NULL: Converters.toStringList ждёт разбираемую строку.
+            assertEquals("[]", cursor.getString(1))
+        }
+    }
+
     private companion object {
         const val TEST_DB = "migration-test"
     }

@@ -345,6 +345,8 @@
     <string name="onboarding_display_name">Название источника</string>
     <string name="onboarding_display_name_help">Как источник будет называться в приложении, например, «Диск в гостиной». На подключение не влияет</string>
     <string name="onboarding_share">Имя шары</string>
+    <string name="onboarding_alternate_hosts">Адреса в других сетях (необязательно)</string>
+    <string name="onboarding_alternate_hosts_help">Если этот же диск подключается в другом месте и там у него другой адрес — впишите его сюда, по одному в строке. Приложение само выберет тот, что доступен в текущей сети, и библиотека не задвоится.</string>
     <string name="onboarding_share_help">Имя общей папки на сервере, как оно видно в проводнике: в пути \\\\192.168.2.1\\Movies — это «Movies»</string>
     <string name="onboarding_advanced_show">Дополнительные поля</string>
     <string name="onboarding_advanced_hide">Скрыть дополнительные поля</string>

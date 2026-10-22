@@ -26,6 +26,8 @@ sealed interface TestConnectionState {
 data class SmbSourceFormState(
     val displayName: String = "",
     val host: String = "",
+    /** Запасные адреса того же диска в других сетях, по одному в строке - см. [SmbSourceEntity.alternateHosts]. */
+    val alternateHosts: String = "",
     val share: String = "",
     val rootPath: String = "",
     val domain: String = "",
@@ -54,6 +56,7 @@ class SmbSourceFormViewModel(
             SmbSourceFormState(
                 displayName = it.displayName,
                 host = it.host,
+                alternateHosts = it.alternateHosts.joinToString("\n"),
                 share = it.share,
                 rootPath = it.rootPath,
                 domain = it.domain,
@@ -85,6 +88,8 @@ class SmbSourceFormViewModel(
 
     fun updateDisplayName(value: String) = _state.update { it.copy(displayName = value) }
     fun updateHost(value: String) = _state.update { it.copy(host = value) }
+
+    fun updateAlternateHosts(value: String) = _state.update { it.copy(alternateHosts = value) }
     fun updateShare(value: String) = _state.update { it.copy(share = value) }
     fun updateRootPath(value: String) = _state.update { it.copy(rootPath = value) }
     fun updateDomain(value: String) = _state.update { it.copy(domain = value) }
@@ -142,11 +147,16 @@ class SmbSourceFormViewModel(
     private fun SmbSourceFormState.toTransientEntity() = SmbSourceEntity(
         displayName = displayName.ifBlank { host },
         host = host,
+        alternateHosts = parsedAlternateHosts(),
         share = share,
         rootPath = rootPath,
         domain = domain,
         username = username
     )
+
+    /** Пустые строки и повтор основного адреса отбрасываем: в списке они только мешали бы выбору. */
+    private fun SmbSourceFormState.parsedAlternateHosts(): List<String> =
+        alternateHosts.split('\n', ',').map { it.trim() }.filter { it.isNotBlank() && it != host.trim() }.distinct()
 
     companion object {
         private const val TAG = "SmbSourceForm"

@@ -33,6 +33,7 @@ class SmbSourceFormFieldsTest {
                     state = state,
                     onDisplayNameChange = {},
                     onHostChange = onHostChange,
+                    onAlternateHostsChange = {},
                     onShareChange = {},
                     onRootPathChange = {},
                     onDomainChange = {},

@@ -49,6 +49,7 @@ fun SmbSourceFormFields(
     state: SmbSourceFormState,
     onDisplayNameChange: (String) -> Unit,
     onHostChange: (String) -> Unit,
+    onAlternateHostsChange: (String) -> Unit,
     onShareChange: (String) -> Unit,
     onRootPathChange: (String) -> Unit,
     onDomainChange: (String) -> Unit,
@@ -94,6 +95,13 @@ fun SmbSourceFormFields(
             label = stringResource(R.string.onboarding_smb_address),
             supportingText = stringResource(R.string.onboarding_smb_address_help),
             suggestions = hostSuggestions,
+            modifier = Modifier.fillMaxWidth()
+        )
+        OutlinedTextField(
+            value = state.alternateHosts,
+            onValueChange = onAlternateHostsChange,
+            label = { Text(stringResource(R.string.onboarding_alternate_hosts)) },
+            supportingText = { Text(stringResource(R.string.onboarding_alternate_hosts_help)) },
             modifier = Modifier.fillMaxWidth()
         )
         SuggestibleTextField(

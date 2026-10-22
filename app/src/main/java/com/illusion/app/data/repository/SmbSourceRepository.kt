@@ -6,6 +6,7 @@ import com.illusion.app.data.smb.MissingSmbCredentialException
 import com.illusion.app.data.smb.SmbClient
 import com.illusion.app.data.smb.SmbConnectionInfo
 import com.illusion.app.data.smb.SmbCredentialStore
+import com.illusion.app.data.smb.chooseReachableHost
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 
@@ -59,7 +60,7 @@ class SmbSourceRepository(
         val password = credentialStore.getPassword(source.id)
             ?: throw MissingSmbCredentialException(source.displayName)
         return SmbConnectionInfo(
-            host = source.host,
+            host = chooseReachableHost(source.host, source.alternateHosts, smbClient.localIpv4()),
             share = source.share,
             rootPath = source.rootPath,
             domain = source.domain,
