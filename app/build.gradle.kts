@@ -138,6 +138,15 @@ android {
         }
     }
     buildTypes {
+        debug {
+            // Своё имя пакета, чтобы debug-сборка вставала РЯДОМ с установленной release, а не
+            // поверх неё. Без этого прогон инструментальных тестов на личном устройстве требовал
+            // снести приложение вместе с данными - паролем NAS, индексом библиотеки и историей
+            // просмотра, - поэтому тесты не гонялись вовсе и копились непроверенными.
+            // Релизную сборку это не затрагивает.
+            applicationIdSuffix = ".debug"
+            versionNameSuffix = "-debug"
+        }
         release {
             // AGP 9's declarative DSL - no minifyEnabled/proguardFiles here, keep rules live under
             // optimization.keepRules instead. Room/Compose/Media3/kotlinx.serialization all ship
