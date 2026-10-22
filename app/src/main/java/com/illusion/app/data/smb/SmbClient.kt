@@ -343,7 +343,7 @@ fun classifySmbError(e: Throwable, host: String? = null, localAddresses: List<Lo
     is TimeoutCancellationException, is SocketTimeoutException -> {
         val mismatch = host?.let { subnetMismatchHint(it, localAddresses) }
         if (mismatch != null) {
-            "Не удалось подключиться: $mismatch — исправьте адрес сервера в настройках источника"
+            "Не удалось подключиться: $mismatch. Либо вы не в той сети, где стоит этот сервер, либо его адрес изменился"
         } else {
             "Не удалось подключиться: сервер не отвечает (проверьте адрес и что телефон в той же сети)"
         }

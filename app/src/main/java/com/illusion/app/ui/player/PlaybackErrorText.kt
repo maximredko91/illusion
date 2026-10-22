@@ -51,7 +51,7 @@ fun humanPlaybackError(cause: Throwable?, fallbackMessage: String?, subnetHint: 
 
         has("SocketTimeout", "TimeoutCancellation", "ETIMEDOUT", "timed out") ->
             if (subnetHint != null) {
-                "Сервер не отвечает: $subnetHint — исправьте адрес сервера в настройках, раздел «Источники SMB»"
+                "Сервер не отвечает: $subnetHint. Этот источник доступен в другой сети - либо вы не там, где он стоит, либо его адрес изменился"
             } else {
                 "Сервер не отвечает. Проверьте, что он включён, а телефон подключён к домашней сети"
             }

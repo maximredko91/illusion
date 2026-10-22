@@ -15,6 +15,11 @@ data class LocalIpv4(val address: String, val prefixLength: Int)
  * literal IPv4 (a name may legitimately resolve anywhere), no usable local address, or a host that
  * really is in one of this device's own subnets - an ordinary unreachable NAS, where this hint
  * would send the user to "fix" an address that is already right.
+ *
+ * Фраза намеренно только КОНСТАТИРУЕТ расхождение и никуда не зовёт. Источник из чужой подсети -
+ * не обязательно сломанный: у пользователя их два, в разных местах и на разных роутерах, и тот,
+ * что стоит в другом месте, из этой сети недоступен совершенно правильно. Первая версия текста
+ * звала «исправить адрес», что для такого источника было прямо вредным советом.
  */
 fun subnetMismatchHint(host: String, localAddresses: List<LocalIpv4>): String? {
     val hostBits = ipv4ToInt(host) ?: return null

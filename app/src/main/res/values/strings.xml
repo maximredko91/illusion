@@ -452,7 +452,7 @@
     <string name="settings_add_source">Добавить источник</string>
     <string name="settings_no_sources">Источники не добавлены</string>
     <string name="settings_source_missing_password">Нет сохранённого пароля — откройте и введите заново</string>
-    <string name="settings_source_wrong_subnet">Недоступен: %1$s — откройте и исправьте адрес</string>
+    <string name="settings_source_wrong_subnet">Недоступен из этой сети: %1$s</string>
     <plurals name="settings_source_item_count">
         <item quantity="one">%1$d элемент библиотеки открывается через этот источник</item>
         <item quantity="few">%1$d элемента библиотеки открываются через этот источник</item>

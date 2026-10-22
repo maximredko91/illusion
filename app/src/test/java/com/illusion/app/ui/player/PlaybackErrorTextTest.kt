@@ -66,7 +66,7 @@ class PlaybackErrorTextTest {
             subnetHint = "адрес 192.168.1.1 не в текущей сети (телефон в 192.168.2.0/24)"
         )
         assertTrue(message, message.contains("192.168.1.1"))
-        assertTrue(message, message.contains("Источники SMB"))
+        assertTrue(message, message.contains("в другой сети"))
     }
 
     @Test
