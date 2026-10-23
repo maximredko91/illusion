@@ -105,7 +105,9 @@ class UpdateViewModel(
                         val path = info.outputData.getString(UpdateDownloadWorker.KEY_FILE_PATH)
                         val file = path?.let(::File)
                         val downloadedVersionCode = file?.nameWithoutExtension?.substringAfterLast('-')?.toIntOrNull()
-                        if (file != null && downloadedVersionCode != null && downloadedVersionCode > BuildConfig.VERSION_CODE) {
+                        if (file != null && file.exists() && file.length() > 0L &&
+                            downloadedVersionCode != null && downloadedVersionCode > BuildConfig.VERSION_CODE
+                        ) {
                             _state.update { it.copy(isDownloading = false, downloadProgress = 1f, downloadedFile = file) }
                         } else {
                             file?.delete()
@@ -263,7 +265,10 @@ class UpdateViewModel(
         // no reason (WorkScheduler.enqueueUpdateDownload's REPLACE policy would otherwise always
         // restart from scratch) is exactly the "скачивалось заново" symptom reported on-device -
         // skip straight to the install-ready state if the file is already sitting there intact.
-        val existing = File(UpdateDownloadWorker.apkDir(appContext), "illusion-${update.versionCode}.apk")
+        // The worker only ever renames a fully-copied .part file into this name, so its mere
+        // existence is now a real "ready to install" (it used to be written in place, where a
+        // truncated file looked finished).
+        val existing = UpdateDownloadWorker.apkFile(appContext, update.versionCode)
         if (existing.exists() && existing.length() > 0L) {
             _state.update { it.copy(isDownloading = false, downloadProgress = 1f, downloadedFile = existing, error = null) }
             return

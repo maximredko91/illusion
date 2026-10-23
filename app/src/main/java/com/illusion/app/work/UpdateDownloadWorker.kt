@@ -38,12 +38,22 @@ class UpdateDownloadWorker(
         val versionCode = inputData.getInt(KEY_VERSION_CODE, -1)
         if (versionCode < 0) return@withContext Result.failure()
 
-        val outFile = File(apkDir(applicationContext), "illusion-$versionCode.apk")
+        val outFile = apkFile(applicationContext, versionCode)
+        // Download into a .part file and rename only once the copy finished: the bytes used to go
+        // straight into the final name, so a cancelled or killed download left a truncated APK
+        // that the next attempt (UpdateViewModel.startDownload, which takes any non-empty file as
+        // ready) happily handed to the package installer as a finished update.
+        val partFile = File(outFile.parentFile, outFile.name + PART_SUFFIX)
+        runCatching { partFile.delete() }
+        runCatching { outFile.delete() }
         try {
-            if (LocalUpdateUri.isLocal(url)) downloadFromSmb(url, outFile) else downloadFromHttp(url, outFile)
+            if (LocalUpdateUri.isLocal(url)) downloadFromSmb(url, partFile) else downloadFromHttp(url, partFile)
+            if (!partFile.renameTo(outFile)) throw IOException("Не удалось сохранить файл обновления")
         } catch (e: java.util.concurrent.CancellationException) {
+            runCatching { partFile.delete() }
             throw e
         } catch (e: Exception) {
+            runCatching { partFile.delete() }
             runCatching { outFile.delete() }
             return@withContext Result.failure(workDataOf(KEY_ERROR to (e.message ?: e::class.simpleName)))
         }
@@ -72,7 +82,13 @@ class UpdateDownloadWorker(
         http.newCall(request).execute().use { response ->
             if (!response.isSuccessful) throw IOException("HTTP ${response.code}")
             val body = response.body ?: throw IOException("Empty response")
-            copyToFile(body.byteStream(), outFile, body.contentLength().takeIf { it > 0 } ?: -1L)
+            val expected = body.contentLength().takeIf { it > 0 } ?: -1L
+            val written = copyToFile(body.byteStream(), outFile, expected)
+            // A connection cut mid-transfer ends the stream without an exception, so without this
+            // a half-downloaded APK counted as a successful download.
+            if (expected > 0 && written != expected) {
+                throw IOException("Файл обновления скачан не полностью ($written из $expected)")
+            }
         }
     }
 
@@ -89,7 +105,8 @@ class UpdateDownloadWorker(
         }
     }
 
-    private suspend fun copyToFile(input: InputStream, outFile: File, total: Long) {
+    /** Returns how many bytes were written. */
+    private suspend fun copyToFile(input: InputStream, outFile: File, total: Long): Long {
         var downloaded = 0L
         var lastReportedPercent = -1
         FileOutputStream(outFile).use { output ->
@@ -112,6 +129,7 @@ class UpdateDownloadWorker(
                 }
             }
         }
+        return downloaded
     }
 
     companion object {
@@ -122,6 +140,13 @@ class UpdateDownloadWorker(
         const val KEY_FILE_PATH = "filePath"
         const val KEY_ERROR = "error"
 
+        /** Suffix of the in-progress download - see [doWork]. */
+        const val PART_SUFFIX = ".part"
+
         fun apkDir(context: Context): File = File(context.cacheDir, "updates").apply { mkdirs() }
+
+        /** Where the finished APK for [versionCode] lands; only ever exists complete. */
+        fun apkFile(context: Context, versionCode: Int): File =
+            File(apkDir(context), "illusion-$versionCode.apk")
     }
 }

@@ -27,20 +27,53 @@ class SmbDataSourceFactory(
     private val sourceRepository: SmbSourceRepository,
     private val smbClient: SmbClient
 ) : DataSource.Factory, AutoCloseable {
-    private val connections = ConcurrentHashMap<Long, SmbConnection>()
+    private val connections = ConcurrentHashMap<Long, Pooled>()
+
+    /** Guards creating/replacing a pooled connection - see [connectionFor]. */
+    private val connectionLock = Any()
+
+    /** Bumped for every connection this factory ever hands out, so a reader can say WHICH
+     * connection it found dead - see [invalidate]. */
+    private var generationCounter = 0
+
+    /** A cached connection plus the generation it was handed out under. */
+    internal class Pooled(val connection: SmbConnection, val generation: Int)
 
     override fun createDataSource(): DataSource = SmbDataSource(this)
 
     internal fun openFile(sourceId: Long, path: String): SmbRandomAccessFile =
-        connectionFor(sourceId).openRandomAccessFile(path)
+        openFileTracked(sourceId, path).file
+
+    /**
+     * Same as [openFile], but also reports the connection generation the handle belongs to, so a
+     * reader whose read fails can invalidate exactly the connection it was using and not one that
+     * another reader has meanwhile replaced.
+     */
+    internal fun openFileTracked(sourceId: Long, path: String): OpenedFile {
+        val pooled = connectionFor(sourceId)
+        return OpenedFile(pooled.connection.openRandomAccessFile(path), pooled.generation)
+    }
+
+    internal class OpenedFile(val file: SmbRandomAccessFile, val generation: Int)
 
     /**
      * Drops the cached connection for [sourceId] so the next [openFile] call re-authenticates -
      * needed because a NAS/router can silently close an idle SMB session server-side; without
      * this, every read/seek on that source keeps failing forever against the same dead session.
+     *
+     * The pooled connection is shared by every reader of that source (playback, the LAN bridge,
+     * thumbnails), so [generation] exists to keep one reader's failure from tearing down a
+     * connection somebody else has already replaced: pass the generation the failing handle came
+     * from and the teardown is skipped if the pool has moved on since. Pass null to drop whatever
+     * is cached regardless.
      */
-    internal fun invalidate(sourceId: Long) {
-        connections.remove(sourceId)?.let { runCatching { it.close() } }
+    internal fun invalidate(sourceId: Long, generation: Int? = null) {
+        synchronized(connectionLock) {
+            val existing = connections[sourceId] ?: return
+            if (generation != null && existing.generation != generation) return
+            connections.remove(sourceId, existing)
+            runCatching { existing.connection.close() }
+        }
     }
 
     /**
@@ -50,15 +83,19 @@ class SmbDataSourceFactory(
      * fails on the very first operation, and since it stays cached, every retry keeps hitting the
      * exact same dead session - `getOrPut` alone can't fix this since it only creates when the
      * key is absent, not when the cached value has gone stale.
+     *
+     * Creating runs under [connectionLock] rather than through `getOrPut`, which on a
+     * ConcurrentHashMap is a plain get-then-put and so is NOT atomic: two readers opening the
+     * same source at once (playback and the LAN bridge, or two seeks) both authenticated, and the
+     * loser's session was dropped on the floor still open - a leaked SMB session per race. The
+     * fast path (a live cached connection) never takes the lock.
      */
-    private fun connectionFor(sourceId: Long): SmbConnection {
-        connections[sourceId]?.let { existing ->
-            if (existing.isConnected) return existing
-            connections.remove(sourceId, existing)
-            runCatching { existing.close() }
-        }
-        return connections.getOrPut(sourceId) {
-            runBlocking {
+    private fun connectionFor(sourceId: Long): Pooled {
+        liveConnection(sourceId)?.let { return it }
+        synchronized(connectionLock) {
+            // Another thread may have connected while this one waited for the lock.
+            liveConnection(sourceId)?.let { return it }
+            val connection = runBlocking {
                 // DataSource.open()'s contract (and ExoPlayer's loader thread) expects an
                 // IOException on failure, not an arbitrary exception - MissingSmbCredentialException
                 // is neither, so it has to be wrapped here rather than left to propagate raw.
@@ -69,12 +106,27 @@ class SmbDataSourceFactory(
                 } ?: throw IOException("Unknown SMB source or missing credentials: $sourceId")
                 smbClient.connect(info)
             }
+            val pooled = Pooled(connection, ++generationCounter)
+            connections[sourceId] = pooled
+            return pooled
         }
     }
 
+    /** The cached connection for [sourceId] if it's still alive; evicts and closes it if not. */
+    private fun liveConnection(sourceId: Long): Pooled? {
+        val existing = connections[sourceId] ?: return null
+        if (existing.connection.isConnected) return existing
+        synchronized(connectionLock) {
+            if (connections.remove(sourceId, existing)) runCatching { existing.connection.close() }
+        }
+        return null
+    }
+
     override fun close() {
-        connections.values.forEach { runCatching { it.close() } }
-        connections.clear()
+        synchronized(connectionLock) {
+            connections.values.forEach { runCatching { it.connection.close() } }
+            connections.clear()
+        }
     }
 }
 
@@ -94,6 +146,8 @@ class SmbDataSource internal constructor(
 ) : BaseDataSource(/* isNetwork = */ true) {
 
     private var randomAccessFile: SmbRandomAccessFile? = null
+    /** Connection generation [randomAccessFile] was opened under - see [SmbDataSourceFactory.invalidate]. */
+    private var connectionGeneration: Int = -1
     /** File position of the next byte handed to Media3 - the read-ahead buffer is always filled from here. */
     private var position: Long = 0
     private var bytesRemaining: Long = C.LENGTH_UNSET.toLong()
@@ -111,7 +165,9 @@ class SmbDataSource internal constructor(
         val parsed = SmbMediaUri.parse(dataSpec.uri)
         sourceId = parsed.sourceId
         path = parsed.path
-        randomAccessFile = factory.openFile(sourceId, path)
+        val openedFile = factory.openFileTracked(sourceId, path)
+        randomAccessFile = openedFile.file
+        connectionGeneration = openedFile.generation
         position = dataSpec.position
         bytesRemaining = when {
             dataSpec.length != C.LENGTH_UNSET.toLong() -> dataSpec.length
@@ -174,16 +230,28 @@ class SmbDataSource internal constructor(
                 Log.w(TAG, "read failed at position=$position (attempt $attempt), reconnecting: ${e.message}")
                 if (attempt < MAX_RECONNECT_ATTEMPTS) {
                     if (attempt > 0) Thread.sleep(RECONNECT_BACKOFF_MS)
-                    factory.invalidate(sourceId)
-                    // Do NOT close raf here - invalidate() just tore down the DiskShare this file
-                    // handle belongs to, so raf.close() would send a protocol close over an
-                    // already-closed share. smbj surfaces that synchronously as
-                    // SMBRuntimeException("DiskShare has already been closed") - observed on-device
-                    // to abort the whole process via a JNI CheckJNI violation rather than being a
-                    // catchable Kotlin exception. The socket is already gone, so the server releases
-                    // the handle on its own; just drop the reference.
-                    raf = factory.openFile(sourceId, path)
-                    randomAccessFile = raf
+                    // The reconnect itself can fail too (NAS still rebooting, Wi-Fi still
+                    // switching) - that must not escape the retry loop, or one bad attempt ends
+                    // playback even though the remaining attempts would have succeeded. Same bug
+                    // class as the one fixed in UploadWorker's reconnect loop.
+                    try {
+                        factory.invalidate(sourceId, connectionGeneration)
+                        // Do NOT close raf here - invalidate() just tore down the DiskShare this
+                        // file handle belongs to, so raf.close() would send a protocol close over
+                        // an already-closed share. smbj surfaces that synchronously as
+                        // SMBRuntimeException("DiskShare has already been closed") - observed
+                        // on-device to abort the whole process via a JNI CheckJNI violation rather
+                        // than being a catchable Kotlin exception. The socket is already gone, so
+                        // the server releases the handle on its own; just drop the reference.
+                        val reopened = factory.openFileTracked(sourceId, path)
+                        raf = reopened.file
+                        connectionGeneration = reopened.generation
+                        randomAccessFile = raf
+                    } catch (reconnectError: Exception) {
+                        if (reconnectError !is IOException && reconnectError !is SMBRuntimeException) throw reconnectError
+                        lastError = reconnectError
+                        Log.w(TAG, "reconnect attempt $attempt failed: ${reconnectError.message}")
+                    }
                 }
             }
         }
@@ -195,6 +263,7 @@ class SmbDataSource internal constructor(
     override fun close() {
         randomAccessFile?.let { runCatching { it.close() } }
         randomAccessFile = null
+        connectionGeneration = -1
         readAheadLength = 0
         readAheadOffset = 0
         if (opened) {

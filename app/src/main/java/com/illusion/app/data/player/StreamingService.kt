@@ -8,7 +8,6 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.net.ConnectivityManager
-import android.net.Uri
 import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
@@ -200,9 +199,10 @@ class StreamingService : Service() {
             val factory = requireNotNull(dataSourceFactory) { "StreamingService.dataSourceFactory not set" }
             val srv = ensureServerStarted(factory)
             ContextCompat.startForegroundService(context, Intent(context, StreamingService::class.java))
-            val encodedPath = Uri.encode(path)
-            return "http://$host:${srv.listeningPort}${LocalStreamingServer.STREAM_PATH}" +
-                "?source=$sourceId&path=$encodedPath&size=$sizeBytes&token=${srv.token}"
+            // The path never rides in the URL any more - the token names the file, see
+            // LocalStreamingServer.register.
+            val token = srv.register(sourceId, path, sizeBytes)
+            return "http://$host:${srv.listeningPort}${LocalStreamingServer.STREAM_PATH}?token=$token"
         }
 
         /**

@@ -370,7 +370,33 @@ class PlayerCastSession(
     /** Casting, or a Google Cast connection still being set up. */
     val isBusy: Boolean get() = _castState.value.isCasting || pendingGoogleItem != null
 
+    /**
+     * The player screen is going away. A cast still running at that moment used to be left exactly
+     * as it was: the renderer kept playing from the LAN bridge, and since nothing called
+     * [stopStreamingBridge], the bridge stayed bound on every interface until its own six-hour
+     * idle timer fired. Leaving the player ends the cast instead - progress is already saved by
+     * PlayerViewModel.onCleared, so there is nothing to resume locally (the local player is being
+     * released too).
+     */
     fun release() {
+        val wasCasting = _castState.value.isCasting || pendingGoogleItem != null
+        castConnectJob?.cancel()
+        castPollJob?.cancel()
+        castSearchJob?.cancel()
+        pendingGoogleItem = null
+        val controller = castController
+        castController = null
+        if (wasCasting) {
+            runCatching { googleCast?.stop() }
+            // scope is the ViewModel's and may already be cancelled by the time onCleared runs, so
+            // this last SOAP call can't go through it - one short-lived thread for one request.
+            if (controller != null) {
+                kotlin.concurrent.thread(name = "dlna-stop") {
+                    runCatching { kotlinx.coroutines.runBlocking { controller.stop() } }
+                }
+            }
+            stopStreamingBridge()
+        }
         googleCast?.release()
     }
 
