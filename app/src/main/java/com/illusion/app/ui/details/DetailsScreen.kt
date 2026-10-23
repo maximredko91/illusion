@@ -201,7 +201,10 @@ fun DetailsScreen(
     // anything else on a real Android TV.
     val contentFocusRequester = remember { androidx.compose.ui.focus.FocusRequester() }
 
-    Box(modifier = modifier.fillMaxSize()) {
+    // Свой непрозрачный фон обязателен, хотя NavHost и так стоит на Surface: при predictive back
+    // система уносит уходящий экран ОТДЕЛЬНЫМ слоем, и в этом слое есть только сам экран. Без
+    // собственного фона его пиксели прозрачны, и уезжающая карточка просвечивает насквозь.
+    Box(modifier = modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         val item = state.item
         when {
             item != null -> DetailsContent(
