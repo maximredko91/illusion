@@ -167,6 +167,14 @@ android {
             }
         }
     }
+    // MigrationTest читает экспортированные схемы через MigrationTestHelper, а тот ищет их в
+    // assets тестового APK. Без этого он падал на «Cannot find the schema file in the assets
+    // folder» - то есть не мог отработать ни разу с момента, как был написан.
+    sourceSets {
+        getByName("androidTest") {
+            assets.srcDir("$projectDir/schemas")
+        }
+    }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11

@@ -5,6 +5,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.illusion.app.data.local.entity.FavoriteEntity
 import com.illusion.app.data.local.entity.MediaItemEntity
+import com.illusion.app.data.local.entity.SmbSourceEntity
 import com.illusion.app.data.local.entity.ThumbnailSpriteEntity
 import com.illusion.app.data.local.entity.WatchProgressEntity
 import com.illusion.app.domain.model.Category
@@ -70,6 +71,26 @@ class DeleteSourceContentTest {
     fun setUp() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         db = Room.inMemoryDatabaseBuilder(context, AppDatabase::class.java).build()
+        // Источники нужны по-настоящему: getAll() и прочие запросы библиотеки отбирают только
+        // элементы ВКЛЮЧЁННЫХ источников, поэтому без строк в smb_sources библиотека выглядит
+        // пустой и проверка «остался ровно один элемент» ничего не проверяет. Инструментальный
+        // прогон это и поймал - тест был написан до того, как появился отбор.
+        runBlocking {
+            for (id in listOf(1L, 2L)) {
+                db.smbSourceDao().upsert(
+                    SmbSourceEntity(
+                        id = id,
+                        displayName = "source-$id",
+                        host = "192.168.$id.1",
+                        share = "Movies",
+                        rootPath = "",
+                        domain = "",
+                        username = "",
+                        enabled = true
+                    )
+                )
+            }
+        }
     }
 
     @After

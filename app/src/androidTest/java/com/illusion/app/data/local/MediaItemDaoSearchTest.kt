@@ -4,6 +4,7 @@ import androidx.room.Room
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.illusion.app.data.local.entity.MediaItemEntity
+import com.illusion.app.data.local.entity.SmbSourceEntity
 import com.illusion.app.domain.model.Category
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
@@ -61,6 +62,22 @@ class MediaItemDaoSearchTest {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         db = Room.inMemoryDatabaseBuilder(context, AppDatabase::class.java).build()
         dao = db.mediaItemDao()
+        // search() отбирает только элементы включённых источников, поэтому без строки в
+        // smb_sources выдача всегда пуста и тест проверяет пустоту вместо ранжирования.
+        runBlocking {
+            db.smbSourceDao().upsert(
+                SmbSourceEntity(
+                    id = 1L,
+                    displayName = "source",
+                    host = "192.168.2.1",
+                    share = "Movies",
+                    rootPath = "",
+                    domain = "",
+                    username = "",
+                    enabled = true
+                )
+            )
+        }
     }
 
     @After
