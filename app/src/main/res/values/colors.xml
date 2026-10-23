@@ -20,6 +20,14 @@
     <color name="icon_accent_teal">#FF1C6C68</color>
     <color name="icon_accent_pink">#FFA13D77</color>
 
+    <!-- Фон окна. Его показывает система там, где контент приложения не нарисован: при
+         predictive back окно уезжает уменьшенной карточкой, и вокруг неё видно именно его. Без
+         явного значения берётся фон родительской темы, а она у нас жёстко светлая
+         (android:Theme.Material.Light.NoActionBar), то есть в тёмной теме это была бы ещё и
+         светлая вспышка. Точно совпасть с фоном Compose нельзя - там динамические цвета Material
+         You, - поэтому берём ту же пару, что и сплешскрин. -->
+    <color name="window_bg">#FFF4EDE4</color>
+
     <!-- Сплешскрин, светлая тема -->
     <color name="splash_bg">#FFF4EDE4</color>
     <color name="illusion_ink_on_bg">#FF1A1512</color>

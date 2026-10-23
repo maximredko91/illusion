@@ -1,7 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
 
-    <style name="Theme.Illusion" parent="android:Theme.Material.Light.NoActionBar" />
+    <style name="Theme.Illusion" parent="android:Theme.Material.Light.NoActionBar">
+        <!-- См. комментарий к window_bg: без него predictive back показывает прозрачность вместо
+             фона приложения, а в тёмной теме - светлый фон родительской темы. -->
+        <item name="android:windowBackground">@color/window_bg</item>
+    </style>
 
     <!-- MainActivity's launch theme only, swapped for Theme.Illusion the moment SplashScreen exits
          (see MainActivity.installSplashScreen() + postSplashScreenTheme below). Static mark (no
