@@ -267,7 +267,7 @@ fun PlayerScreen(
             controlsVisible -> controlsVisible = false
         }
     }
-    var resizeMode by remember { mutableStateOf(AspectRatioFrameLayout.RESIZE_MODE_FIT) }
+    var resizeMode by remember { mutableIntStateOf(AspectRatioFrameLayout.RESIZE_MODE_FIT) }
     var resizeModeLabel by remember { mutableStateOf<String?>(null) }
     var sharpenToggleLabel by remember { mutableStateOf<String?>(null) }
     var playerViewRef by remember { mutableStateOf<PlayerView?>(null) }

@@ -51,6 +51,8 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
@@ -123,8 +125,8 @@ internal fun ColumnScope.SettingsAboutCategory(
     AboutLayout(
         header = {
             AboutBrandHeader()
-            var buildNumberTapCount by remember { mutableStateOf(0) }
-            var lastBuildNumberTapAt by remember { mutableStateOf(0L) }
+            var buildNumberTapCount by remember { mutableIntStateOf(0) }
+            var lastBuildNumberTapAt by remember { mutableLongStateOf(0L) }
             val eggContext = LocalContext.current
             val eggResources = androidx.compose.ui.platform.LocalResources.current
             // A fresh Toast.makeText().show() per tap QUEUES on Android instead of

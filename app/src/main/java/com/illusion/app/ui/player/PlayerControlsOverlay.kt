@@ -1048,7 +1048,7 @@ fun PlayerSettingsPanel(
                     // (same pattern as the seek bar above) keeps the live percentage readout
                     // responsive while dragging, but only actually commits - and so only triggers
                     // one real setVideoEffects() call - once the user lets go.
-                    var sharpenDragValue by remember(sharpenAmount) { mutableStateOf(sharpenAmount) }
+                    var sharpenDragValue by remember(sharpenAmount) { mutableFloatStateOf(sharpenAmount) }
                     Text(
                         stringResource(R.string.player_sharpen_amount, (sharpenDragValue * 100).roundToInt()),
                         color = Color.White.copy(alpha = 0.7f),
