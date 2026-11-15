@@ -59,6 +59,13 @@ data class MediaItemEntity(
      * после титров" banner and holds back the skip-credits/autoplay path until the scene is past.
      */
     val postCreditsStartMs: Long? = null,
+    /**
+     * Every post-credits scene of this title, once there can be more than one - see
+     * [com.illusion.app.domain.model.parsePostCreditsScenes] for the format. Written by both the
+     * manual marker and the automatic search (data/credits). [postCreditsStartMs] is kept in step
+     * with the first scene and stays the fallback for marks made before this column existed.
+     */
+    val postCreditsScenesMs: String? = null,
     val mpaa: String? = null,
     val tagline: String? = null,
     val studio: String? = null,

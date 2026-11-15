@@ -185,7 +185,6 @@ fun PlayerScreen(
     val castPermissionGate = com.illusion.app.ui.smbsource.rememberLocalNetworkPermissionGate {
         android.widget.Toast.makeText(context, R.string.player_cast_permission_required, android.widget.Toast.LENGTH_LONG).show()
     }
-    val introDetectState by viewModel.introDetectState.collectAsState()
     val noExternalAppMessage = stringResource(R.string.player_open_external_no_app)
 
     // Settings' "external player" choice (see SettingsRepository.playerMode) is applied once by
@@ -930,15 +929,11 @@ fun PlayerScreen(
             introMarkedEndMs = uiState.introMarkedEndMs,
             onMarkIntroEnd = { viewModel.markIntroEnd(); showSpeedDialog = false },
             onClearIntroMarkers = { viewModel.clearIntroMarkers(); showSpeedDialog = false },
-            introDetectState = introDetectState,
-            onDetectIntro = { viewModel.detectIntroAutomatically() },
-            onDetectIntroAllSeasons = { viewModel.detectIntroAutomatically(allSeasons = true) },
-            onCancelDetectIntro = viewModel::cancelIntroDetection,
             canMarkCredits = uiState.canMarkCredits,
             outroMarkedStartMs = uiState.outroMarkedStartMs,
             onMarkCreditsStart = { viewModel.markCreditsStart(); showSpeedDialog = false },
             onClearOutroMarker = { viewModel.clearOutroMarker(); showSpeedDialog = false },
-            postCreditsMarkedStartMs = uiState.postCreditsMarkedStartMs,
+            postCreditsScenes = uiState.postCreditsScenes,
             onMarkPostCreditsStart = { viewModel.markPostCreditsStart(); showSpeedDialog = false },
             onClearPostCreditsMarker = { viewModel.clearPostCreditsMarker(); showSpeedDialog = false },
             onSelect = { speed -> viewModel.setPlaybackSpeed(speed); showSpeedDialog = false },

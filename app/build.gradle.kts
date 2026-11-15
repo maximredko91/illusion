@@ -67,8 +67,8 @@ android {
         // Left beta at 1.0.0 (184) on 2026-11-14 - from here versionName is plain semver
         // (1.0.1, 1.1.0, ...); versionCode keeps counting up and stays the only thing the
         // in-app updater compares.
-        versionCode = 185
-        versionName = "1.0.1"
+        versionCode = 186
+        versionName = "1.1.0"
 
         // The real bulk of a universal APK's size turned out to be native .so libs bundled per-ABI
         // (ML Kit's on-device tag-translation library alone is ~17MB *per architecture*) - R8

@@ -68,6 +68,18 @@ class LibraryScanWorker(
         // Any completed rescan (not just one started from the banner itself) already picked up
         // whatever was new - the banner shouldn't keep nagging about it.
         NewContentNotifier.clear()
+        // Seasons that just got new episodes are searched for an intro unattended - the scan is
+        // the one moment the app knows something new arrived. Films drop out in getSeasonsOf.
+        android.util.Log.i("LibraryScanWorker", "scan done: ${result.totalIndexed} indexed, ${result.newlyAddedStableIds.size} new")
+        if (result.newlyAddedStableIds.isNotEmpty() && settingsRepository.autoIntroAfterScan.first()) {
+            val app = applicationContext as com.illusion.app.IllusionApplication
+            val seasons = app.libraryRepository.getSeasonsOf(result.newlyAddedStableIds.toList())
+            android.util.Log.i("LibraryScanWorker", "auto intro: ${result.newlyAddedStableIds.size} new items in ${seasons.size} seasons")
+            if (seasons.isNotEmpty()) {
+                com.illusion.app.data.intro.AutoIntroQueue(applicationContext).add(seasons)
+                WorkScheduler.enqueueAutoIntroDetect(applicationContext)
+            }
+        }
         return Result.success(
             workDataOf(
                 KEY_TOTAL_INDEXED to result.totalIndexed,

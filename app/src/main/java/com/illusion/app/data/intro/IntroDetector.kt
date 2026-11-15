@@ -61,12 +61,36 @@ class IntroDetector(
         }
     }
 
+    /**
+     * Fingerprint of the last [ANALYSIS_WINDOW_MS] of [item] - the credits search's raw material.
+     * Unlike intros, credits don't sit at the same position in every episode (episodes differ in
+     * length), so the caller fingerprints every episode's tail and matches neighbours pairwise;
+     * see `IntroDetectWorker.detectSeasonCredits`.
+     */
+    suspend fun tailFingerprintOf(item: MediaItemEntity, isCancelled: () -> Boolean = { false }): TailFingerprint? =
+        withContext(Dispatchers.IO) {
+            if (item.sizeBytes <= 0) return@withContext null
+            val info = sourceRepository.connectionInfoById(item.sourceId) ?: return@withContext null
+            runCatching {
+                smbClient.connect(info).use { connection ->
+                    val randomAccessFile = connection.openRandomAccessFile(item.filePath)
+                    val decoded = decodeMonoPcmTail(SmbMediaDataSource(randomAccessFile, item.sizeBytes), ANALYSIS_WINDOW_MS, isCancelled)
+                        ?: return@use null
+                    val print = fingerprint(decoded.samples)
+                    if (print.size > 0) TailFingerprint(print, decoded.startMs) else null
+                }
+            }.onFailure { Log.w(TAG, "tail fingerprint failed for ${item.filePath}", it) }.getOrNull()
+        }
+
     companion object {
         private const val TAG = "IntroDetector"
         /** Five minutes covers a cold open plus the theme on effectively every show. */
         const val ANALYSIS_WINDOW_MS = 5 * 60 * 1000L
     }
 }
+
+/** An episode's closing minutes as a fingerprint, plus where in the file that stretch starts. */
+class TailFingerprint(val fingerprint: Fingerprint, val startMs: Long)
 
 /**
  * The episode to compare [item] against: the next one in the same season, or the previous one when

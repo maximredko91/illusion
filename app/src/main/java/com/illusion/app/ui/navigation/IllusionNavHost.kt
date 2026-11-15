@@ -1028,6 +1028,8 @@ private fun SettingsRoute(
         onPosterAccentEnabledChange = settingsViewModel::setPosterAccentEnabled,
         parallaxEnabled = settingsViewModel.parallaxEnabled,
         onParallaxEnabledChange = settingsViewModel::setParallaxEnabled,
+        autoIntroAfterScan = settingsViewModel.autoIntroAfterScan,
+        onAutoIntroAfterScanChange = settingsViewModel::setAutoIntroAfterScan,
         accentColor = settingsViewModel.accentColor,
         onAccentColorChange = settingsViewModel::setAccentColor,
         themeMode = settingsViewModel.themeMode,

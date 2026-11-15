@@ -69,6 +69,13 @@ class MainActivity : ComponentActivity() {
             .onFailure { android.util.Log.w("IllusionCast", "Google Cast unavailable", it) }
         enableEdgeToEdge()
         val app = application as IllusionApplication
+        // Область кадра для анимации входа в PiP (sourceRectHint) считается от размера окна, а он
+        // меняется при повороте. Пересчёт только по смене состояния плеера оставлял подсказку от
+        // прежней ориентации, и анимация стартовала не от того прямоугольника.
+        window.decorView.addOnLayoutChangeListener { _, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom ->
+            val sizeChanged = right - left != oldRight - oldLeft || bottom - top != oldBottom - oldTop
+            if (sizeChanged && PipController.isPlayerActive && !PipController.isInPipMode) updatePipParams()
+        }
         setContent {
             val accentColor by app.settingsRepository.accentColor.collectAsState(initial = com.illusion.app.domain.model.AccentColor.ILLUSION)
             val themeMode by app.settingsRepository.themeMode.collectAsState(initial = com.illusion.app.domain.model.ThemeMode.SYSTEM)
@@ -124,8 +131,11 @@ class MainActivity : ComponentActivity() {
     private fun buildPipParams(): PictureInPictureParams {
         val ratio = PipController.aspectRatio
         val builder = PictureInPictureParams.Builder().setAspectRatio(ratio)
-        // Область, которую видео занимает на экране (вписано по центру), - с ней система
-        // анимирует переход в PiP от самого кадра, а не от всего окна с чёрными полями.
+        // Наибольший прямоугольник с пропорциями видео по центру окна - с ним система анимирует
+        // переход в PiP от самого кадра, а не от всего окна с чёрными полями. В режиме «вписать»
+        // это ровно кадр. В режимах «заполнить»/зум кадр больше окна, и этот же прямоугольник
+        // целиком лежит внутри него: пропорции совпадают с окном PiP, так что отдельного расчёта
+        // под зум не нужно (точную область кадра там всё равно не задать - она выходит за экран).
         val w = window.decorView.width
         val h = window.decorView.height
         if (w > 0 && h > 0) {

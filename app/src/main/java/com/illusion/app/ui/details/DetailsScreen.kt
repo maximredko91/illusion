@@ -45,6 +45,7 @@ import androidx.compose.material.icons.filled.HighQuality
 import androidx.compose.material.icons.filled.MovieCreation
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
@@ -192,6 +193,11 @@ fun DetailsScreen(
     val downloads by viewModel.downloads.collectAsState()
     val watchProgress by viewModel.watchProgress.collectAsState()
     val context = LocalContext.current
+    val postCreditsScanProgress by viewModel.postCreditsScanProgress.collectAsState()
+    val introScanProgress by viewModel.introScanProgress.collectAsState()
+    val creditsScanProgress by viewModel.creditsScanProgress.collectAsState()
+    // Не Unit: какие поиски бывают у этого тайтла, известно только когда он загрузился.
+    LaunchedEffect(state.item?.stableId) { viewModel.observeMarkerScans(context) }
     val offlineWarning = stringResource(R.string.details_offline_warning)
     val downloadOfflineWarning = stringResource(R.string.details_offline_warning_download)
     val snackbarHostState = remember { SnackbarHostState() }
@@ -237,6 +243,25 @@ fun DetailsScreen(
                     }
                 },
                 onRemoveDownload = { viewModel.removeDownload(context) },
+                postCreditsScanProgress = postCreditsScanProgress,
+                introScanProgress = introScanProgress,
+                creditsScanProgress = creditsScanProgress,
+                // Кадры и звук читаются с того же NAS - без домашней сети поиск просто упадёт в воркере.
+                onFindPostCredits = {
+                    if (com.illusion.app.ui.common.isOnLocalNetwork(context)) {
+                        viewModel.startPostCreditsScan(context)
+                    } else {
+                        scope.launch { snackbarHostState.showSnackbar(offlineWarning) }
+                    }
+                },
+                onFindSeriesMarkers = { credits ->
+                    if (com.illusion.app.ui.common.isOnLocalNetwork(context)) {
+                        viewModel.startSeriesMarkerScan(context, credits)
+                    } else {
+                        scope.launch { snackbarHostState.showSnackbar(offlineWarning) }
+                    }
+                },
+                onCancelSeriesMarkers = { credits -> viewModel.cancelSeriesMarkerScan(context, credits) },
                 onDownloadSeason = { ids ->
                     if (com.illusion.app.ui.common.isOnLocalNetwork(context)) {
                         viewModel.startSeasonDownload(context, ids)
@@ -411,6 +436,12 @@ private fun DetailsContent(
     downloads: Map<String, DownloadEntity>,
     onStartDownload: () -> Unit,
     onRemoveDownload: () -> Unit,
+    postCreditsScanProgress: Float?,
+    introScanProgress: Float?,
+    creditsScanProgress: Float?,
+    onFindPostCredits: () -> Unit,
+    onFindSeriesMarkers: (credits: Boolean) -> Unit,
+    onCancelSeriesMarkers: (credits: Boolean) -> Unit,
     onPlaySeasonTrailer: (String) -> Unit,
     onDownloadSeason: (List<String>) -> Unit,
     onDownloadEpisode: (String) -> Unit,
@@ -1105,6 +1136,63 @@ private fun DetailsContent(
             }
         }
 
+        // Автоматические метки. Отдельный заметный блок, а не строки в таблице метаданных и не
+        // кнопки в панели плеера, где они были раньше: про функцию, спрятанную в настройках
+        // плеера, никто не узнает. Здесь же ничего не играет, декодер свободен - поиск по
+        // картинке у фильма может идти сразу (см. PostCreditsDetectWorker).
+        if (item.seriesStableId == null) {
+            val scenes = remember(item.postCreditsScenesMs, item.postCreditsStartMs) {
+                com.illusion.app.domain.model.parsePostCreditsScenes(item.postCreditsScenesMs, item.postCreditsStartMs)
+            }
+            // У фильма начало титров ставит только автопоиск, так что по нему видно, что поиск
+            // уже был и сцен просто не нашлось.
+            val creditsStartMs = item.outroStartMs
+            AutoMarkersCard(stringResource(R.string.details_auto_markers_film_description)) {
+                AutoMarkerRow(
+                    label = stringResource(R.string.details_auto_markers_scenes),
+                    status = when {
+                        scenes.isNotEmpty() -> stringResource(
+                            R.string.details_post_credits_scenes,
+                            scenes.joinToString(", ") { formatWatchClock(it.startMs) }
+                        )
+                        creditsStartMs != null -> stringResource(R.string.details_post_credits_none, formatWatchClock(creditsStartMs))
+                        else -> stringResource(R.string.details_auto_markers_not_searched)
+                    },
+                    progress = postCreditsScanProgress,
+                    onFind = onFindPostCredits,
+                    onCancel = null
+                )
+            }
+        } else if (episodes.isNotEmpty()) {
+            val seasons = remember(episodes) { episodes.filter { it.seasonNumber != null }.groupBy { it.seasonNumber } }
+            val seasonsWithIntro = seasons.count { (_, seasonEpisodes) -> seasonEpisodes.any { it.introEndMs != null } }
+            val episodesWithCredits = episodes.count { it.outroStartMs != null }
+            AutoMarkersCard(stringResource(R.string.details_auto_markers_series_description)) {
+                AutoMarkerRow(
+                    label = stringResource(R.string.details_auto_markers_intro),
+                    status = if (seasonsWithIntro == 0) {
+                        stringResource(R.string.details_auto_markers_not_marked)
+                    } else {
+                        stringResource(R.string.details_auto_markers_intro_status, seasonsWithIntro, seasons.size)
+                    },
+                    progress = introScanProgress,
+                    onFind = { onFindSeriesMarkers(false) },
+                    onCancel = { onCancelSeriesMarkers(false) }
+                )
+                AutoMarkerRow(
+                    label = stringResource(R.string.details_auto_markers_credits),
+                    status = if (episodesWithCredits == 0) {
+                        stringResource(R.string.details_auto_markers_not_marked)
+                    } else {
+                        stringResource(R.string.details_auto_markers_credits_status, episodesWithCredits, episodes.size)
+                    },
+                    progress = creditsScanProgress,
+                    onFind = { onFindSeriesMarkers(true) },
+                    onCancel = { onCancelSeriesMarkers(true) }
+                )
+            }
+        }
+
         if (episodes.isNotEmpty()) {
             EpisodeList(episodes, downloads, item.plot, onPlay, onPlaySeasonTrailer, onDownloadSeason, onDownloadEpisode, onRemoveEpisodeDownload, onRemoveSeasonDownloads)
         }
@@ -1526,6 +1614,73 @@ private fun TechTagChip(
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.padding(start = 4.dp)
         )
+    }
+}
+
+/**
+ * The "automatic markers" block: skip-intro / credits / post-credits searches for this title.
+ * Tinted and titled on purpose - see the call site for why it isn't just more metadata rows.
+ */
+@Composable
+private fun AutoMarkersCard(description: String, content: @Composable () -> Unit) {
+    Column(
+        modifier = Modifier
+            .padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 8.dp)
+            .fillMaxWidth()
+            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.10f), RoundedCornerShape(12.dp))
+            .padding(12.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            androidx.compose.material3.Icon(
+                androidx.compose.material.icons.Icons.Default.AutoAwesome,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(20.dp)
+            )
+            Text(
+                stringResource(R.string.details_auto_markers_title),
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.padding(start = 8.dp)
+            )
+        }
+        Text(
+            description,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        content()
+    }
+}
+
+/** One search inside [AutoMarkersCard]: what it's for, what's marked so far, and the button. */
+@Composable
+private fun AutoMarkerRow(label: String, status: String, progress: Float?, onFind: () -> Unit, onCancel: (() -> Unit)?) {
+    Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                label,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Text(
+                if (progress != null) stringResource(R.string.details_post_credits_running, (progress * 100).toInt()) else status,
+                style = MaterialTheme.typography.bodySmall,
+                color = if (progress != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        if (progress == null) {
+            com.illusion.app.ui.common.TvAwareTextButton(onClick = onFind) {
+                Text(stringResource(R.string.details_post_credits_find))
+            }
+        } else if (onCancel != null) {
+            com.illusion.app.ui.common.TvAwareTextButton(onClick = onCancel) {
+                Text(stringResource(R.string.action_cancel))
+            }
+        }
     }
 }
 

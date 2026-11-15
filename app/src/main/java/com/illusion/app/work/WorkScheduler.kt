@@ -185,34 +185,77 @@ object WorkScheduler {
         WorkManager.getInstance(context).cancelUniqueWork(UPDATE_DOWNLOAD_WORK_NAME)
     }
 
-    /** Kicks off automatic intro detection for the season [stableId] belongs to. Unique: two runs
-     * at once would each pull minutes of video off the same share for nothing. */
-    fun enqueueIntroDetect(context: Context, stableId: String, allSeasons: Boolean = false) {
+    /**
+     * Audio search over a whole series for its intros ([credits] = false) or its credits (true) -
+     * see IntroDetectWorker. One unique work per series and kind: a second tap doesn't start a
+     * second run, and the two kinds don't replace each other.
+     */
+    fun enqueueSeriesMarkerDetect(context: Context, seriesStableId: String, credits: Boolean) {
         val request = OneTimeWorkRequestBuilder<IntroDetectWorker>()
             .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
             .setInputData(
                 workDataOf(
-                    IntroDetectWorker.KEY_STABLE_ID to stableId,
-                    IntroDetectWorker.KEY_ALL_SEASONS to allSeasons
+                    IntroDetectWorker.KEY_SERIES_ID to seriesStableId,
+                    IntroDetectWorker.KEY_CREDITS to credits
                 )
             )
             .build()
         WorkManager.getInstance(context).enqueueUniqueWork(
-            INTRO_DETECT_WORK_NAME,
-            ExistingWorkPolicy.REPLACE,
+            seriesMarkerWorkName(seriesStableId, credits),
+            ExistingWorkPolicy.KEEP,
             request
         )
     }
 
-    fun introDetectWorkInfo(context: Context): Flow<androidx.work.WorkInfo?> =
-        WorkManager.getInstance(context).getWorkInfosForUniqueWorkFlow(INTRO_DETECT_WORK_NAME)
-            .map { infos -> infos.firstOrNull { !it.state.isFinished } ?: infos.lastOrNull() }
-
-    fun cancelIntroDetect(context: Context) {
-        WorkManager.getInstance(context).cancelUniqueWork(INTRO_DETECT_WORK_NAME)
+    /**
+     * Starts the unattended intro search over AutoIntroQueue. Appended rather than kept: a run
+     * that is just finishing may miss entries added a moment ago, and the appended one picks them
+     * up (or finds the queue empty and ends at once).
+     */
+    fun enqueueAutoIntroDetect(context: Context) {
+        val request = OneTimeWorkRequestBuilder<IntroDetectWorker>()
+            .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
+            .setInputData(workDataOf(IntroDetectWorker.KEY_AUTO_QUEUE to true))
+            .build()
+        WorkManager.getInstance(context).enqueueUniqueWork(
+            "auto_intro_detect",
+            ExistingWorkPolicy.APPEND_OR_REPLACE,
+            request
+        )
     }
 
-    private const val INTRO_DETECT_WORK_NAME = "intro_detect"
+    fun seriesMarkerDetectWorkInfo(context: Context, seriesStableId: String, credits: Boolean): Flow<androidx.work.WorkInfo?> =
+        WorkManager.getInstance(context).getWorkInfosForUniqueWorkFlow(seriesMarkerWorkName(seriesStableId, credits))
+            .map { infos -> infos.firstOrNull { !it.state.isFinished } ?: infos.lastOrNull() }
+
+    fun cancelSeriesMarkerDetect(context: Context, seriesStableId: String, credits: Boolean) {
+        WorkManager.getInstance(context).cancelUniqueWork(seriesMarkerWorkName(seriesStableId, credits))
+    }
+
+    private fun seriesMarkerWorkName(seriesStableId: String, credits: Boolean) =
+        (if (credits) "credits_detect_" else "intro_detect_") + seriesStableId
+
+    /**
+     * Picture-based credits/scene search for one film - see PostCreditsDetectWorker. It can't run
+     * while something is playing, so the worker asks to be retried until playback is over (linear
+     * backoff, 10 s steps). One unique work per title.
+     */
+    fun enqueuePostCreditsDetect(context: Context, stableId: String) {
+        val request = OneTimeWorkRequestBuilder<PostCreditsDetectWorker>()
+            .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
+            .setBackoffCriteria(androidx.work.BackoffPolicy.LINEAR, 10, java.util.concurrent.TimeUnit.SECONDS)
+            .setInputData(workDataOf(PostCreditsDetectWorker.KEY_STABLE_ID to stableId))
+            .build()
+        WorkManager.getInstance(context).enqueueUniqueWork(
+            "post_credits_detect_$stableId",
+            ExistingWorkPolicy.KEEP,
+            request
+        )
+    }
+
+    fun postCreditsDetectWorkInfo(context: Context, stableId: String): Flow<androidx.work.WorkInfo?> =
+        WorkManager.getInstance(context).getWorkInfosForUniqueWorkFlow("post_credits_detect_$stableId")
+            .map { infos -> infos.firstOrNull { !it.state.isFinished } ?: infos.lastOrNull() }
 
     private const val UPDATE_CHECK_WORK_NAME = "update_check_periodic"
 

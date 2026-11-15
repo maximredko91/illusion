@@ -43,6 +43,7 @@ class SettingsRepository(private val context: Context) {
         val GLASS_EFFECT_ENABLED = booleanPreferencesKey("glass_effect_enabled")
         val POSTER_ACCENT_ENABLED = booleanPreferencesKey("poster_accent_enabled")
         val PARALLAX_ENABLED = booleanPreferencesKey("parallax_enabled")
+        val AUTO_INTRO_AFTER_SCAN = booleanPreferencesKey("auto_intro_after_scan")
         val ACCENT_COLOR = stringPreferencesKey("accent_color")
         val THEME_MODE = stringPreferencesKey("theme_mode")
         val PLAYER_MODE = stringPreferencesKey("player_mode")
@@ -176,6 +177,13 @@ class SettingsRepository(private val context: Context) {
 
     suspend fun setParallaxEnabled(value: Boolean) {
         context.dataStore.edit { it[Keys.PARALLAX_ENABLED] = value }
+    }
+
+    /** After a library scan, search seasons that got new episodes for an intro - see LibraryScanWorker. */
+    val autoIntroAfterScan: Flow<Boolean> = context.dataStore.data.map { it[Keys.AUTO_INTRO_AFTER_SCAN] ?: true }
+
+    suspend fun setAutoIntroAfterScan(value: Boolean) {
+        context.dataStore.edit { it[Keys.AUTO_INTRO_AFTER_SCAN] = value }
     }
 
     /** ILLUSION (the app's own brand crimson, matching the launcher icon/splash) is the actual out-of-box default - not AccentColor.DEFAULT, which would let Material You's wallpaper-based dynamic color override the brand on API 31+ and undercut the "one consistent style" the icon/splash rename was for. DEFAULT is still a real selectable option in Settings for anyone who wants dynamic color instead. */
@@ -441,6 +449,7 @@ class SettingsRepository(private val context: Context) {
             it.remove(Keys.GLASS_EFFECT_ENABLED)
             it.remove(Keys.POSTER_ACCENT_ENABLED)
             it.remove(Keys.PARALLAX_ENABLED)
+            it.remove(Keys.AUTO_INTRO_AFTER_SCAN)
             it.remove(Keys.ACCENT_COLOR)
             it.remove(Keys.THEME_MODE)
             // Зеркало для синхронного чтения на старте - иначе сброс настроек не доехал бы до

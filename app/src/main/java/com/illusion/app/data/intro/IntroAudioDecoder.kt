@@ -18,7 +18,21 @@ import java.nio.ByteOrder
  *
  * Returns null if the file has no audio track, no decoder exists for it, or nothing decoded.
  */
-fun decodeMonoPcm(dataSource: MediaDataSource, limitMs: Long, isCancelled: () -> Boolean = { false }): FloatArray? {
+fun decodeMonoPcm(dataSource: MediaDataSource, limitMs: Long, isCancelled: () -> Boolean = { false }): FloatArray? =
+    decodeWindow(dataSource, limitMs, fromEnd = false, isCancelled)?.samples
+
+/** Decoded audio plus where in the file it starts - 0 for the opening window, non-zero for a tail. */
+class DecodedAudio(val samples: FloatArray, val startMs: Long)
+
+/**
+ * Same as [decodeMonoPcm] but for the LAST [windowMs] of the file - what the credits search needs.
+ * Seeks by the audio track's own duration; a container that doesn't report one can't be searched
+ * from the end, so that returns null like any other undecodable track.
+ */
+fun decodeMonoPcmTail(dataSource: MediaDataSource, windowMs: Long, isCancelled: () -> Boolean = { false }): DecodedAudio? =
+    decodeWindow(dataSource, windowMs, fromEnd = true, isCancelled)
+
+private fun decodeWindow(dataSource: MediaDataSource, limitMs: Long, fromEnd: Boolean, isCancelled: () -> Boolean): DecodedAudio? {
     val extractor = MediaExtractor()
     var codec: MediaCodec? = null
     try {
@@ -36,6 +50,21 @@ fun decodeMonoPcm(dataSource: MediaDataSource, limitMs: Long, isCancelled: () ->
         val sourceRate = format.getInteger(MediaFormat.KEY_SAMPLE_RATE)
         val channels = runCatching { format.getInteger(MediaFormat.KEY_CHANNEL_COUNT) }.getOrDefault(2)
         extractor.selectTrack(trackIndex)
+
+        var startUs = 0L
+        var endUs = limitMs * 1000
+        if (fromEnd) {
+            if (!format.containsKey(MediaFormat.KEY_DURATION)) {
+                android.util.Log.w(DECODER_TAG, "no track duration, can't read the tail")
+                return null
+            }
+            val durationUs = format.getLong(MediaFormat.KEY_DURATION)
+            extractor.seekTo((durationUs - limitMs * 1000).coerceAtLeast(0), MediaExtractor.SEEK_TO_PREVIOUS_SYNC)
+            // Where the seek actually landed, not where it was asked to: the caller turns positions
+            // inside the decoded window back into file positions with this.
+            startUs = extractor.sampleTime.coerceAtLeast(0)
+            endUs = Long.MAX_VALUE
+        }
 
         codec = runCatching { MediaCodec.createDecoderByType(mime) }.getOrNull() ?: run {
             android.util.Log.w(DECODER_TAG, "no platform decoder for $mime")
@@ -61,7 +90,7 @@ fun decodeMonoPcm(dataSource: MediaDataSource, limitMs: Long, isCancelled: () ->
                 if (inputIndex >= 0) {
                     val buffer = codec.getInputBuffer(inputIndex)!!
                     val size = extractor.readSampleData(buffer, 0)
-                    if (size < 0 || extractor.sampleTime > limitMs * 1000) {
+                    if (size < 0 || extractor.sampleTime > endUs) {
                         codec.queueInputBuffer(inputIndex, 0, 0, 0, MediaCodec.BUFFER_FLAG_END_OF_STREAM)
                         inputDone = true
                     } else {
@@ -93,7 +122,7 @@ fun decodeMonoPcm(dataSource: MediaDataSource, limitMs: Long, isCancelled: () ->
         }
         val samples = output.toFloatArray()
         android.util.Log.i(DECODER_TAG, "decoded ${samples.size} samples (${samples.size / FINGERPRINT_SAMPLE_RATE} s), output format ${codec.outputFormat}")
-        return samples.takeIf { it.size >= FRAME_SIZE }
+        return if (samples.size >= FRAME_SIZE) DecodedAudio(samples, startUs / 1000) else null
     } catch (e: Exception) {
         android.util.Log.w(DECODER_TAG, "decode failed", e)
         // A malformed/unsupported track, a codec refusing this profile, an SMB read failing

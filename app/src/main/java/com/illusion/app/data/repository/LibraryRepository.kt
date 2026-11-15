@@ -209,6 +209,10 @@ class LibraryRepository(private val dao: MediaItemDao) {
     suspend fun getSeasonEpisodes(seriesStableId: String, seasonNumber: Int): List<MediaItemEntity> =
         dao.getSeasonEpisodes(seriesStableId, seasonNumber)
 
+    /** The distinct seasons the given items belong to - see [MediaItemDao.getSeasonsOf]. */
+    suspend fun getSeasonsOf(stableIds: List<String>): List<com.illusion.app.data.intro.SeasonKey> =
+        stableIds.chunked(500).flatMap { dao.getSeasonsOf(it) }.distinct()
+
     /** Every episode of a series, once - see [MediaItemDao.getSeriesEpisodes]. */
     suspend fun getSeriesEpisodes(seriesStableId: String): List<MediaItemEntity> =
         dao.getSeriesEpisodes(seriesStableId)
@@ -224,9 +228,22 @@ class LibraryRepository(private val dao: MediaItemDao) {
         }
     }
 
-    /** Marks where a post-credits scene starts on this one item - see [MediaItemEntity.postCreditsStartMs]. Pass null to clear. */
-    suspend fun markPostCreditsStart(item: MediaItemEntity, startMs: Long?) {
-        dao.setPostCreditsMarker(item.stableId, startMs)
+    /** Replaces this one item's post-credits scenes - see [MediaItemEntity.postCreditsScenesMs]. An empty list clears them. */
+    suspend fun setPostCreditsScenes(item: MediaItemEntity, scenes: List<com.illusion.app.domain.model.PostCreditsScene>) {
+        dao.setPostCreditsScenes(
+            item.stableId,
+            scenes.minOfOrNull { it.startMs },
+            com.illusion.app.domain.model.encodePostCreditsScenes(scenes)
+        )
+    }
+
+    /**
+     * Credits start for ONE episode only - what the automatic search writes. Episodes differ in
+     * length, so a detected position is only true for the episode it was found in; the manual
+     * [markCreditsStart] keeps its whole-season scope because one tap can't know better.
+     */
+    suspend fun markCreditsStartForEpisode(item: MediaItemEntity, startMs: Long) {
+        dao.setOutroMarker(item.stableId, startMs)
     }
 
     /** Same idea as [markIntroEnd] but for the credits at the end of an episode - only a start is needed since credits run to EOF. */

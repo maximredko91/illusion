@@ -136,6 +136,10 @@ interface MediaItemDao {
     @Query("SELECT * FROM media_items WHERE seriesStableId = :seriesStableId AND seasonNumber = :seasonNumber AND sourceId IN (SELECT id FROM smb_sources WHERE enabled = 1) ORDER BY episodeNumber")
     suspend fun getSeasonEpisodes(seriesStableId: String, seasonNumber: Int): List<MediaItemEntity>
 
+    /** Which seasons the given items belong to - films and items without a season drop out. At most a few hundred ids per call (SQLite's bound-variable limit). */
+    @Query("SELECT DISTINCT seriesStableId, seasonNumber FROM media_items WHERE stableId IN (:stableIds) AND seriesStableId IS NOT NULL AND seasonNumber IS NOT NULL")
+    suspend fun getSeasonsOf(stableIds: List<String>): List<com.illusion.app.data.intro.SeasonKey>
+
     /** Every episode of a series, once - for the whole-series intro search. */
     @Query("SELECT * FROM media_items WHERE seriesStableId = :seriesStableId AND sourceId IN (SELECT id FROM smb_sources WHERE enabled = 1) ORDER BY seasonNumber, episodeNumber")
     suspend fun getSeriesEpisodes(seriesStableId: String): List<MediaItemEntity>
@@ -215,8 +219,8 @@ interface MediaItemDao {
     suspend fun clearOutroMarker(stableId: String)
 
     /** Post-credits scenes are per item, not per season - see [MediaItemEntity.postCreditsStartMs]. */
-    @Query("UPDATE media_items SET postCreditsStartMs = :startMs WHERE stableId = :stableId")
-    suspend fun setPostCreditsMarker(stableId: String, startMs: Long?)
+    @Query("UPDATE media_items SET postCreditsStartMs = :firstStartMs, postCreditsScenesMs = :scenes WHERE stableId = :stableId")
+    suspend fun setPostCreditsScenes(stableId: String, firstStartMs: Long?, scenes: String?)
 
     @Query("UPDATE media_items SET outroStartMs = NULL WHERE seriesStableId = :seriesStableId AND seasonNumber = :seasonNumber")
     suspend fun clearOutroMarkerForSeason(seriesStableId: String, seasonNumber: Int)

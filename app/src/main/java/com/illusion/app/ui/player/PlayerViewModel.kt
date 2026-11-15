@@ -45,6 +45,9 @@ import com.illusion.app.data.settings.SettingsRepository
 import com.illusion.app.data.smb.SmbCredentialStore
 import com.illusion.app.data.smb.localIpv4Addresses
 import com.illusion.app.data.smb.subnetMismatchHint
+import com.illusion.app.domain.model.PostCreditsScene
+import com.illusion.app.domain.model.encodePostCreditsScenes
+import com.illusion.app.domain.model.parsePostCreditsScenes
 import com.illusion.app.domain.model.PlayerMode
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -110,8 +113,8 @@ data class PlayerUiState(
     val canMarkCredits: Boolean = false,
     /** Mirrors [introMarkedEndMs] for the credits marker. */
     val outroMarkedStartMs: Long? = null,
-    /** Where this title's post-credits scene starts, if it was marked - see [MediaItemEntity.postCreditsStartMs]. */
-    val postCreditsMarkedStartMs: Long? = null,
+    /** This title's post-credits scenes, marked by hand or found automatically - see [MediaItemEntity.postCreditsScenesMs]. */
+    val postCreditsScenes: List<PostCreditsScene> = emptyList(),
     /** "К сцене после титров" is showing: the credits are running and a marked scene is still ahead. */
     val showSkipToPostCredits: Boolean = false,
     /** Non-null while a sleep timer is counting down - null means no timer is active. Survives episode/trailer transitions (see the playItem/playTrailerItem reconstructions), unlike the per-item intro/credits fields above. */
@@ -255,64 +258,6 @@ class PlayerViewModel(
     private var currentItem: MediaItemEntity? = null
     private var currentTrailerItem: MediaItemEntity? = null
 
-    // ---- Automatic intro detection (see data/intro/*, work/IntroDetectWorker) -----------------
-
-    private val _introDetectState = MutableStateFlow(IntroDetectUiState())
-    val introDetectState: StateFlow<IntroDetectUiState> = _introDetectState.asStateFlow()
-
-    /**
-     * Starts the audio-fingerprint search for this season's title sequence and follows the worker
-     * until it finishes. Separate StateFlow for the same reason the cast state is - `playItem`
-     * rebuilds [PlayerUiState] from scratch, and a detection running across an episode change
-     * shouldn't silently lose its progress indicator.
-     */
-    fun detectIntroAutomatically(allSeasons: Boolean = false) {
-        val item = currentItem ?: return
-        com.illusion.app.work.WorkScheduler.enqueueIntroDetect(appContext, item.stableId, allSeasons)
-        _introDetectState.value = IntroDetectUiState(isRunning = true)
-        introDetectJob?.cancel()
-        introDetectJob = viewModelScope.launch {
-            com.illusion.app.work.WorkScheduler.introDetectWorkInfo(appContext).collect { info ->
-                if (info == null) return@collect
-                val progress = info.progress.getFloat(com.illusion.app.work.IntroDetectWorker.KEY_PROGRESS, 0f)
-                when (info.state) {
-                    androidx.work.WorkInfo.State.SUCCEEDED -> {
-                        val endMs = info.outputData.getLong(com.illusion.app.work.IntroDetectWorker.KEY_END_MS, 0L)
-                        val startMs = info.outputData.getLong(com.illusion.app.work.IntroDetectWorker.KEY_START_MS, 0L)
-                        // A whole-series run reports -1 when it found intros in other seasons but
-                        // not in the one being watched - nothing to update on this episode then.
-                        if (endMs >= 0) {
-                            // The worker wrote the markers straight to Room; this view model keeps
-                            // its own copy of the item (skip-intro reads it every frame), so it
-                            // needs the same update rather than a re-query.
-                            currentItem = currentItem?.copy(introStartMs = startMs, introEndMs = endMs)
-                            _state.update { it.copy(introMarkedEndMs = endMs) }
-                        }
-                        _introDetectState.value = IntroDetectUiState(
-                            foundEndMs = endMs.takeIf { it >= 0 },
-                            seasonsFound = info.outputData.getInt(com.illusion.app.work.IntroDetectWorker.KEY_SEASONS_FOUND, 0),
-                            seasonsTotal = info.outputData.getInt(com.illusion.app.work.IntroDetectWorker.KEY_SEASONS_TOTAL, 0)
-                        )
-                    }
-                    androidx.work.WorkInfo.State.FAILED ->
-                        _introDetectState.value = IntroDetectUiState(
-                            error = info.outputData.getString(com.illusion.app.work.IntroDetectWorker.KEY_ERROR)
-                                ?: com.illusion.app.work.IntroDetectWorker.ERROR_NOT_FOUND
-                        )
-                    androidx.work.WorkInfo.State.CANCELLED -> _introDetectState.value = IntroDetectUiState()
-                    else -> _introDetectState.value = IntroDetectUiState(isRunning = true, progress = progress)
-                }
-            }
-        }
-    }
-
-    fun cancelIntroDetection() {
-        com.illusion.app.work.WorkScheduler.cancelIntroDetect(appContext)
-        introDetectJob?.cancel()
-        _introDetectState.value = IntroDetectUiState()
-    }
-
-    private var introDetectJob: Job? = null
 
     // ---- Casting to a TV (see PlayerCastSession, data/cast/*) ---------------------------------
 
@@ -824,7 +769,7 @@ class PlayerViewModel(
                 introMarkedEndMs = item.introEndMs,
                 canMarkCredits = item.seriesStableId != null && item.seasonNumber != null,
                 outroMarkedStartMs = item.outroStartMs,
-                postCreditsMarkedStartMs = item.postCreditsStartMs,
+                postCreditsScenes = parsePostCreditsScenes(item.postCreditsScenesMs, item.postCreditsStartMs),
                 sleepTimerRemainingMs = it.sleepTimerRemainingMs,
                 readyForInternalPlayback = it.readyForInternalPlayback
             )
@@ -1172,28 +1117,42 @@ class PlayerViewModel(
     }
 
     /**
-     * Marks the current position as the start of this title's post-credits scene. Per item, not
-     * per season: it's a property of this one film (see [MediaItemEntity.postCreditsStartMs]).
+     * Adds the current position as the start of a post-credits scene of this title - a film can
+     * have several, so a second mark adds a scene rather than moving the first. Per item, not per
+     * season: it's a property of this one film (see [MediaItemEntity.postCreditsScenesMs]).
      */
     fun markPostCreditsStart() {
-        val item = currentItem ?: return
         val positionMs = player.currentPosition.coerceAtLeast(0)
-        currentItem = item.copy(postCreditsStartMs = positionMs)
-        _state.update { it.copy(postCreditsMarkedStartMs = positionMs) }
-        viewModelScope.launch { libraryRepository.markPostCreditsStart(item, positionMs) }
+        // A mark right on top of an existing one replaces it instead of piling up next to it.
+        val scenes = _state.value.postCreditsScenes
+            .filter { kotlin.math.abs(it.startMs - positionMs) > SAME_SCENE_TOLERANCE_MS }
+            .plus(PostCreditsScene(positionMs))
+            .sortedBy { it.startMs }
+        applyPostCreditsScenes(scenes)
     }
 
     fun clearPostCreditsMarker() {
-        val item = currentItem ?: return
-        currentItem = item.copy(postCreditsStartMs = null)
-        _state.update { it.copy(postCreditsMarkedStartMs = null, showSkipToPostCredits = false) }
-        viewModelScope.launch { libraryRepository.markPostCreditsStart(item, null) }
+        applyPostCreditsScenes(emptyList())
     }
 
-    /** Jumps straight to the marked post-credits scene - what the banner's own button does. */
-    fun skipToPostCredits() {
-        currentItem?.postCreditsStartMs?.let { seekTo(it) }
+    private fun applyPostCreditsScenes(scenes: List<PostCreditsScene>) {
+        val item = currentItem ?: return
+        currentItem = item.copy(
+            postCreditsStartMs = scenes.firstOrNull()?.startMs,
+            postCreditsScenesMs = encodePostCreditsScenes(scenes)
+        )
+        _state.update {
+            it.copy(postCreditsScenes = scenes, showSkipToPostCredits = if (scenes.isEmpty()) false else it.showSkipToPostCredits)
+        }
+        viewModelScope.launch { libraryRepository.setPostCreditsScenes(item, scenes) }
     }
+
+    /** Jumps to the next post-credits scene ahead of the current position - what the banner's own button does. */
+    fun skipToPostCredits() {
+        val positionMs = player.currentPosition
+        _state.value.postCreditsScenes.firstOrNull { it.startMs > positionMs }?.let { seekTo(it.startMs) }
+    }
+
 
     /** Undoes [markCreditsStart] for the whole season. */
     fun clearOutroMarker() {
@@ -1357,9 +1316,16 @@ class PlayerViewModel(
      * is about how long a film's credits run.
      */
     private fun isBeforePostCredits(positionMs: Long): Boolean {
-        val scene = currentItem?.postCreditsStartMs ?: return false
-        if (positionMs >= scene) return false
-        val from = currentItem?.outroStartMs ?: (scene - POST_CREDITS_BANNER_LEAD_MS)
+        val scenes = _state.value.postCreditsScenes
+        if (scenes.none { it.startMs > positionMs }) return false
+        // While a scene itself is on screen, offering to jump to the next one would be an
+        // invitation to skip what the marker exists for. A hand-marked scene has no known end,
+        // so it's given a typical scene's length.
+        val insideScene = scenes.any { scene ->
+            positionMs >= scene.startMs && positionMs < (scene.endMs ?: (scene.startMs + UNKNOWN_SCENE_LENGTH_MS))
+        }
+        if (insideScene) return false
+        val from = currentItem?.outroStartMs ?: (scenes.first().startMs - POST_CREDITS_BANNER_LEAD_MS)
         return positionMs >= from
     }
 
@@ -1421,6 +1387,8 @@ class PlayerViewModel(
 
         /** How early the post-credits banner shows when the credits themselves weren't marked. */
         private const val POST_CREDITS_BANNER_LEAD_MS = 8 * 60 * 1000L
+        private const val UNKNOWN_SCENE_LENGTH_MS = 90 * 1000L
+        private const val SAME_SCENE_TOLERANCE_MS = 5 * 1000L
 
         fun factory(
             libraryRepository: LibraryRepository,

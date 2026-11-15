@@ -139,6 +139,85 @@ class DetailsViewModel(
         _state.update { it.copy(audioTracks = probed) }
     }
 
+    /** Progress (0..1) of each automatic marker search on this title; null while it isn't queued or running. */
+    private val _postCreditsScanProgress = MutableStateFlow<Float?>(null)
+    val postCreditsScanProgress: StateFlow<Float?> = _postCreditsScanProgress.asStateFlow()
+    private val _introScanProgress = MutableStateFlow<Float?>(null)
+    val introScanProgress: StateFlow<Float?> = _introScanProgress.asStateFlow()
+    private val _creditsScanProgress = MutableStateFlow<Float?>(null)
+    val creditsScanProgress: StateFlow<Float?> = _creditsScanProgress.asStateFlow()
+    private var markerScansObserved = false
+
+    /**
+     * Follows this title's automatic marker searches (IntroDetectWorker for a series,
+     * PostCreditsDetectWorker for a film) - ones started here now, or still running from an earlier
+     * visit. When one finishes, the item and its episodes are re-read so the result shows up
+     * without leaving the screen. Needs the item loaded first: which searches exist depends on
+     * whether this is a series.
+     */
+    fun observeMarkerScans(context: Context) {
+        val item = _state.value.item ?: return
+        if (markerScansObserved) return
+        markerScansObserved = true
+        val appContext = context.applicationContext
+        val seriesId = item.seriesStableId
+        if (seriesId == null) {
+            follow(
+                WorkScheduler.postCreditsDetectWorkInfo(appContext, stableId),
+                _postCreditsScanProgress,
+                com.illusion.app.work.PostCreditsDetectWorker.KEY_PROGRESS
+            )
+        } else {
+            follow(
+                WorkScheduler.seriesMarkerDetectWorkInfo(appContext, seriesId, credits = false),
+                _introScanProgress,
+                com.illusion.app.work.IntroDetectWorker.KEY_PROGRESS
+            )
+            follow(
+                WorkScheduler.seriesMarkerDetectWorkInfo(appContext, seriesId, credits = true),
+                _creditsScanProgress,
+                com.illusion.app.work.IntroDetectWorker.KEY_PROGRESS
+            )
+        }
+    }
+
+    private fun follow(
+        workInfo: kotlinx.coroutines.flow.Flow<androidx.work.WorkInfo?>,
+        progress: MutableStateFlow<Float?>,
+        progressKey: String
+    ) {
+        viewModelScope.launch {
+            var wasActive = false
+            workInfo.collect { info ->
+                val active = info != null && !info.state.isFinished
+                progress.value = if (active) info?.progress?.getFloat(progressKey, 0f) else null
+                if (wasActive && !active) reloadMarkers()
+                wasActive = active
+            }
+        }
+    }
+
+    private suspend fun reloadMarkers() {
+        val fresh = libraryRepository.getById(stableId) ?: return
+        val episodes = fresh.seriesStableId?.let { libraryRepository.observeEpisodes(it).first() }
+        _state.update { it.copy(item = fresh, episodes = episodes ?: it.episodes) }
+    }
+
+    fun startPostCreditsScan(context: Context) {
+        WorkScheduler.enqueuePostCreditsDetect(context.applicationContext, stableId)
+    }
+
+    /** Intro ([credits] = false) or credits (true) search over the whole series this screen shows. */
+    fun startSeriesMarkerScan(context: Context, credits: Boolean) {
+        val seriesId = _state.value.item?.seriesStableId ?: return
+        WorkScheduler.enqueueSeriesMarkerDetect(context.applicationContext, seriesId, credits)
+    }
+
+    fun cancelSeriesMarkerScan(context: Context, credits: Boolean) {
+        val seriesId = _state.value.item?.seriesStableId ?: return
+        WorkScheduler.cancelSeriesMarkerDetect(context.applicationContext, seriesId, credits)
+    }
+
     fun toggleFavorite() {
         viewModelScope.launch {
             watchProgressRepository.setFavorite(stableId, !isFavorite.value, System.currentTimeMillis())

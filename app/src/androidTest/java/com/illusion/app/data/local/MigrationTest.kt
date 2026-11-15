@@ -90,6 +90,17 @@ class MigrationTest {
         }
     }
 
+    @Test
+    fun migrate23To24AddsPostCreditsScenesColumn() {
+        helper.createDatabase(TEST_DB, 23).close()
+
+        val migrated = helper.runMigrationsAndValidate(TEST_DB, 24, true, AppDatabase.MIGRATION_23_24)
+
+        migrated.query("SELECT postCreditsScenesMs FROM media_items").use { cursor ->
+            assertEquals(0, cursor.count)
+        }
+    }
+
     private companion object {
         const val TEST_DB = "migration-test"
     }

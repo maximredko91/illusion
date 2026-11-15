@@ -802,13 +802,9 @@ fun PlayerSettingsPanel(
     introMarkedEndMs: Long?,
     onMarkIntroEnd: () -> Unit,
     onClearIntroMarkers: () -> Unit,
-    introDetectState: IntroDetectUiState,
-    onDetectIntro: () -> Unit,
-    onDetectIntroAllSeasons: () -> Unit,
-    onCancelDetectIntro: () -> Unit,
     canMarkCredits: Boolean,
     outroMarkedStartMs: Long?,
-    postCreditsMarkedStartMs: Long?,
+    postCreditsScenes: List<com.illusion.app.domain.model.PostCreditsScene>,
     onMarkPostCreditsStart: () -> Unit,
     onClearPostCreditsMarker: () -> Unit,
     onMarkCreditsStart: () -> Unit,
@@ -1134,55 +1130,10 @@ fun PlayerSettingsPanel(
                         color = Color.White.copy(alpha = 0.7f),
                         style = MaterialTheme.typography.bodySmall
                     )
-                    // Automatic detection sits under the manual marker rather than replacing it:
-                    // it costs minutes of SMB traffic and can legitimately find nothing (a show
-                    // with no fixed intro), so the one-tap manual path stays the default.
-                    if (introDetectState.isRunning) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            CircularProgressIndicator(
-                                progress = { introDetectState.progress.coerceIn(0f, 1f) },
-                                modifier = Modifier.size(18.dp),
-                                strokeWidth = 2.dp,
-                                color = Color.White
-                            )
-                            Text(
-                                stringResource(R.string.player_detect_intro_running),
-                                color = Color.White.copy(alpha = 0.7f),
-                                style = MaterialTheme.typography.bodySmall,
-                                modifier = Modifier.padding(start = 8.dp)
-                            )
-                            TextButton(onClick = onCancelDetectIntro) {
-                                Text(stringResource(R.string.action_cancel))
-                            }
-                        }
-                    } else {
-                        TextButton(onClick = onDetectIntro) {
-                            Text(stringResource(R.string.player_detect_intro))
-                        }
-                        TextButton(onClick = onDetectIntroAllSeasons) {
-                            Text(stringResource(R.string.player_detect_intro_all_seasons))
-                        }
-                        if (introDetectState.seasonsTotal > 0) {
-                            Text(
-                                stringResource(
-                                    R.string.player_detect_intro_seasons_result,
-                                    introDetectState.seasonsFound,
-                                    introDetectState.seasonsTotal
-                                ),
-                                color = Color.White.copy(alpha = 0.7f),
-                                style = MaterialTheme.typography.bodySmall
-                            )
-                        }
-                        introDetectState.error?.let { error ->
-                            Text(
-                                stringResource(introDetectErrorText(error)),
-                                color = Color.White.copy(alpha = 0.7f),
-                                style = MaterialTheme.typography.bodySmall
-                            )
-                        }
-                    }
+                    // Автопоиск заставки и титров переехал на экран описания сериала - здесь
+                    // только ручные отметки, которым нужна текущая позиция.
                     Text(
-                        stringResource(R.string.player_detect_intro_hint),
+                        stringResource(R.string.player_auto_markers_pointer_series),
                         color = Color.White.copy(alpha = 0.7f),
                         style = MaterialTheme.typography.bodySmall
                     )
@@ -1214,13 +1165,16 @@ fun PlayerSettingsPanel(
                     )
                 }
 
-                // Сцена после титров (Marvel и прочие): у фильма нет соседней серии, автоматически
-                // такое не найти, поэтому только ручная отметка - зато она же удерживает переход
-                // к следующему файлу, пока сцена не пройдена.
+                // Сцены после титров (Marvel и прочие). У фильма нет соседней серии, по звуку такое
+                // не найти - поэтому ручная отметка плюс поиск по картинке (data/credits). Сцен
+                // может быть несколько: каждая ручная отметка добавляет ещё одну.
                 PanelSectionLabel(stringResource(R.string.player_settings_section_post_credits))
-                if (postCreditsMarkedStartMs != null) {
+                if (postCreditsScenes.isNotEmpty()) {
                     Text(
-                        stringResource(R.string.player_post_credits_marked_at, formatTime(postCreditsMarkedStartMs)),
+                        stringResource(
+                            R.string.player_post_credits_marked_at,
+                            postCreditsScenes.joinToString(", ") { formatTime(it.startMs) }
+                        ),
                         color = Color.White.copy(alpha = 0.7f),
                         style = MaterialTheme.typography.bodySmall
                     )
@@ -1229,7 +1183,7 @@ fun PlayerSettingsPanel(
                     TextButton(onClick = onMarkPostCreditsStart) {
                         Text(stringResource(R.string.player_mark_post_credits))
                     }
-                    if (postCreditsMarkedStartMs != null) {
+                    if (postCreditsScenes.isNotEmpty()) {
                         TextButton(onClick = onClearPostCreditsMarker) {
                             Text(stringResource(R.string.player_clear_post_credits))
                         }
@@ -1240,6 +1194,14 @@ fun PlayerSettingsPanel(
                     color = Color.White.copy(alpha = 0.7f),
                     style = MaterialTheme.typography.bodySmall
                 )
+                // У серии раздел «Заставка» выше уже сказал, где автопоиск.
+                if (!canMarkCredits) {
+                    Text(
+                        stringResource(R.string.player_auto_markers_pointer_film),
+                        color = Color.White.copy(alpha = 0.7f),
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
             }
         }
     }
