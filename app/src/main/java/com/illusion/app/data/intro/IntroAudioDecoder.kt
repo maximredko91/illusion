@@ -25,15 +25,22 @@ fun decodeMonoPcm(dataSource: MediaDataSource, limitMs: Long, isCancelled: () ->
         extractor.setDataSource(dataSource)
         val trackIndex = (0 until extractor.trackCount).firstOrNull { index ->
             extractor.getTrackFormat(index).getString(MediaFormat.KEY_MIME)?.startsWith("audio/") == true
-        } ?: return null
+        } ?: run {
+            android.util.Log.w(DECODER_TAG, "no audio track among ${extractor.trackCount} tracks")
+            return null
+        }
 
         val format = extractor.getTrackFormat(trackIndex)
         val mime = format.getString(MediaFormat.KEY_MIME) ?: return null
+        android.util.Log.i(DECODER_TAG, "audio track: $format")
         val sourceRate = format.getInteger(MediaFormat.KEY_SAMPLE_RATE)
         val channels = runCatching { format.getInteger(MediaFormat.KEY_CHANNEL_COUNT) }.getOrDefault(2)
         extractor.selectTrack(trackIndex)
 
-        codec = runCatching { MediaCodec.createDecoderByType(mime) }.getOrNull() ?: return null
+        codec = runCatching { MediaCodec.createDecoderByType(mime) }.getOrNull() ?: run {
+            android.util.Log.w(DECODER_TAG, "no platform decoder for $mime")
+            return null
+        }
         codec.configure(format, null, null, 0)
         codec.start()
 
@@ -84,8 +91,11 @@ fun decodeMonoPcm(dataSource: MediaDataSource, limitMs: Long, isCancelled: () ->
                 outputIndex == MediaCodec.INFO_TRY_AGAIN_LATER && inputDone -> outputDone = true
             }
         }
-        return output.toFloatArray().takeIf { it.size >= FRAME_SIZE }
+        val samples = output.toFloatArray()
+        android.util.Log.i(DECODER_TAG, "decoded ${samples.size} samples (${samples.size / FINGERPRINT_SAMPLE_RATE} s), output format ${codec.outputFormat}")
+        return samples.takeIf { it.size >= FRAME_SIZE }
     } catch (e: Exception) {
+        android.util.Log.w(DECODER_TAG, "decode failed", e)
         // A malformed/unsupported track, a codec refusing this profile, an SMB read failing
         // mid-decode: all mean "no fingerprint for this episode", never a crashed worker.
         return null
@@ -143,3 +153,4 @@ private class FloatArrayBuilder(initialCapacity: Int) {
 }
 
 private const val TIMEOUT_US = 10_000L
+private const val DECODER_TAG = "IntroAudioDecoder"

@@ -5,7 +5,9 @@ import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import androidx.work.workDataOf
 import com.illusion.app.data.intro.IntroDetector
+import com.illusion.app.data.intro.IntroMatch
 import com.illusion.app.data.intro.pickReferenceEpisode
+import com.illusion.app.data.local.entity.MediaItemEntity
 import com.illusion.app.data.repository.LibraryRepository
 import com.illusion.app.data.repository.SmbSourceRepository
 import com.illusion.app.data.smb.SmbClient
@@ -35,6 +37,8 @@ class IntroDetectWorker(
         val season = item.seasonNumber
         if (seriesId == null || season == null) return Result.failure(workDataOf(KEY_ERROR to ERROR_NOT_SERIES))
 
+        if (inputData.getBoolean(KEY_ALL_SEASONS, false)) return detectAllSeasons(item, seriesId, season)
+
         val reference = pickReferenceEpisode(item, libraryRepository.getSeasonEpisodes(seriesId, season))
             ?: return Result.failure(workDataOf(KEY_ERROR to ERROR_NO_REFERENCE))
 
@@ -54,6 +58,62 @@ class IntroDetectWorker(
         return Result.success(workDataOf(KEY_START_MS to match.startMs, KEY_END_MS to match.endMs))
     }
 
+    /**
+     * The whole-series run: one detection per season, each season compared within itself (intros
+     * change between seasons, so there's nothing to share across them). The season being watched
+     * goes first and uses the open episode; the others use their first episode. A season that
+     * already has markers is left alone unless it's the one being watched - those are either an
+     * earlier run's result or the user's own manual mark, and neither should be overwritten by a
+     * run they started from a different season.
+     */
+    private suspend fun detectAllSeasons(item: MediaItemEntity, seriesId: String, currentSeason: Int): Result {
+        val bySeason = libraryRepository.getSeriesEpisodes(seriesId)
+            .filter { it.seasonNumber != null }
+            .groupBy { it.seasonNumber!! }
+        val seasons = listOf(currentSeason) + bySeason.keys.filter { it != currentSeason }.sorted()
+        val detector = IntroDetector(sourceRepository, smbClient)
+        var found = 0
+        var currentMatch: IntroMatch? = null
+        setProgress(workDataOf(KEY_PROGRESS to 0f))
+        for ((index, season) in seasons.withIndex()) {
+            if (isStopped) return Result.failure()
+            val episodes = bySeason[season].orEmpty()
+            val isCurrent = season == currentSeason
+            if (!isCurrent && episodes.any { it.introEndMs != null }) {
+                found++
+            } else {
+                val target = if (isCurrent) item else episodes.minByOrNull { it.episodeNumber ?: Int.MAX_VALUE }
+                val reference = target?.let { pickReferenceEpisode(it, episodes) }
+                val match = if (target != null && reference != null) {
+                    detector.detect(
+                        item = target,
+                        reference = reference,
+                        isCancelled = { isStopped },
+                        onProgress = { progress -> setProgressBlocking((index + progress) / seasons.size) }
+                    )
+                } else {
+                    null
+                }
+                if (match != null && target != null) {
+                    libraryRepository.markIntroRange(target, match.startMs, match.endMs)
+                    found++
+                    if (isCurrent) currentMatch = match
+                }
+            }
+            setProgressBlocking((index + 1f) / seasons.size)
+        }
+        if (isStopped) return Result.failure()
+        if (found == 0) return Result.failure(workDataOf(KEY_ERROR to ERROR_NOT_FOUND))
+        return Result.success(
+            workDataOf(
+                KEY_START_MS to (currentMatch?.startMs ?: -1L),
+                KEY_END_MS to (currentMatch?.endMs ?: -1L),
+                KEY_SEASONS_FOUND to found,
+                KEY_SEASONS_TOTAL to seasons.size
+            )
+        )
+    }
+
     // setProgress is suspending and the detector's callback isn't - progress here is a nicety on a
     // multi-minute job, so a dropped update is harmless and blocking the (background) worker thread
     // for it is not worth threading a coroutine scope through the detector.
@@ -63,6 +123,9 @@ class IntroDetectWorker(
 
     companion object {
         const val KEY_STABLE_ID = "stable_id"
+        const val KEY_ALL_SEASONS = "all_seasons"
+        const val KEY_SEASONS_FOUND = "seasons_found"
+        const val KEY_SEASONS_TOTAL = "seasons_total"
         const val KEY_PROGRESS = "progress"
         const val KEY_START_MS = "start_ms"
         const val KEY_END_MS = "end_ms"

@@ -209,6 +209,10 @@ class LibraryRepository(private val dao: MediaItemDao) {
     suspend fun getSeasonEpisodes(seriesStableId: String, seasonNumber: Int): List<MediaItemEntity> =
         dao.getSeasonEpisodes(seriesStableId, seasonNumber)
 
+    /** Every episode of a series, once - see [MediaItemDao.getSeriesEpisodes]. */
+    suspend fun getSeriesEpisodes(seriesStableId: String): List<MediaItemEntity> =
+        dao.getSeriesEpisodes(seriesStableId)
+
     /** Undoes [markIntroEnd] - same single-item-vs-whole-season scoping. */
     suspend fun clearIntroMarkers(item: MediaItemEntity) {
         val seriesId = item.seriesStableId

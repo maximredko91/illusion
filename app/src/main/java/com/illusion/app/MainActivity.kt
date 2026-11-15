@@ -90,6 +90,11 @@ class MainActivity : ComponentActivity() {
                 controller.isAppearanceLightStatusBars = !darkTheme
                 controller.isAppearanceLightNavigationBars = !darkTheme
             }
+            // Держим параметры PiP актуальными заранее: на Android 12+ система сама уводит
+            // плеер в PiP (setAutoEnterEnabled), и ей нужны уже готовые пропорции и область видео.
+            val pipPlayerActive = PipController.isPlayerActive
+            val pipAspectRatio = PipController.aspectRatio
+            LaunchedEffect(pipPlayerActive, pipAspectRatio) { updatePipParams() }
             IllusionTheme(themeMode = themeMode, accentColor = accentColor) {
                 Box(modifier = Modifier.fillMaxSize()) {
                     IllusionNavHost(
@@ -116,13 +121,40 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private fun buildPipParams(): PictureInPictureParams {
+        val ratio = PipController.aspectRatio
+        val builder = PictureInPictureParams.Builder().setAspectRatio(ratio)
+        // Область, которую видео занимает на экране (вписано по центру), - с ней система
+        // анимирует переход в PiP от самого кадра, а не от всего окна с чёрными полями.
+        val w = window.decorView.width
+        val h = window.decorView.height
+        if (w > 0 && h > 0) {
+            val r = ratio.toFloat()
+            val hint = if (w.toFloat() / h > r) {
+                val vw = (h * r).toInt()
+                android.graphics.Rect((w - vw) / 2, 0, (w + vw) / 2, h)
+            } else {
+                val vh = (w / r).toInt()
+                android.graphics.Rect(0, (h - vh) / 2, w, (h + vh) / 2)
+            }
+            builder.setSourceRectHint(hint)
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            builder.setAutoEnterEnabled(PipController.isPlayerActive)
+        }
+        return builder.build()
+    }
+
+    private fun updatePipParams() {
+        runCatching { setPictureInPictureParams(buildPipParams()) }
+    }
+
+    // На Android 12+ в PiP уводит сама система (setAutoEnterEnabled в buildPipParams) - это
+    // покрывает и жест «домой», и даёт плавный переход. Ручной вход остаётся для Android 8-11.
     override fun onUserLeaveHint() {
         super.onUserLeaveHint()
-        if (PipController.isPlayerActive) {
-            val params = PictureInPictureParams.Builder()
-                .setAspectRatio(PipController.aspectRatio)
-                .build()
-            enterPictureInPictureMode(params)
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S && PipController.isPlayerActive) {
+            enterPictureInPictureMode(buildPipParams())
         }
     }
 

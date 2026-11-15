@@ -804,6 +804,7 @@ fun PlayerSettingsPanel(
     onClearIntroMarkers: () -> Unit,
     introDetectState: IntroDetectUiState,
     onDetectIntro: () -> Unit,
+    onDetectIntroAllSeasons: () -> Unit,
     onCancelDetectIntro: () -> Unit,
     canMarkCredits: Boolean,
     outroMarkedStartMs: Long?,
@@ -1157,6 +1158,20 @@ fun PlayerSettingsPanel(
                     } else {
                         TextButton(onClick = onDetectIntro) {
                             Text(stringResource(R.string.player_detect_intro))
+                        }
+                        TextButton(onClick = onDetectIntroAllSeasons) {
+                            Text(stringResource(R.string.player_detect_intro_all_seasons))
+                        }
+                        if (introDetectState.seasonsTotal > 0) {
+                            Text(
+                                stringResource(
+                                    R.string.player_detect_intro_seasons_result,
+                                    introDetectState.seasonsFound,
+                                    introDetectState.seasonsTotal
+                                ),
+                                color = Color.White.copy(alpha = 0.7f),
+                                style = MaterialTheme.typography.bodySmall
+                            )
                         }
                         introDetectState.error?.let { error ->
                             Text(

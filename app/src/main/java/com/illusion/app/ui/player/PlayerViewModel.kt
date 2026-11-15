@@ -266,9 +266,9 @@ class PlayerViewModel(
      * rebuilds [PlayerUiState] from scratch, and a detection running across an episode change
      * shouldn't silently lose its progress indicator.
      */
-    fun detectIntroAutomatically() {
+    fun detectIntroAutomatically(allSeasons: Boolean = false) {
         val item = currentItem ?: return
-        com.illusion.app.work.WorkScheduler.enqueueIntroDetect(appContext, item.stableId)
+        com.illusion.app.work.WorkScheduler.enqueueIntroDetect(appContext, item.stableId, allSeasons)
         _introDetectState.value = IntroDetectUiState(isRunning = true)
         introDetectJob?.cancel()
         introDetectJob = viewModelScope.launch {
@@ -279,12 +279,20 @@ class PlayerViewModel(
                     androidx.work.WorkInfo.State.SUCCEEDED -> {
                         val endMs = info.outputData.getLong(com.illusion.app.work.IntroDetectWorker.KEY_END_MS, 0L)
                         val startMs = info.outputData.getLong(com.illusion.app.work.IntroDetectWorker.KEY_START_MS, 0L)
-                        // The worker wrote the markers straight to Room; this view model keeps its
-                        // own copy of the item (skip-intro reads it every frame), so it needs the
-                        // same update rather than a re-query.
-                        currentItem = currentItem?.copy(introStartMs = startMs, introEndMs = endMs)
-                        _state.update { it.copy(introMarkedEndMs = endMs) }
-                        _introDetectState.value = IntroDetectUiState(foundEndMs = endMs)
+                        // A whole-series run reports -1 when it found intros in other seasons but
+                        // not in the one being watched - nothing to update on this episode then.
+                        if (endMs >= 0) {
+                            // The worker wrote the markers straight to Room; this view model keeps
+                            // its own copy of the item (skip-intro reads it every frame), so it
+                            // needs the same update rather than a re-query.
+                            currentItem = currentItem?.copy(introStartMs = startMs, introEndMs = endMs)
+                            _state.update { it.copy(introMarkedEndMs = endMs) }
+                        }
+                        _introDetectState.value = IntroDetectUiState(
+                            foundEndMs = endMs.takeIf { it >= 0 },
+                            seasonsFound = info.outputData.getInt(com.illusion.app.work.IntroDetectWorker.KEY_SEASONS_FOUND, 0),
+                            seasonsTotal = info.outputData.getInt(com.illusion.app.work.IntroDetectWorker.KEY_SEASONS_TOTAL, 0)
+                        )
                     }
                     androidx.work.WorkInfo.State.FAILED ->
                         _introDetectState.value = IntroDetectUiState(

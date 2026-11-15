@@ -136,6 +136,10 @@ interface MediaItemDao {
     @Query("SELECT * FROM media_items WHERE seriesStableId = :seriesStableId AND seasonNumber = :seasonNumber AND sourceId IN (SELECT id FROM smb_sources WHERE enabled = 1) ORDER BY episodeNumber")
     suspend fun getSeasonEpisodes(seriesStableId: String, seasonNumber: Int): List<MediaItemEntity>
 
+    /** Every episode of a series, once - for the whole-series intro search. */
+    @Query("SELECT * FROM media_items WHERE seriesStableId = :seriesStableId AND sourceId IN (SELECT id FROM smb_sources WHERE enabled = 1) ORDER BY seasonNumber, episodeNumber")
+    suspend fun getSeriesEpisodes(seriesStableId: String): List<MediaItemEntity>
+
     /** .nfo <set>-based - Details' own "Другие части" row. */
     @Query("SELECT * FROM media_items WHERE collectionName = :collectionName AND isOrphanedDownload = 0 AND sourceId IN (SELECT id FROM smb_sources WHERE enabled = 1)")
     fun observeByCollection(collectionName: String): Flow<List<MediaItemEntity>>

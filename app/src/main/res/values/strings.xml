@@ -537,8 +537,10 @@
     <string name="player_mark_intro_end">Отметить конец заставки</string>
     <string name="player_mark_intro_end_hint">Применится ко всем сериям этого сезона</string>
     <string name="player_detect_intro">Найти заставку автоматически</string>
-    <string name="player_detect_intro_running">Анализ звука двух серий…</string>
-    <string name="player_detect_intro_hint">Сравнивает звук этой и соседней серии и ставит метки всему сезону. Занимает несколько минут — файлы читаются с сервера.</string>
+    <string name="player_detect_intro_running">Анализ звука серий…</string>
+    <string name="player_detect_intro_hint">Сравнивает звук этой и соседней серии и ставит метки всему сезону. Обычно меньше минуты на сезон: начало двух серий читается с сервера. «Во всех сезонах» проходит сериал целиком и не трогает другие сезоны, где метки уже стоят.</string>
+    <string name="player_detect_intro_all_seasons">Найти во всех сезонах</string>
+    <string name="player_detect_intro_seasons_result">Заставка отмечена в %1$d из %2$d сезонов</string>
     <string name="player_detect_intro_not_found">Не нашёл общую заставку в этих сериях</string>
     <string name="player_detect_intro_no_reference">Нужна ещё хотя бы одна серия этого сезона</string>
     <string name="player_detect_intro_not_series">Автопоиск работает только для серий сериала</string>

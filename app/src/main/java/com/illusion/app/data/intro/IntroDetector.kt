@@ -1,5 +1,6 @@
 package com.illusion.app.data.intro
 
+import android.util.Log
 import com.illusion.app.data.local.entity.MediaItemEntity
 import com.illusion.app.data.repository.SmbSourceRepository
 import com.illusion.app.data.scan.SmbMediaDataSource
@@ -33,13 +34,20 @@ class IntroDetector(
         isCancelled: () -> Boolean = { false },
         onProgress: (Float) -> Unit = {}
     ): IntroMatch? = withContext(Dispatchers.IO) {
-        val first = fingerprintOf(item, isCancelled) ?: return@withContext null
+        val first = fingerprintOf(item, isCancelled) ?: run {
+            Log.w(TAG, "no fingerprint for ${item.filePath}")
+            return@withContext null
+        }
         onProgress(0.5f)
         if (isCancelled()) return@withContext null
-        val second = fingerprintOf(reference, isCancelled) ?: return@withContext null
+        val second = fingerprintOf(reference, isCancelled) ?: run {
+            Log.w(TAG, "no fingerprint for reference ${reference.filePath}")
+            return@withContext null
+        }
+        Log.i(TAG, "fingerprints: ${first.size} and ${second.size} frames")
         onProgress(0.9f)
         if (isCancelled()) return@withContext null
-        findSharedIntro(first, second)
+        findSharedIntro(first, second, diagnostics = { Log.i(TAG, it) })
     }
 
     private suspend fun fingerprintOf(item: MediaItemEntity, isCancelled: () -> Boolean): Fingerprint? {
@@ -54,6 +62,7 @@ class IntroDetector(
     }
 
     companion object {
+        private const val TAG = "IntroDetector"
         /** Five minutes covers a cold open plus the theme on effectively every show. */
         const val ANALYSIS_WINDOW_MS = 5 * 60 * 1000L
     }

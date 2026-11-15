@@ -187,10 +187,15 @@ object WorkScheduler {
 
     /** Kicks off automatic intro detection for the season [stableId] belongs to. Unique: two runs
      * at once would each pull minutes of video off the same share for nothing. */
-    fun enqueueIntroDetect(context: Context, stableId: String) {
+    fun enqueueIntroDetect(context: Context, stableId: String, allSeasons: Boolean = false) {
         val request = OneTimeWorkRequestBuilder<IntroDetectWorker>()
             .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
-            .setInputData(workDataOf(IntroDetectWorker.KEY_STABLE_ID to stableId))
+            .setInputData(
+                workDataOf(
+                    IntroDetectWorker.KEY_STABLE_ID to stableId,
+                    IntroDetectWorker.KEY_ALL_SEASONS to allSeasons
+                )
+            )
             .build()
         WorkManager.getInstance(context).enqueueUniqueWork(
             INTRO_DETECT_WORK_NAME,

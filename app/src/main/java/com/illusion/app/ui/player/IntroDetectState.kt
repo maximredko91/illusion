@@ -15,6 +15,9 @@ data class IntroDetectUiState(
     val progress: Float = 0f,
     /** Set once a search has succeeded this session - the markers themselves live in Room. */
     val foundEndMs: Long? = null,
+    /** Set by a whole-series run: in how many of the series' seasons an intro is now marked. */
+    val seasonsFound: Int = 0,
+    val seasonsTotal: Int = 0,
     /** One of IntroDetectWorker's ERROR_* constants. */
     val error: String? = null
 )

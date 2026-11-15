@@ -22,9 +22,15 @@ fun findSharedIntro(
     first: Fingerprint,
     second: Fingerprint,
     minDurationMs: Long = MIN_INTRO_MS,
-    maxDurationMs: Long = MAX_INTRO_MS
+    maxDurationMs: Long = MAX_INTRO_MS,
+    // Why a match was or wasn't found - a callback rather than android.util.Log so this file stays
+    // plain Kotlin for IntroMatcherTest.
+    diagnostics: (String) -> Unit = {}
 ): IntroMatch? {
-    if (first.size < MIN_FRAMES || second.size < MIN_FRAMES) return null
+    if (first.size < MIN_FRAMES || second.size < MIN_FRAMES) {
+        diagnostics("too short: first=${first.size} second=${second.size} frames, need $MIN_FRAMES")
+        return null
+    }
 
     var bestOffset = 0
     var bestScore = 0
@@ -40,6 +46,7 @@ fun findSharedIntro(
             bestOffset = offset
         }
     }
+    diagnostics("best offset=$bestOffset frames, score=$bestScore matching frames (need $MIN_FRAMES)")
     if (bestScore < MIN_FRAMES) return null
 
     // Longest run at the winning alignment, allowing short non-matching gaps inside it.
@@ -72,7 +79,11 @@ fun findSharedIntro(
         bestStart = runStart
         bestEnd = runEnd
     }
-    if (bestStart < 0) return null
+    if (bestStart < 0) {
+        diagnostics("no continuous run at the best offset")
+        return null
+    }
+    diagnostics("longest run: ${bestStart * FRAME_HOP_MS}..${(bestEnd + 1) * FRAME_HOP_MS} ms (allowed $minDurationMs..$maxDurationMs)")
 
     val match = IntroMatch(
         startMs = bestStart * FRAME_HOP_MS,
