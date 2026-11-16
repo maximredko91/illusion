@@ -168,6 +168,19 @@
     <string name="settings_easter_egg_countdown">Ещё %1$d, и что-то произойдёт…</string>
     <string name="secret_cinema_title">Тайный кинозал</string>
     <string name="secret_cinema_screening">ЗАКРЫТЫЙ ПОКАЗ</string>
+    <string name="secret_cinema_regular">ПОСТОЯННЫЙ ЗРИТЕЛЬ</string>
+    <string name="secret_cinema_seat_format">Ряд %1$d · Место %2$d</string>
+    <string name="secret_cinema_seat_hint">Ряд — досмотренные фильмы, место — серии</string>
+    <string name="secret_cinema_message_golden">Сто фильмов позади. Этот зал — ваш</string>
+    <string name="splash_cinema_birthday">Кинематографу — %1$s</string>
+    <string name="splash_russian_cinema_day">С Днём российского кино</string>
+    <plurals name="cinema_years">
+        <item quantity="one">%d год</item>
+        <item quantity="few">%d года</item>
+        <item quantity="many">%d лет</item>
+        <item quantity="other">%d года</item>
+    </plurals>
+    <string name="search_lumiere_caption">«Прибытие поезда на вокзал Ла-Сьота», 1895</string>
     <string name="secret_cinema_seat">Ряд 7 · Место 7</string>
     <string name="secret_cinema_message">Лучшие места — у вас дома</string>
     <string name="secret_cinema_enter">В зал</string>

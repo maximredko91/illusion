@@ -94,8 +94,9 @@ fun SearchScreen(
     val results by viewModel.results.collectAsState()
     val recentSearches by viewModel.recentSearches.collectAsState()
 
+    androidx.compose.foundation.layout.Box(modifier = modifier) {
     Scaffold(
-        modifier = modifier,
+        modifier = Modifier.fillMaxSize(),
         contentWindowInsets = com.illusion.app.ui.common.tvSafeContentWindowInsets(androidx.compose.foundation.layout.WindowInsets.safeDrawing),
         topBar = {
             TopAppBar(
@@ -248,6 +249,9 @@ fun SearchScreen(
                 }
             }
         }
+    }
+    // Пасхалка - см. LumiereTrain. Поверх экрана, но касаний не перехватывает.
+    LumiereTrain(query)
     }
 }
 

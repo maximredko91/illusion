@@ -23,6 +23,10 @@ class WatchProgressRepository(
 
     suspend fun clearHistory() = progressDao.deleteAll()
 
+    suspend fun countWatchedFilms(): Int = progressDao.countWatchedFilms()
+
+    suspend fun countWatchedEpisodes(): Int = progressDao.countWatchedEpisodes()
+
     /**
      * Manual "mark watched/unwatched" toggle (Details screen) - the only other writer of [WatchProgressEntity.watched]
      * is the player itself, automatically, on reaching the last 5s of playback. Marking watched

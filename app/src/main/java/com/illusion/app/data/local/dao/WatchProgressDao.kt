@@ -38,6 +38,13 @@ interface WatchProgressDao {
     @Query("DELETE FROM watch_progress WHERE mediaItemStableId = :stableId")
     suspend fun deleteForItem(stableId: String)
 
+    /** Fully watched titles that are films / that are episodes - the souvenir ticket's row and seat (see SecretCinemaDialog). */
+    @Query("SELECT COUNT(*) FROM watch_progress w JOIN media_items m ON m.stableId = w.mediaItemStableId WHERE w.watched = 1 AND m.seriesStableId IS NULL")
+    suspend fun countWatchedFilms(): Int
+
+    @Query("SELECT COUNT(*) FROM watch_progress w JOIN media_items m ON m.stableId = w.mediaItemStableId WHERE w.watched = 1 AND m.seriesStableId IS NOT NULL")
+    suspend fun countWatchedEpisodes(): Int
+
     @Query("DELETE FROM watch_progress")
     suspend fun deleteAll()
 }

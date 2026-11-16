@@ -36,7 +36,13 @@ import com.illusion.app.ui.common.LocalUiMode
 import com.illusion.app.ui.common.PerforationStrip
 import com.illusion.app.ui.common.TvAwareButton
 
-/** A souvenir cinema ticket; closing it simply returns to About. */
+/**
+ * A souvenir cinema ticket; closing it simply returns to About.
+ *
+ * The seat on it is the viewer's own: the row is how many films they have watched to the end, the
+ * seat how many episodes. Until there's anything to count it stays the original "row 7, seat 7".
+ * After [GOLDEN_TICKET_FILMS] films the ticket turns gold.
+ */
 @Composable
 internal fun SecretCinemaDialog(onDismiss: () -> Unit) {
     val isTv = LocalUiMode.current == UiMode.TV
@@ -44,7 +50,15 @@ internal fun SecretCinemaDialog(onDismiss: () -> Unit) {
     val motionEnabled = remember(economical) { !economical && ValueAnimator.areAnimatorsEnabled() }
     val reveal = remember { Animatable(if (motionEnabled) 0f else 1f) }
     val buttonFocus = remember { FocusRequester() }
-    val paper = Color(0xFFF4EDE4)
+    val app = androidx.compose.ui.platform.LocalContext.current.applicationContext as com.illusion.app.IllusionApplication
+    // films to episodes; null until counted, so the ticket never flashes one seat and then another
+    val watched = androidx.compose.runtime.produceState<Pair<Int, Int>?>(null) {
+        value = app.watchProgressRepository.countWatchedFilms() to app.watchProgressRepository.countWatchedEpisodes()
+    }.value
+    val films = watched?.first ?: 0
+    val episodes = watched?.second ?: 0
+    val golden = films >= GOLDEN_TICKET_FILMS
+    val paper = if (golden) Color(0xFFEFD58A) else Color(0xFFF4EDE4)
     val ink = Color(0xFF241B18)
     val crimson = Color(0xFFA13F3F)
     Dialog(onDismissRequest = onDismiss,
@@ -78,7 +92,7 @@ internal fun SecretCinemaDialog(onDismiss: () -> Unit) {
                             Text(stringResource(R.string.app_name).uppercase(), fontFamily = FontFamily.Serif,
                                 fontSize = if (isTv) 30.sp else 26.sp, letterSpacing = 0.1.em,
                                 fontWeight = FontWeight.Medium, textAlign = TextAlign.Center)
-                            Text(stringResource(R.string.secret_cinema_screening),
+                            Text(stringResource(if (golden) R.string.secret_cinema_regular else R.string.secret_cinema_screening),
                                 modifier = Modifier.padding(top = 8.dp), style = MaterialTheme.typography.labelLarge,
                                 letterSpacing = 0.12.em, color = crimson, textAlign = TextAlign.Center)
                         }
@@ -87,11 +101,24 @@ internal fun SecretCinemaDialog(onDismiss: () -> Unit) {
                                 Offset(size.width - 24.dp.toPx(), size.height / 2), 1.dp.toPx(),
                                 pathEffect = PathEffect.dashPathEffect(floatArrayOf(4.dp.toPx(), 4.dp.toPx())))
                         }
-                        Text(stringResource(R.string.secret_cinema_seat),
-                            modifier = Modifier.padding(horizontal = 24.dp, vertical = 20.dp),
+                        val counted = films > 0 || episodes > 0
+                        Text(
+                            if (counted) {
+                                // A seat number of zero doesn't exist in any cinema.
+                                stringResource(R.string.secret_cinema_seat_format, films.coerceAtLeast(1), episodes.coerceAtLeast(1))
+                            } else {
+                                stringResource(R.string.secret_cinema_seat)
+                            },
+                            modifier = Modifier.padding(start = 24.dp, end = 24.dp, top = 20.dp, bottom = if (counted) 4.dp else 20.dp),
                             style = MaterialTheme.typography.headlineSmall, fontFamily = FontFamily.Serif,
                             textAlign = TextAlign.Center)
-                        Text(stringResource(R.string.secret_cinema_message),
+                        if (counted) {
+                            Text(stringResource(R.string.secret_cinema_seat_hint),
+                                modifier = Modifier.padding(start = 24.dp, end = 24.dp, bottom = 16.dp),
+                                style = MaterialTheme.typography.bodySmall, color = ink.copy(alpha = 0.6f),
+                                textAlign = TextAlign.Center)
+                        }
+                        Text(stringResource(if (golden) R.string.secret_cinema_message_golden else R.string.secret_cinema_message),
                             modifier = Modifier.padding(start = 24.dp, end = 24.dp, bottom = 24.dp),
                             style = MaterialTheme.typography.bodyLarge, textAlign = TextAlign.Center)
                         PerforationStrip(holeColor = paper, modifier = Modifier.fillMaxWidth().height(8.dp))
@@ -105,3 +132,5 @@ internal fun SecretCinemaDialog(onDismiss: () -> Unit) {
         }
     }
 }
+
+private const val GOLDEN_TICKET_FILMS = 100

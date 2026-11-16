@@ -45,6 +45,8 @@ fun AppSplashOverlay(app: IllusionApplication) {
     var isTv by remember { mutableStateOf(false) }
     var animate by remember { mutableStateOf(false) }
     val progress = remember { Animatable(0f) }
+    // Пасхалка: 28 декабря и 27 августа заставка выглядит иначе - см. CinemaOccasion.
+    val occasion = remember { cinemaOccasion(java.time.LocalDate.now()) }
     LaunchedEffect(Unit) {
         if (finished) return@LaunchedEffect
         isTv = app.settingsRepository.uiMode.first() == UiMode.TV
@@ -53,7 +55,8 @@ fun AppSplashOverlay(app: IllusionApplication) {
             (performance == PerformanceMode.AUTO && DevicePerformance.isLowEndDevice(app))
         animate = !economical && ValueAnimator.areAnimatorsEnabled()
         if (animate) {
-            progress.animateTo(1f, tween(560, easing = LinearEasing))
+            // В особый день заставка задерживается, чтобы титр успели прочитать.
+            progress.animateTo(1f, tween(if (occasion != null) OCCASION_SPLASH_MS else 560, easing = LinearEasing))
         } else {
             // Экономичный режим (TV Box в «Авто» попадает сюда как слабое устройство): без анимации
             // сплэш закрывался в тот же кадр, и его не было видно вовсе. Показываем статично.
@@ -61,7 +64,7 @@ fun AppSplashOverlay(app: IllusionApplication) {
             // Отсчёт - от первого показанного кадра: на медленном TV Box 650 мс успевали пройти,
             // пока окно ещё открывалось, и экран с названием не был виден ни разу.
             withFrameNanos { }
-            kotlinx.coroutines.delay(if (isTv) 1200 else 650)
+            kotlinx.coroutines.delay(if (occasion != null) OCCASION_SPLASH_MS.toLong() else if (isTv) 1200 else 650)
         }
         finished = true
     }
@@ -98,6 +101,14 @@ fun AppSplashOverlay(app: IllusionApplication) {
         // Keep the native 288dp canvas even on ATV: enlarging it at handoff causes a jump.
         Image(
             androidx.compose.ui.graphics.vector.rememberVectorPainter(mark), contentDescription = null,
+            // Чёрно-белый знак - как плёнка тех лет.
+            colorFilter = if (occasion != null) {
+                androidx.compose.ui.graphics.ColorFilter.colorMatrix(
+                    androidx.compose.ui.graphics.ColorMatrix().apply { setToSaturation(0f) }
+                )
+            } else {
+                null
+            },
             modifier = Modifier.size(288.dp)
                 .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
                 .drawWithContent {
@@ -133,5 +144,28 @@ fun AppSplashOverlay(app: IllusionApplication) {
             )
             PerforationStrip(holeColor = background, modifier = Modifier.fillMaxWidth().height(3.dp))
         }
+        // Титр в духе немого кино. Отдельно от колонки с названием, а не внутри неё: её ширина
+        // считается по самому широкому ребёнку, и длинная строка растянула бы перфорацию.
+        val occasionText = when (occasion) {
+            is CinemaOccasion.Birthday -> stringResource(
+                R.string.splash_cinema_birthday,
+                androidx.compose.ui.res.pluralStringResource(R.plurals.cinema_years, occasion.years, occasion.years)
+            )
+            CinemaOccasion.RussianCinemaDay -> stringResource(R.string.splash_russian_cinema_day)
+            null -> null
+        }
+        if (occasionText != null) {
+            Text(
+                occasionText,
+                modifier = Modifier.offset(y = titleOffset + 64.dp)
+                    .graphicsLayer { alpha = (progress.value / 0.3f).coerceIn(0f, 1f) },
+                color = ink, fontFamily = FontFamily.Serif,
+                fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
+                fontSize = if (isTv) 16.sp else 14.sp, letterSpacing = 0.06.em,
+                maxLines = 1
+            )
+        }
     }
 }
+
+private const val OCCASION_SPLASH_MS = 2600
