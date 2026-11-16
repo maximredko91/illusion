@@ -59,7 +59,12 @@ private fun decodeWindow(dataSource: MediaDataSource, limitMs: Long, fromEnd: Bo
                 return null
             }
             val durationUs = format.getLong(MediaFormat.KEY_DURATION)
-            extractor.seekTo((durationUs - limitMs * 1000).coerceAtLeast(0), MediaExtractor.SEEK_TO_PREVIOUS_SYNC)
+            // Never more than the last 30% of the file. With a fixed window, an episode shorter
+            // than the window had its whole length fingerprinted as its "tail", and the credits
+            // search then matched the INTRO two episodes share and marked that as the credits
+            // (seen on 3-minute test episodes; an 8-minute cartoon short would do the same).
+            val windowUs = minOf(limitMs * 1000, durationUs * 3 / 10)
+            extractor.seekTo((durationUs - windowUs).coerceAtLeast(0), MediaExtractor.SEEK_TO_PREVIOUS_SYNC)
             // Where the seek actually landed, not where it was asked to: the caller turns positions
             // inside the decoded window back into file positions with this.
             startUs = extractor.sampleTime.coerceAtLeast(0)

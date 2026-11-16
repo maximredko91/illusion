@@ -46,6 +46,34 @@ interface MediaItemDao {
     @Query("DELETE FROM thumbnail_sprites WHERE mediaItemStableId IN (SELECT stableId FROM media_items WHERE sourceId = :sourceId)")
     suspend fun deleteThumbnailSpritesBySource(sourceId: Long)
 
+    // Элемент со скачанной копией не трогается ни одним из запросов ниже: файл на телефоне есть
+    // и играет, даже если оригинал с сервера убрали.
+    @Query("DELETE FROM watch_progress WHERE mediaItemStableId IN (:stableIds) AND mediaItemStableId NOT IN (SELECT stableId FROM downloads)")
+    suspend fun deleteWatchProgressOf(stableIds: List<String>)
+
+    @Query("DELETE FROM favorites WHERE mediaItemStableId IN (:stableIds) AND mediaItemStableId NOT IN (SELECT stableId FROM downloads)")
+    suspend fun deleteFavoritesOf(stableIds: List<String>)
+
+    @Query("DELETE FROM thumbnail_sprites WHERE mediaItemStableId IN (:stableIds) AND mediaItemStableId NOT IN (SELECT stableId FROM downloads)")
+    suspend fun deleteThumbnailSpritesOf(stableIds: List<String>)
+
+    @Query("DELETE FROM media_items WHERE stableId IN (:stableIds) AND stableId NOT IN (SELECT stableId FROM downloads)")
+    suspend fun deleteItems(stableIds: List<String>): Int
+
+    /**
+     * Элементы, чьих файлов на сервере больше нет (см. LibraryScanner.pruneVanished), вместе с
+     * прогрессом, избранным и спрайтами - тот же состав, что у [deleteSourceContent], и по той же
+     * причине: без своего элемента они недостижимы. Не больше нескольких сотен id за вызов
+     * (ограничение SQLite на число параметров). Возвращает число удалённых элементов.
+     */
+    @Transaction
+    suspend fun deleteVanished(stableIds: List<String>): Int {
+        deleteWatchProgressOf(stableIds)
+        deleteFavoritesOf(stableIds)
+        deleteThumbnailSpritesOf(stableIds)
+        return deleteItems(stableIds)
+    }
+
     /**
      * Всё, что осталось в библиотеке от одного источника. Ничего, кроме удаления источника,
      * элементы не удаляет - сканирование только добавляет и обновляет, - поэтому раньше удалённый

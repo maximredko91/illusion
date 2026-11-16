@@ -38,9 +38,22 @@ import kotlinx.coroutines.withContext
  * a time - a share with thousands of files/folders was otherwise the slow, silent part of a scan.
  */
 /** [newlyAddedStableIds] - items this specific scan found that weren't already indexed (not merely updated) - see [LibraryScanner.hasNewContent]'s sibling use of the same "new" definition, and [com.illusion.app.ui.scan.ScanProgressScreen]'s "что добавилось" summary. */
-data class ScanResult(val totalIndexed: Int, val sourceErrors: List<SourceScanError>, val newlyAddedStableIds: List<String> = emptyList())
+data class ScanResult(val totalIndexed: Int, val sourceErrors: List<SourceScanError>, val newlyAddedStableIds: List<String> = emptyList(), val removed: List<RemovedTitle> = emptyList())
 data class SourceScanError(val sourceName: String, val message: String)
-private data class SourceScanOutcome(val indexed: Int, val newlyAddedStableIds: List<String>)
+private data class SourceScanOutcome(
+    val indexed: Int,
+    val newlyAddedStableIds: List<String>,
+    val pruneWarning: String? = null,
+    val removed: List<RemovedTitle> = emptyList()
+)
+
+private class PruneOutcome(val warning: String? = null, val removed: List<RemovedTitle> = emptyList())
+
+/** One line of "what this scan removed": a film, or a series with how many of its episodes went. */
+data class RemovedTitle(val title: String, val itemCount: Int, val isSeries: Boolean)
+
+/** Below this many items a source is too small for "more than half vanished" to mean anything. */
+private const val MIN_ITEMS_FOR_PRUNE_GUARD = 20
 
 class LibraryScanner(
     private val sourceRepository: SmbSourceRepository,
@@ -71,13 +84,21 @@ class LibraryScanner(
         val sources = sourceRepository.getEnabledSources()
         val errors = mutableListOf<SourceScanError>()
         val newlyAdded = mutableListOf<String>()
+        val removed = mutableListOf<RemovedTitle>()
         val total = sources.foldIndexed(0) { index, sum, source ->
             val outcome = runCatching { scanSource(source, index, sources.size, force, onProgress) }
-            outcome.exceptionOrNull()?.let { errors += SourceScanError(source.displayName, classifySmbError(it, source.host, smbClient.localIpv4())) }
+            outcome.exceptionOrNull()?.let {
+                // classifySmbError turns anything it doesn't recognise into a network-sounding
+                // message; the real exception is the only way to tell a code bug from a dead NAS.
+                android.util.Log.w("LibraryScanner", "source ${source.displayName} failed", it)
+                errors += SourceScanError(source.displayName, classifySmbError(it, source.host, smbClient.localIpv4()))
+            }
             outcome.getOrNull()?.let { newlyAdded += it.newlyAddedStableIds }
+            outcome.getOrNull()?.pruneWarning?.let { errors += SourceScanError(source.displayName, it) }
+            outcome.getOrNull()?.let { removed += it.removed }
             sum + (outcome.getOrNull()?.indexed ?: 0)
         }
-        ScanResult(totalIndexed = total, sourceErrors = errors, newlyAddedStableIds = newlyAdded)
+        ScanResult(totalIndexed = total, sourceErrors = errors, newlyAddedStableIds = newlyAdded, removed = removed)
     }
 
     /**
@@ -182,8 +203,68 @@ class LibraryScanner(
                     }
                 }.awaitAll()
             }
-            SourceScanOutcome(items.size, newlyAddedStableIds.toList())
+            val seenPaths = videoFiles.mapTo(HashSet()) { it.path }
+            // A downloaded title whose original is gone is DownloadRepository's business, not this.
+            val vanished = existingByPath.values.filter { it.filePath !in seenPaths && !it.isOrphanedDownload }
+            val pruned = pruneVanished(source, vanished, indexedBefore = existingByPath.size, seenNow = videoFiles.size, force = force)
+            SourceScanOutcome(items.size, newlyAddedStableIds.toList(), pruned.warning, pruned.removed)
         }
+    }
+
+    /**
+     * Removes library items whose files this scan no longer found on the server. Until this
+     * existed, scanning only ever added and updated: a deleted series stayed in the library as
+     * cards that couldn't be opened, through any number of rescans, full ones included.
+     *
+     * Only ever called after a COMPLETE walk of the source (any directory that fails to list
+     * throws out of [scanSource] long before this), so "not seen" really does mean "not there".
+     * Two cases still don't get pruned, because being wrong costs the user their markers, watch
+     * progress and favourites for everything removed:
+     * - the walk found no videos at all - a share whose disk isn't mounted looks exactly like an
+     *   emptied one, and this NAS is a router with a USB drive;
+     * - an ordinary rescan would drop more than half of a sizeable source - the same failure
+     *   partway (one of several disks missing). A full rescan is the user saying "yes, really".
+     * Returns what was removed (grouped for display - a series is one line, not one per episode)
+     * or, when it declined to prune, a message for the user saying why.
+     */
+    private suspend fun pruneVanished(
+        source: SmbSourceEntity,
+        vanished: List<MediaItemEntity>,
+        indexedBefore: Int,
+        seenNow: Int,
+        force: Boolean
+    ): PruneOutcome {
+        if (vanished.isEmpty()) return PruneOutcome()
+        if (seenNow == 0) {
+            android.util.Log.w("LibraryScanner", "${source.displayName}: no videos found, ${vanished.size} items kept")
+            return PruneOutcome(warning = "на сервере не найдено ни одного видео — похоже, диск не подключён; библиотека оставлена как есть")
+        }
+        if (!force && indexedBefore >= MIN_ITEMS_FOR_PRUNE_GUARD && vanished.size * 2 > indexedBefore) {
+            android.util.Log.w("LibraryScanner", "${source.displayName}: ${vanished.size} of $indexedBefore items vanished, kept")
+            return PruneOutcome(
+                warning = "пропало больше половины файлов (${vanished.size} из $indexedBefore) — карточки оставлены; " +
+                    "если файлы действительно удалены, запустите полное пересканирование"
+            )
+        }
+        val removedCount = libraryRepository.deleteVanished(vanished.map { it.stableId })
+        // Items with a downloaded copy survive deleteVanished - only look for them when the count
+        // says some did, so the report lists exactly what went.
+        val gone = if (removedCount == vanished.size) vanished else vanished.filter { libraryRepository.getById(it.stableId) == null }
+        // A series is reported as one line with its episode count; the show folder's own name is
+        // the series title everywhere else in the app too (see DetailsUiState.seriesTitle).
+        val removed = gone.groupBy { it.seriesStableId ?: it.stableId }.values.map { group ->
+            val first = group.first()
+            RemovedTitle(
+                title = first.seriesStableId?.substringAfterLast('\\') ?: first.title,
+                itemCount = group.size,
+                isSeries = first.seriesStableId != null
+            )
+        }.sortedBy { it.title }
+        // The full list goes to logcat as well: the result screen only shows the first few dozen,
+        // and after the first real prune (67 items) there was no record anywhere of WHAT had gone.
+        android.util.Log.i("LibraryScanner", "${source.displayName}: removed $removedCount items whose files are gone: " +
+            removed.joinToString("; ") { if (it.isSeries) "${it.title} (${it.itemCount})" else it.title })
+        return PruneOutcome(removed = removed)
     }
 
     /** [channel]'s connections plus the [info] that made them - [withConnection] needs [info] to reconnect a connection that died mid-scan, which a bare `Channel<SmbConnection>` had no way to carry. */
@@ -372,10 +453,18 @@ class LibraryScanner(
             previous.sizeBytes == file.sizeBytes &&
             previous.lastModified == file.lastModified &&
             previous.nfoLastModified == nfoRef?.lastModified
+        // Season/episode from the file name and folders, for a series laid out without
+        // per-episode .nfo files - see parseSeasonEpisode. An .nfo value always wins.
+        val fromPath = if (seriesStableId != null) parseSeasonEpisode(file.path) else SeasonEpisode(null, null)
         if (unchanged) {
-            val trailerFile = trailerFor(previous!!.seasonNumber)
+            // Applied on this path too (it's pure string work, no SMB read): otherwise episodes
+            // indexed before the fallback existed would stay season-less until a full rescan.
+            val seasonNumber = previous!!.seasonNumber ?: fromPath.season
+            val trailerFile = trailerFor(seasonNumber)
             return previous.copy(
                 category = category,
+                seasonNumber = seasonNumber,
+                episodeNumber = previous.episodeNumber ?: fromPath.episode,
                 posterPath = localPosterPath ?: previous.posterPath,
                 fanartPath = localFanartPath ?: previous.fanartPath,
                 episodeThumbPath = localEpisodeThumbPath ?: previous.episodeThumbPath,
@@ -402,7 +491,8 @@ class LibraryScanner(
         // genre/year on any item, which silently disables the Library genre/year filter chips
         // (they only render when at least one item in the category has a value).
         val showMetadata = showFolder?.let { fetchShowNfo(connection, it, showNfoCache) }
-        val trailerFile = trailerFor(metadata?.season)
+        val seasonNumber = metadata?.season ?: fromPath.season
+        val trailerFile = trailerFor(seasonNumber)
 
         return MediaItemEntity(
             stableId = stableId,
@@ -441,8 +531,8 @@ class LibraryScanner(
             fanartPath = localFanartPath ?: metadata?.fanartUrl?.takeIf { it.startsWith("http://") || it.startsWith("https://") },
             episodeThumbPath = localEpisodeThumbPath
                 ?: metadata?.posterUrl?.takeIf { seriesStableId != null && (it.startsWith("http://") || it.startsWith("https://")) },
-            seasonNumber = metadata?.season,
-            episodeNumber = metadata?.episode,
+            seasonNumber = seasonNumber,
+            episodeNumber = metadata?.episode ?: fromPath.episode,
             seriesStableId = seriesStableId,
             dateAdded = previous?.dateAdded ?: System.currentTimeMillis(),
             sizeBytes = file.sizeBytes,

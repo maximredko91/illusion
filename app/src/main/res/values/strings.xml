@@ -403,6 +403,11 @@
     <string name="scan_progress_done_count">Готово</string>
     <string name="scan_progress_newly_added_title">Добавлено новое</string>
     <string name="scan_progress_failed">Не удалось выполнить сканирование. Проверьте соединение с источником в настройках</string>
+    <string name="scan_progress_summary_removed">Убрано из библиотеки: %1$d</string>
+    <string name="scan_progress_removed_title">Этих файлов больше нет на сервере</string>
+    <string name="scan_progress_removed_series">%1$s — серий: %2$d</string>
+    <string name="scan_progress_removed_more">…и ещё названий: %1$d</string>
+    <string name="scan_notification_result_removed">Убрано: %1$d.</string>
     <string name="scan_progress_partial_error">Не всё удалось просканировать: %1$s</string>
     <string name="scan_progress_summary_total">В библиотеке %1$d видео</string>
     <string name="scan_progress_summary_added">Добавлено новых: %1$d</string>
@@ -559,8 +564,8 @@
     <string name="player_cast_forward">Вперёд на 10 секунд</string>
     <string name="player_cast_volume">Громкость телевизора</string>
     <string name="player_settings_section_post_credits">Сцены после титров</string>
-    <string name="settings_auto_intro_after_scan">Искать заставки после сканирования</string>
-    <string name="settings_auto_intro_after_scan_description">В сезонах, где появились новые серии, приложение само ищет заставку: сравнивает звук двух серий, около 20 секунд на сезон. Работает в фоне и читает файлы с сервера; после первого сканирования большой библиотеки может идти долго.</string>
+    <string name="settings_auto_intro_after_scan">Искать заставки и титры после сканирования</string>
+    <string name="settings_auto_intro_after_scan_description">В сезонах, где появились новые серии, приложение само ищет заставку (около 20 секунд на сезон) и титры новых серий (около 10 секунд на серию). Работает в фоне и читает файлы с сервера; после первого сканирования большой библиотеки может идти долго.</string>
     <string name="details_auto_markers_title">Автоматические метки</string>
     <string name="details_auto_markers_series_description">Приложение может само найти заставку и титры по звуку, сравнивая серии между собой, — тогда в плеере появятся кнопки «Пропустить заставку» и «Следующая серия». Меньше минуты на сезон для заставки, около 10 секунд на серию для титров.</string>
     <string name="details_auto_markers_film_description">Приложение может само найти титры и сцены после них: просматривает кадры последних минут, чёрный экран с текстом считает титрами, обычную картинку — сценой. Около 20 секунд. Во время титров плеер предложит перейти к сцене.</string>

@@ -42,6 +42,9 @@ class LibraryScanWorker(
         // instead of the old always-success/generic-message behavior.
         if (result.totalIndexed == 0 && result.sourceErrors.isNotEmpty()) {
             val message = result.sourceErrors.joinToString("; ") { "${it.sourceName}: ${it.message}" }
+            // The message otherwise only exists in a notification and on the progress screen -
+            // nothing to read back from a device over adb when a scan fails.
+            android.util.Log.w("LibraryScanWorker", "scan failed: $message")
             ScanNotifications.notifyResult(
                 applicationContext,
                 applicationContext.getString(R.string.scan_notification_result_failed_title),
@@ -60,10 +63,15 @@ class LibraryScanWorker(
         } else {
             applicationContext.getString(R.string.scan_notification_result_success_text, result.totalIndexed)
         }
+        val removedCount = result.removed.sumOf { it.itemCount }
         ScanNotifications.notifyResult(
             applicationContext,
             applicationContext.getString(R.string.scan_notification_result_success_title),
-            resultText
+            if (removedCount > 0) {
+                resultText + " " + applicationContext.getString(R.string.scan_notification_result_removed, removedCount)
+            } else {
+                resultText
+            }
         )
         // Any completed rescan (not just one started from the banner itself) already picked up
         // whatever was new - the banner shouldn't keep nagging about it.
@@ -91,6 +99,18 @@ class LibraryScanWorker(
                 KEY_NEWLY_ADDED to result.newlyAddedStableIds.take(MAX_REPORTED_NEWLY_ADDED).toTypedArray(),
                 // Полное число новых, а не длина обрезанного выше списка.
                 KEY_NEWLY_ADDED_COUNT to result.newlyAddedStableIds.size,
+                // What the scan removed because its files are gone from the server. Titles, not
+                // ids - the items no longer exist to be looked up. Capped for the same ~10KB
+                // reason as above; the count is of library items, the list is of titles.
+                KEY_REMOVED to result.removed.take(MAX_REPORTED_REMOVED).map { removed ->
+                    if (removed.isSeries) {
+                        applicationContext.getString(R.string.scan_progress_removed_series, removed.title.take(80), removed.itemCount)
+                    } else {
+                        removed.title.take(80)
+                    }
+                }.toTypedArray(),
+                KEY_REMOVED_TITLES_TOTAL to result.removed.size,
+                KEY_REMOVED_COUNT to result.removed.sumOf { it.itemCount },
                 KEY_DURATION_MS to (System.currentTimeMillis() - startedAt)
             )
         )
@@ -100,6 +120,10 @@ class LibraryScanWorker(
         const val KEY_TOTAL_INDEXED = "total_indexed"
         const val KEY_ERROR = "error"
         const val KEY_PARTIAL_ERROR = "partial_error"
+        const val KEY_REMOVED = "removed"
+        const val KEY_REMOVED_TITLES_TOTAL = "removed_titles_total"
+        const val KEY_REMOVED_COUNT = "removed_count"
+        private const val MAX_REPORTED_REMOVED = 40
         const val KEY_NEWLY_ADDED = "newly_added"
         const val KEY_NEWLY_ADDED_COUNT = "newly_added_count"
         const val KEY_DURATION_MS = "duration_ms"

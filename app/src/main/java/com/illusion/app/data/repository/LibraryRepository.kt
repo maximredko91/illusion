@@ -127,6 +127,10 @@ class LibraryRepository(private val dao: MediaItemDao) {
 
     suspend fun upsertAll(items: List<MediaItemEntity>) = dao.upsertAll(items)
 
+    /** Removes items whose files are gone from the server - see [MediaItemDao.deleteVanished]. Returns how many went. */
+    suspend fun deleteVanished(stableIds: List<String>): Int =
+        stableIds.chunked(500).sumOf { dao.deleteVanished(it) }
+
     /** Other items in the same category sharing at least one genre with [item], for the "Похожие" block. */
     suspend fun getSimilar(item: MediaItemEntity, limit: Int = 12): List<MediaItemEntity> {
         if (item.genres.isEmpty()) return emptyList()

@@ -57,21 +57,32 @@ class IntroDetectWorker(
 
     /**
      * The unattended run after a library scan: works through [AutoIntroQueue] one season at a
-     * time. A season that already has markers, or still has a single episode, is just dropped from
-     * the queue (the second episode arriving later queues it again). Always "succeeds" - nothing
-     * is waiting on the outcome, and a failure would cancel runs appended behind this one; stopped
-     * mid-season, it asks to be retried and the season stays queued.
+     * time - the intro if the season has none yet (it needs two episodes; the second one arriving
+     * later queues the season again), then the credits of whichever episodes have no marker.
+     * Always "succeeds" - nothing is waiting on the outcome, and a failure would cancel runs
+     * appended behind this one; stopped mid-season, it asks to be retried and the season stays
+     * queued.
      */
     private suspend fun drainQueue(): Result {
         val queue = AutoIntroQueue(applicationContext)
         val detector = IntroDetector(sourceRepository, smbClient)
+        val pictureDetector = CreditsDetector(sourceRepository, smbClient)
         while (true) {
             if (isStopped) return Result.retry()
             val season = queue.peek() ?: return Result.success()
             val episodes = libraryRepository.getSeasonEpisodes(season.seriesStableId, season.seasonNumber)
                 .filter { it.sizeBytes > 0 }
                 .sortedBy { it.episodeNumber ?: Int.MAX_VALUE }
-            if (episodes.size >= 2 && episodes.none { it.introEndMs != null }) {
+            val marked = episodes.firstOrNull { it.introEndMs != null }
+            if (marked != null) {
+                // The season's intro is known already, but markers are written to the episodes
+                // that existed at the time - the one that just arrived has none. Same range, whole
+                // season again.
+                if (episodes.any { it.introEndMs == null }) {
+                    libraryRepository.markIntroRange(marked, marked.introStartMs ?: 0L, marked.introEndMs ?: 0L)
+                    Log.i(TAG, "auto intro S${season.seasonNumber} of ${season.seriesStableId}: copied to new episodes")
+                }
+            } else if (episodes.size >= 2) {
                 val target = episodes.first()
                 val match = pickReferenceEpisode(target, episodes)?.let { reference ->
                     detector.detect(item = target, reference = reference, isCancelled = { isStopped })
@@ -80,6 +91,9 @@ class IntroDetectWorker(
                 if (match != null) libraryRepository.markIntroRange(target, match.startMs, match.endMs)
                 Log.i(TAG, "auto intro S${season.seasonNumber} of ${season.seriesStableId}: ${match ?: "not found"}")
             }
+            val credits = detectSeasonCredits(detector, pictureDetector, season.seasonNumber, episodes, onlyUnmarked = true)
+                ?: return Result.retry()
+            Log.i(TAG, "auto credits S${season.seasonNumber} of ${season.seriesStableId}: $credits new markers")
             queue.remove(season)
         }
     }
@@ -136,38 +150,63 @@ class IntroDetectWorker(
         var done = 0
         var found = 0
         for ((season, episodes) in bySeason) {
-            val tails = ArrayList<TailFingerprint?>(episodes.size)
-            for (episode in episodes) {
-                if (isStopped) return null
-                tails += detector.tailFingerprintOf(episode) { isStopped }
+            found += detectSeasonCredits(detector, pictureDetector, season, episodes, onlyUnmarked = false) {
                 setProgressBlocking(++done / total.toFloat())
-            }
+            } ?: return null
+        }
+        return found
+    }
+
+    /**
+     * One season of [detectCredits]. With [onlyUnmarked] (the run after a library scan) only the
+     * episodes that have no credits marker yet are searched, and only their tails and their
+     * neighbours' are fingerprinted - a season that gets one new episode a week shouldn't have all
+     * of its episodes pulled off the share again each time. [onEpisodeDone] is called once per
+     * episode of the season either way, for progress. Null if the work was stopped.
+     */
+    private suspend fun detectSeasonCredits(
+        detector: IntroDetector,
+        pictureDetector: CreditsDetector,
+        season: Int,
+        episodes: List<MediaItemEntity>,
+        onlyUnmarked: Boolean,
+        onEpisodeDone: () -> Unit = {}
+    ): Int? {
+        val wanted = episodes.indices.filter { !onlyUnmarked || episodes[it].outroStartMs == null }
+        val needed = wanted.flatMap { listOf(it - 1, it, it + 1) }.toSet()
+        val tails = arrayOfNulls<TailFingerprint>(episodes.size)
+        for (index in episodes.indices) {
             if (isStopped) return null
-            for ((index, episode) in episodes.withIndex()) {
-                if (isStopped) return null
-                val own = tails[index]
-                // Next episode first, previous one as the fallback - the last episode has no next,
-                // and a neighbour whose tail failed to decode shouldn't cost this one its marker.
-                val byAudio = own?.let {
-                    listOfNotNull(tails.getOrNull(index + 1), tails.getOrNull(index - 1)).firstNotNullOfOrNull { other ->
-                        findSharedIntro(
-                            own.fingerprint,
-                            other.fingerprint,
-                            maxDurationMs = IntroDetector.ANALYSIS_WINDOW_MS,
-                            diagnostics = { Log.i(TAG, "credits S${season}E${episode.episodeNumber}: $it") }
-                        )
-                    }?.let { match -> own.startMs + match.startMs }
-                }
-                // No shared closing music (whole seasons of the first real series this ran on use a
-                // different track every episode), or no decodable audio at all: look for the black
-                // roll itself instead. Skipped while something is playing - it needs the decoder.
-                val startMs = byAudio
-                    ?: pictureDetector.detectEpisodeCreditsStart(episode) { isStopped }
-                        ?.also { Log.i(TAG, "credits S${season}E${episode.episodeNumber}: by picture at $it ms") }
-                    ?: continue
-                libraryRepository.markCreditsStartForEpisode(episode, startMs)
-                found++
+            if (index in needed) tails[index] = detector.tailFingerprintOf(episodes[index]) { isStopped }
+            onEpisodeDone()
+        }
+        if (isStopped) return null
+        var found = 0
+        for (index in wanted) {
+            if (isStopped) return null
+            val episode = episodes[index]
+            val own = tails[index]
+            // Next episode first, previous one as the fallback - the last episode has no next,
+            // and a neighbour whose tail failed to decode shouldn't cost this one its marker.
+            val byAudio = own?.let {
+                listOfNotNull(tails.getOrNull(index + 1), tails.getOrNull(index - 1)).firstNotNullOfOrNull { other ->
+                    findSharedIntro(
+                        own.fingerprint,
+                        other.fingerprint,
+                        maxDurationMs = IntroDetector.ANALYSIS_WINDOW_MS,
+                        diagnostics = { Log.i(TAG, "credits S${season}E${episode.episodeNumber}: $it") }
+                    )
+                }?.let { match -> own.startMs + match.startMs }
             }
+            // No shared closing music (whole seasons of the first real series this ran on use a
+            // different track every episode), or no decodable audio at all: look for the black
+            // roll itself instead. Skipped while something is playing - it needs the decoder.
+            val startMs = byAudio
+                ?: pictureDetector.detectEpisodeCreditsStart(episode) { isStopped }
+                    ?.also { Log.i(TAG, "credits S${season}E${episode.episodeNumber}: by picture at $it ms") }
+                ?: continue
+            libraryRepository.markCreditsStartForEpisode(episode, startMs)
+            found++
         }
         return found
     }

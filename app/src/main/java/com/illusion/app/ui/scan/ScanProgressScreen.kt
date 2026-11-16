@@ -304,6 +304,16 @@ fun ScanProgressScreen(
                                     },
                                     modifier = Modifier.padding(top = 4.dp)
                                 )
+                                val removedCount = workInfo?.outputData?.getInt(LibraryScanWorker.KEY_REMOVED_COUNT, 0) ?: 0
+                                if (removedCount > 0) {
+                                    Text(
+                                        stringResource(R.string.scan_progress_summary_removed, removedCount),
+                                        textAlign = TextAlign.Center,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.padding(top = 4.dp)
+                                    )
+                                }
                                 if (durationMs > 0) {
                                     Text(
                                         stringResource(R.string.scan_progress_summary_duration, formatScanDuration(durationMs)),
@@ -331,6 +341,44 @@ fun ScanProgressScreen(
                                     },
                                     modifier = Modifier.padding(top = 6.dp)
                                 )
+                            }
+                            // Что именно убрано: карточки уже удалены, показать их постерами, как
+                            // добавленное ниже, нечем - остаются названия. Без этого списка
+                            // пользователь видел бы только число и не мог проверить, не ушло ли лишнее.
+                            val removedTitles = workInfo?.outputData?.getStringArray(LibraryScanWorker.KEY_REMOVED)?.toList().orEmpty()
+                            if (removedTitles.isNotEmpty()) {
+                                val removedTitlesTotal = workInfo?.outputData?.getInt(LibraryScanWorker.KEY_REMOVED_TITLES_TOTAL, 0) ?: 0
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(top = 12.dp)
+                                        .background(
+                                            MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.7f),
+                                            RoundedCornerShape(16.dp)
+                                        )
+                                        .padding(horizontal = 16.dp, vertical = 12.dp)
+                                ) {
+                                    Text(
+                                        stringResource(R.string.scan_progress_removed_title),
+                                        style = MaterialTheme.typography.titleSmall
+                                    )
+                                    removedTitles.forEach { title ->
+                                        Text(
+                                            title,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            modifier = Modifier.padding(top = 2.dp)
+                                        )
+                                    }
+                                    if (removedTitlesTotal > removedTitles.size) {
+                                        Text(
+                                            stringResource(R.string.scan_progress_removed_more, removedTitlesTotal - removedTitles.size),
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            modifier = Modifier.padding(top = 2.dp)
+                                        )
+                                    }
+                                }
                             }
                             if (newlyAddedItems.isNotEmpty()) {
                                 Text(
