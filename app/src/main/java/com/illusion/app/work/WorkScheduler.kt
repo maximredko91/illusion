@@ -224,6 +224,25 @@ object WorkScheduler {
         )
     }
 
+    /**
+     * The film half of the search that follows a scan: credits and post-credits scenes of the
+     * films in AutoPostCreditsQueue. Appended to the SAME unique work as the intro search on
+     * purpose - both use the hardware video decoder (the intro one for its picture fallback), so
+     * they run one after the other instead of competing for it.
+     */
+    fun enqueueAutoPostCreditsDetect(context: Context) {
+        val request = OneTimeWorkRequestBuilder<PostCreditsDetectWorker>()
+            .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
+            .setBackoffCriteria(androidx.work.BackoffPolicy.LINEAR, 10, java.util.concurrent.TimeUnit.SECONDS)
+            .setInputData(workDataOf(PostCreditsDetectWorker.KEY_AUTO_QUEUE to true))
+            .build()
+        WorkManager.getInstance(context).enqueueUniqueWork(
+            "auto_intro_detect",
+            ExistingWorkPolicy.APPEND_OR_REPLACE,
+            request
+        )
+    }
+
     fun seriesMarkerDetectWorkInfo(context: Context, seriesStableId: String, credits: Boolean): Flow<androidx.work.WorkInfo?> =
         WorkManager.getInstance(context).getWorkInfosForUniqueWorkFlow(seriesMarkerWorkName(seriesStableId, credits))
             .map { infos -> infos.firstOrNull { !it.state.isFinished } ?: infos.lastOrNull() }

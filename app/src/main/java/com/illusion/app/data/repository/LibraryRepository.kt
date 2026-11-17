@@ -217,6 +217,10 @@ class LibraryRepository(private val dao: MediaItemDao) {
     suspend fun getSeasonsOf(stableIds: List<String>): List<com.illusion.app.data.intro.SeasonKey> =
         stableIds.chunked(500).flatMap { dao.getSeasonsOf(it) }.distinct()
 
+    /** See [MediaItemDao.getFilmsWithoutCredits]. */
+    suspend fun getFilmsWithoutCredits(stableIds: List<String>): List<String> =
+        stableIds.chunked(500).flatMap { dao.getFilmsWithoutCredits(it) }
+
     /** Every episode of a series, once - see [MediaItemDao.getSeriesEpisodes]. */
     suspend fun getSeriesEpisodes(seriesStableId: String): List<MediaItemEntity> =
         dao.getSeriesEpisodes(seriesStableId)

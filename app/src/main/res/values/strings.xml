@@ -577,8 +577,11 @@
     <string name="player_cast_forward">Вперёд на 10 секунд</string>
     <string name="player_cast_volume">Громкость телевизора</string>
     <string name="player_settings_section_post_credits">Сцены после титров</string>
-    <string name="settings_auto_intro_after_scan">Искать заставки и титры после сканирования</string>
-    <string name="settings_auto_intro_after_scan_description">В сезонах, где появились новые серии, приложение само ищет заставку (около 20 секунд на сезон) и титры новых серий (около 10 секунд на серию). Работает в фоне и читает файлы с сервера; после первого сканирования большой библиотеки может идти долго.</string>
+    <string name="settings_auto_intro_after_scan">Искать метки после сканирования</string>
+    <string name="settings_auto_intro_after_scan_description">Приложение само ищет заставку в сезонах с новыми сериями (около 20 секунд на сезон), титры новых серий (около 10 секунд на серию), а у новых фильмов — титры и сцены после них (около 20 секунд на фильм, не во время просмотра). Работает в фоне и читает файлы с сервера; после первого сканирования большой библиотеки может идти долго.</string>
+    <string name="settings_last_removed_title">Убрано при последнем сканировании</string>
+    <string name="settings_last_removed_description">%1$s из библиотеки убрано элементов: %2$d. Этих файлов уже не было на сервере.</string>
+    <string name="settings_last_removed_action">Показать список</string>
     <string name="details_auto_markers_title">Автоматические метки</string>
     <string name="details_auto_markers_series_description">Приложение может само найти заставку и титры по звуку, сравнивая серии между собой, — тогда в плеере появятся кнопки «Пропустить заставку» и «Следующая серия». Меньше минуты на сезон для заставки, около 10 секунд на серию для титров.</string>
     <string name="details_auto_markers_film_description">Приложение может само найти титры и сцены после них: просматривает кадры последних минут, чёрный экран с текстом считает титрами, обычную картинку — сценой. Около 20 секунд. Во время титров плеер предложит перейти к сцене.</string>

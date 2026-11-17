@@ -26,6 +26,9 @@ import com.illusion.app.data.smb.SmbClient
  *
  * The outcome is also reported with a toast, for when the user has left the screen by the time
  * the scan finishes.
+ *
+ * Second mode ([KEY_AUTO_QUEUE]): after a library scan, the films that scan added are searched
+ * unattended, one after another, from AutoPostCreditsQueue - see [drainQueue].
  */
 class PostCreditsDetectWorker(
     context: Context,
@@ -36,6 +39,7 @@ class PostCreditsDetectWorker(
 ) : CoroutineWorker(context, params) {
 
     override suspend fun doWork(): Result {
+        if (inputData.getBoolean(KEY_AUTO_QUEUE, false)) return drainQueue()
         val stableId = inputData.getString(KEY_STABLE_ID) ?: return Result.failure()
         val item = libraryRepository.getById(stableId) ?: return Result.failure()
         if (PlaybackActivity.isActive) return retryLater()
@@ -79,6 +83,46 @@ class PostCreditsDetectWorker(
         }
     }
 
+    /**
+     * The unattended run after a scan. Silent - nobody asked for it, so no toasts; the result
+     * shows up in the film's card. A film leaves the queue only once it has been dealt with, so
+     * being stopped (WorkManager's 10-minute limit included) or losing the decoder to playback
+     * just means "retry and carry on from the same film". Never fails: a failure would cancel
+     * the work appended behind this one.
+     */
+    private suspend fun drainQueue(): Result {
+        val queue = com.illusion.app.data.credits.AutoPostCreditsQueue(applicationContext)
+        val detector = CreditsDetector(sourceRepository, smbClient)
+        while (true) {
+            if (isStopped || PlaybackActivity.isActive) return Result.retry()
+            val stableId = queue.peek() ?: return Result.success()
+            // Away from home the server can't be reached, and "couldn't open the file" would be
+            // taken for "no credits" - the film would leave the queue unsearched.
+            if (!com.illusion.app.ui.common.isOnLocalNetwork(applicationContext)) return Result.retry()
+            val item = libraryRepository.getById(stableId)
+            if (item != null && item.seriesStableId == null && item.outroStartMs == null) {
+                val outcome = try {
+                    detector.detect(item = item, isCancelled = { isStopped })
+                } catch (e: kotlinx.coroutines.CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    android.util.Log.w(TAG, "auto credits ${item.title}: failed", e)
+                    CreditsScanOutcome.NotFound
+                }
+                when (outcome) {
+                    CreditsScanOutcome.Interrupted -> return Result.retry()
+                    CreditsScanOutcome.NotFound -> android.util.Log.i(TAG, "auto credits ${item.title}: not found")
+                    is CreditsScanOutcome.Found -> {
+                        libraryRepository.markCreditsStartForEpisode(item, outcome.layout.creditsStartMs)
+                        if (outcome.layout.scenes.isNotEmpty()) libraryRepository.setPostCreditsScenes(item, outcome.layout.scenes)
+                        android.util.Log.i(TAG, "auto credits ${item.title}: credits at ${formatPosition(outcome.layout.creditsStartMs)}, scenes ${outcome.layout.scenes.size}")
+                    }
+                }
+            }
+            queue.remove(stableId)
+        }
+    }
+
     /** Give up eventually rather than retry forever against a player that never closes. */
     private fun retryLater(): Result = if (runAttemptCount < MAX_ATTEMPTS) Result.retry() else Result.failure()
 
@@ -99,6 +143,8 @@ class PostCreditsDetectWorker(
     companion object {
         const val KEY_STABLE_ID = "stable_id"
         const val KEY_PROGRESS = "progress"
+        const val KEY_AUTO_QUEUE = "auto_queue"
+        private const val TAG = "PostCreditsDetectWorker"
         private const val MAX_ATTEMPTS = 60
     }
 }

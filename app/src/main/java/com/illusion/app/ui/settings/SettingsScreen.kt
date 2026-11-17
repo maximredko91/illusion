@@ -708,6 +708,7 @@ fun SettingsScreen(
                                     onCheckedChange = onAutoIntroAfterScanChange
                                 )
                             }
+                            LastScanRemovalsCard(refreshKey = isScanRunning)
                         }
                     }
 

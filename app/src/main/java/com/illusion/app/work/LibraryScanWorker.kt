@@ -64,6 +64,19 @@ class LibraryScanWorker(
             applicationContext.getString(R.string.scan_notification_result_success_text, result.totalIndexed)
         }
         val removedCount = result.removed.sumOf { it.itemCount }
+        val removedLines = result.removed.map { removed ->
+            if (removed.isSeries) {
+                applicationContext.getString(R.string.scan_progress_removed_series, removed.title.take(80), removed.itemCount)
+            } else {
+                removed.title.take(80)
+            }
+        }
+        // The result screen and the notification show this once; kept so it can be read later
+        // from Settings (the output below is capped, this isn't).
+        if (removedLines.isNotEmpty()) {
+            com.illusion.app.data.scan.RemovedReportStore(applicationContext)
+                .save(com.illusion.app.data.scan.RemovedReport(System.currentTimeMillis(), removedCount, removedLines))
+        }
         ScanNotifications.notifyResult(
             applicationContext,
             applicationContext.getString(R.string.scan_notification_result_success_title),
@@ -87,6 +100,13 @@ class LibraryScanWorker(
                 com.illusion.app.data.intro.AutoIntroQueue(applicationContext).add(seasons)
                 WorkScheduler.enqueueAutoIntroDetect(applicationContext)
             }
+            // New films get their credits and post-credits scenes searched the same way.
+            val films = app.libraryRepository.getFilmsWithoutCredits(result.newlyAddedStableIds.toList())
+            android.util.Log.i("LibraryScanWorker", "auto credits: ${films.size} new films")
+            if (films.isNotEmpty()) {
+                com.illusion.app.data.credits.AutoPostCreditsQueue(applicationContext).add(films)
+                WorkScheduler.enqueueAutoPostCreditsDetect(applicationContext)
+            }
         }
         return Result.success(
             workDataOf(
@@ -102,15 +122,9 @@ class LibraryScanWorker(
                 // What the scan removed because its files are gone from the server. Titles, not
                 // ids - the items no longer exist to be looked up. Capped for the same ~10KB
                 // reason as above; the count is of library items, the list is of titles.
-                KEY_REMOVED to result.removed.take(MAX_REPORTED_REMOVED).map { removed ->
-                    if (removed.isSeries) {
-                        applicationContext.getString(R.string.scan_progress_removed_series, removed.title.take(80), removed.itemCount)
-                    } else {
-                        removed.title.take(80)
-                    }
-                }.toTypedArray(),
+                KEY_REMOVED to removedLines.take(MAX_REPORTED_REMOVED).toTypedArray(),
                 KEY_REMOVED_TITLES_TOTAL to result.removed.size,
-                KEY_REMOVED_COUNT to result.removed.sumOf { it.itemCount },
+                KEY_REMOVED_COUNT to removedCount,
                 KEY_DURATION_MS to (System.currentTimeMillis() - startedAt)
             )
         )

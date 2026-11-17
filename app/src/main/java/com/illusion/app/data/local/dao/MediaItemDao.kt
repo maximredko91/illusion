@@ -168,6 +168,10 @@ interface MediaItemDao {
     @Query("SELECT DISTINCT seriesStableId, seasonNumber FROM media_items WHERE stableId IN (:stableIds) AND seriesStableId IS NOT NULL AND seasonNumber IS NOT NULL")
     suspend fun getSeasonsOf(stableIds: List<String>): List<com.illusion.app.data.intro.SeasonKey>
 
+    /** Which of the given items are films nobody has searched for credits yet - for the search that follows a scan. Same per-call id limit as [getSeasonsOf]. */
+    @Query("SELECT stableId FROM media_items WHERE stableId IN (:stableIds) AND seriesStableId IS NULL AND outroStartMs IS NULL AND postCreditsScenesMs IS NULL AND postCreditsStartMs IS NULL")
+    suspend fun getFilmsWithoutCredits(stableIds: List<String>): List<String>
+
     /** Every episode of a series, once - for the whole-series intro search. */
     @Query("SELECT * FROM media_items WHERE seriesStableId = :seriesStableId AND sourceId IN (SELECT id FROM smb_sources WHERE enabled = 1) ORDER BY seasonNumber, episodeNumber")
     suspend fun getSeriesEpisodes(seriesStableId: String): List<MediaItemEntity>
