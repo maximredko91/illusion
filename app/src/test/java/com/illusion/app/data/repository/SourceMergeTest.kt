@@ -119,4 +119,26 @@ class SourceMergeTest {
         assertEquals(1, plan.progressToTransfer)
         assertEquals(0, plan.favoritesToTransfer)
     }
+
+    @Test
+    fun markersMoveOverOnlyWhereTheTwinHasNone() {
+        val from = listOf(
+            item("old-1", 2L, "\\Show\\E1.mkv").copy(introStartMs = 10L, introEndMs = 70L, outroStartMs = 900L),
+            item("old-2", 2L, "\\Movies\\Film.mkv").copy(postCreditsStartMs = 500L, postCreditsScenesMs = "500-600"),
+            item("old-3", 2L, "\\Movies\\Plain.mkv")
+        )
+        val into = listOf(
+            // Своя заставка уже есть - чужая её не трогает, титры добираются.
+            item("new-1", 1L, "\\Show\\E1.mkv").copy(introStartMs = 0L, introEndMs = 60L),
+            item("new-2", 1L, "\\Movies\\Film.mkv"),
+            item("new-3", 1L, "\\Movies\\Plain.mkv")
+        )
+        val transfers = markerTransfers(from, into).associateBy { it.stableId }
+        assertEquals(setOf("new-1", "new-2"), transfers.keys)
+        assertEquals(0L, transfers.getValue("new-1").introStartMs)
+        assertEquals(60L, transfers.getValue("new-1").introEndMs)
+        assertEquals(900L, transfers.getValue("new-1").outroStartMs)
+        assertEquals(500L, transfers.getValue("new-2").postCreditsStartMs)
+        assertEquals("500-600", transfers.getValue("new-2").postCreditsScenesMs)
+    }
 }

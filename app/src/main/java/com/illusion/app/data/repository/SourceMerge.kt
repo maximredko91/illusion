@@ -62,6 +62,33 @@ fun favoriteTransfers(
     else FavoriteEntity(intoId, source.addedAt)
 }
 
+/**
+ * Метки заставки, титров и сцен после титров, которые надо записать оставляемым элементам:
+ * возвращает двойников уже с метками, готовых к upsert. Своя метка двойника всегда главнее -
+ * переносится только то, чего у него нет. Заставка идёт парой (начало и конец), сцены - обеими
+ * колонками сразу: половина чужой метки рядом с половиной своей дала бы диапазон, которого никто
+ * не ставил.
+ */
+fun markerTransfers(from: List<MediaItemEntity>, into: List<MediaItemEntity>): List<MediaItemEntity> {
+    val fromById = from.associateBy { it.stableId }
+    val intoById = into.associateBy { it.stableId }
+    return pairItemsByFile(from, into).mapNotNull { (fromId, intoId) ->
+        val source = fromById[fromId] ?: return@mapNotNull null
+        val target = intoById[intoId] ?: return@mapNotNull null
+        val takeIntro = target.introEndMs == null && source.introEndMs != null
+        val takeScenes = target.postCreditsStartMs == null && target.postCreditsScenesMs == null &&
+            (source.postCreditsStartMs != null || source.postCreditsScenesMs != null)
+        val merged = target.copy(
+            introStartMs = if (takeIntro) source.introStartMs else target.introStartMs,
+            introEndMs = if (takeIntro) source.introEndMs else target.introEndMs,
+            outroStartMs = target.outroStartMs ?: source.outroStartMs,
+            postCreditsStartMs = if (takeScenes) source.postCreditsStartMs else target.postCreditsStartMs,
+            postCreditsScenesMs = if (takeScenes) source.postCreditsScenesMs else target.postCreditsScenesMs
+        )
+        merged.takeIf { it != target }
+    }
+}
+
 /** Сводка для диалога подтверждения - то же сопоставление, но без единой записи в базу. */
 fun buildMergePlan(
     from: List<MediaItemEntity>,

@@ -121,10 +121,12 @@ class SettingsViewModel(
      */
     fun applyMerge(state: SourceMergeState) {
         viewModelScope.launch {
-            val pairs = pairItemsByFile(
-                from = libraryRepository.getBySource(state.from.id),
-                into = libraryRepository.getBySource(state.into.id)
-            )
+            val fromItems = libraryRepository.getBySource(state.from.id)
+            val intoItems = libraryRepository.getBySource(state.into.id)
+            val pairs = pairItemsByFile(from = fromItems, into = intoItems)
+            // Метки заставок и титров живут в самих элементах, поэтому без этого они пропадали
+            // вместе с удаляемым источником.
+            libraryRepository.upsertAll(com.illusion.app.data.repository.markerTransfers(fromItems, intoItems))
             val progress = watchProgressRepository.getAllProgress().associateBy { it.mediaItemStableId }
             val favorites = watchProgressRepository.getAllFavorites().associateBy { it.mediaItemStableId }
             watchProgressRepository.restoreProgress(progressTransfers(pairs, progress))
