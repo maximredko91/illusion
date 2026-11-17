@@ -53,12 +53,18 @@ class IntroDetector(
     private suspend fun fingerprintOf(item: MediaItemEntity, isCancelled: () -> Boolean): Fingerprint? {
         if (item.sizeBytes <= 0) return null
         val info = sourceRepository.connectionInfoById(item.sourceId) ?: return null
-        return smbClient.connect(info).use { connection ->
-            val randomAccessFile = connection.openRandomAccessFile(item.filePath)
-            val samples = decodeMonoPcm(SmbMediaDataSource(randomAccessFile, item.sizeBytes), ANALYSIS_WINDOW_MS, isCancelled)
-                ?: return@use null
-            fingerprint(samples).takeIf { it.size > 0 }
-        }
+        // A server that doesn't answer or a file that's gone since the scan is "no fingerprint",
+        // not an exception out of the worker: thrown from the unattended run, it failed the work,
+        // which cancelled the film search appended behind it and left the season at the head of
+        // the queue to do the same next time.
+        return runCatching {
+            smbClient.connect(info).use { connection ->
+                val randomAccessFile = connection.openRandomAccessFile(item.filePath)
+                val samples = decodeMonoPcm(SmbMediaDataSource(randomAccessFile, item.sizeBytes), ANALYSIS_WINDOW_MS, isCancelled)
+                    ?: return@use null
+                fingerprint(samples).takeIf { it.size > 0 }
+            }
+        }.onFailure { Log.w(TAG, "fingerprint failed for ${item.filePath}", it) }.getOrNull()
     }
 
     /**

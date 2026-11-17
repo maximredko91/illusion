@@ -108,7 +108,10 @@ class LibraryScanWorker(
                 WorkScheduler.enqueueAutoPostCreditsDetect(applicationContext)
             }
         }
-        return Result.success(
+        // Both lists are capped, but a scan that added a hundred items AND removed dozens of
+        // long-titled ones can still exceed Data's 10 KB - and that throws, failing a scan that
+        // has in fact finished. The counts alone always fit.
+        val output = runCatching {
             workDataOf(
                 KEY_TOTAL_INDEXED to result.totalIndexed,
                 KEY_PARTIAL_ERROR to partialErrorMessage,
@@ -127,7 +130,16 @@ class LibraryScanWorker(
                 KEY_REMOVED_COUNT to removedCount,
                 KEY_DURATION_MS to (System.currentTimeMillis() - startedAt)
             )
-        )
+        }.getOrElse {
+            workDataOf(
+                KEY_TOTAL_INDEXED to result.totalIndexed,
+                KEY_NEWLY_ADDED_COUNT to result.newlyAddedStableIds.size,
+                KEY_REMOVED_TITLES_TOTAL to result.removed.size,
+                KEY_REMOVED_COUNT to removedCount,
+                KEY_DURATION_MS to (System.currentTimeMillis() - startedAt)
+            )
+        }
+        return Result.success(output)
     }
 
     companion object {

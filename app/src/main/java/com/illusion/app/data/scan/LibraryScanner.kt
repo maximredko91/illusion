@@ -161,7 +161,12 @@ class LibraryScanner(
             // What's already indexed for this source, keyed by path - the fast path in toMediaItem
             // compares against this to skip re-hashing/re-parsing a file that hasn't changed since
             // the last scan (see toMediaItem's unchanged check).
-            val existingByPath = libraryRepository.getBySource(source.id).associateBy { it.filePath }
+            val existing = libraryRepository.getBySource(source.id)
+            val existingByPath = existing.associateBy { it.filePath }
+            // And keyed by content: a file that was moved or renamed, or re-read because its .nfo
+            // changed or the rescan is a full one, comes out of toMediaItem as a freshly built row
+            // with the SAME stableId - see the carry-over below.
+            val existingById = existing.associateBy { it.stableId }
 
             val indexed = AtomicInteger(0)
             // Kodi's per-episode .nfo (episodedetails) rarely carries genre/year - those live only
@@ -175,11 +180,24 @@ class LibraryScanner(
             val items = coroutineScope {
                 videoFiles.map { file ->
                     async {
-                        val isNew = file.path !in existingByPath
-                        val item = withConnection(pool) { connection ->
+                        val built = withConnection(pool) { connection ->
                             toMediaItem(source, connection, file, subtitleFiles, imageFiles, trailerFiles, filesByPath, existingByPath, showNfoCache, force)
                         }
-                        if (isNew) newlyAddedStableIds += item.stableId
+                        // What the app itself wrote to the row - intro/credits/scene markers, the
+                        // date it first appeared - isn't in the file or its .nfo, so a rebuilt row
+                        // has none of it. Without this a full rescan wiped every marker in the
+                        // library, and an edited .nfo or a moved file wiped that title's.
+                        val before = existingById[built.stableId]
+                        val item = if (before == null) built else built.copy(
+                            dateAdded = before.dateAdded,
+                            introStartMs = built.introStartMs ?: before.introStartMs,
+                            introEndMs = built.introEndMs ?: before.introEndMs,
+                            outroStartMs = built.outroStartMs ?: before.outroStartMs,
+                            postCreditsStartMs = built.postCreditsStartMs ?: before.postCreditsStartMs,
+                            postCreditsScenesMs = built.postCreditsScenesMs ?: before.postCreditsScenesMs
+                        )
+                        // A moved file is at a new path but isn't a new title.
+                        if (before == null && file.path !in existingByPath) newlyAddedStableIds += item.stableId
                         // Upserted per-file as each one finishes, not batched into one call after
                         // every file in the source has processed - confirmed on-device that losing
                         // Wi-Fi partway through a large share (10000+ files) threw the whole scan
@@ -203,10 +221,15 @@ class LibraryScanner(
                     }
                 }.awaitAll()
             }
-            val seenPaths = videoFiles.mapTo(HashSet()) { it.path }
+            // By stableId, not by path: a moved or renamed file keeps its id and only changes path,
+            // and judged by path its row - just rewritten above with the new path - was deleted
+            // here together with its watch progress and favourite, to reappear bare on the next
+            // scan. The other way round, a file replaced by a different one at the same path left
+            // its old row behind for good.
+            val seenIds = items.mapTo(HashSet()) { it.stableId }
             // A downloaded title whose original is gone is DownloadRepository's business, not this.
-            val vanished = existingByPath.values.filter { it.filePath !in seenPaths && !it.isOrphanedDownload }
-            val pruned = pruneVanished(source, vanished, indexedBefore = existingByPath.size, seenNow = videoFiles.size, force = force)
+            val vanished = existing.filter { it.stableId !in seenIds && !it.isOrphanedDownload }
+            val pruned = pruneVanished(source, vanished, indexedBefore = existing.size, seenNow = videoFiles.size, force = force)
             SourceScanOutcome(items.size, newlyAddedStableIds.toList(), pruned.warning, pruned.removed)
         }
     }

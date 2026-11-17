@@ -70,6 +70,9 @@ class IntroDetectWorker(
         while (true) {
             if (isStopped) return Result.retry()
             val season = queue.peek() ?: return Result.success()
+            // Away from home nothing can be read, and that would pass for "no intro, no credits" -
+            // the season would leave the queue unsearched. Same check as the film half.
+            if (!com.illusion.app.ui.common.isOnLocalNetwork(applicationContext)) return Result.retry()
             val episodes = libraryRepository.getSeasonEpisodes(season.seriesStableId, season.seasonNumber)
                 .filter { it.sizeBytes > 0 }
                 .sortedBy { it.episodeNumber ?: Int.MAX_VALUE }
