@@ -94,6 +94,12 @@ fun findCreditsLayout(samples: List<FrameSample>, durationMs: Long): CreditsLayo
     }
     val scenes = runsOf(credit, value = false)
         .filter { (from, _) -> from > creditsStart }
+        // A scene has to be mostly picture as SAMPLED, before the smoothing above. Two bright
+        // frames 20 seconds apart inside the roll (logos, a song-credits card) turn the black
+        // between them into a "short credit run", which the first pass erases - and the three
+        // together then read as a 25-second scene. Seen on Eternals: a marker in the middle of
+        // the roll, five minutes after the real mid-credits scene.
+        .filter { (from, to) -> (from until to).count { !samples[it].creditLike } * 2 > to - from }
         .map { (from, to) ->
             PostCreditsScene(
                 startMs = samples[from].timeMs,

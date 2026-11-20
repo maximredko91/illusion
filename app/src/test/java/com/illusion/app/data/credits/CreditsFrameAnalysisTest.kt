@@ -42,6 +42,16 @@ class CreditsFrameAnalysisTest {
     }
 
     @Test
+    fun twoBrightFramesInsideTheRollAreNotAScene() {
+        // The tail of Eternals as sampled on the device: two lone bright frames 20 s apart in the
+        // roll used to come out as a 25-second "scene"; the real one after the roll stays.
+        val layout = layout(".".repeat(10) + "C".repeat(53) + ".CCC." + "C".repeat(23) + ".....C..C..C.." + "C".repeat(7))
+        assertNotNull(layout)
+        assertEquals(10 * STEP, layout!!.creditsStartMs)
+        assertEquals(listOf(PostCreditsScene(91 * STEP, 105 * STEP)), layout.scenes)
+    }
+
+    @Test
     fun logoInsideTheCreditsIsNotAScene() {
         // two bright samples (10 s) in the middle of the roll - shorter than a scene
         val layout = layout(".".repeat(6) + "C".repeat(20) + ".." + "C".repeat(20))

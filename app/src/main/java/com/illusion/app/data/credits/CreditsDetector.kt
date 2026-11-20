@@ -130,7 +130,8 @@ class CreditsDetector(
         // A scene's sound often starts before its picture: the music fades and a voice-over begins
         // over the still-black screen. On the first film this was tried on, that was 15 seconds of
         // narration before the first frame - invisible to a search that only looks at pictures. So
-        // every scene start is moved back by a fixed lead-in: a few seconds of credits music is a
+        // every scene start is moved back by a fixed lead-in (20 s at first; cut to 5 after Eternals,
+        // where the picture start was exact and the user got 20 s of roll): a little credits music is a
         // cheap price for never cutting into the scene itself. Never back past the credits start or
         // the previous scene's end.
         var earliestMs = creditsStartMs
@@ -214,7 +215,7 @@ class CreditsDetector(
         const val REFINE_STEPS = 3
 
         /** How far before a scene's first picture frame its marker is placed - see [scan]. */
-        const val SCENE_LEAD_IN_MS = 20_000L
+        const val SCENE_LEAD_IN_MS = 5_000L
 
         const val FRAME_WIDTH = 160
         const val FRAME_HEIGHT = 90
