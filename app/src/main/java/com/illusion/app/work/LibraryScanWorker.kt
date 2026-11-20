@@ -89,23 +89,24 @@ class LibraryScanWorker(
         // Any completed rescan (not just one started from the banner itself) already picked up
         // whatever was new - the banner shouldn't keep nagging about it.
         NewContentNotifier.clear()
-        // Seasons that just got new episodes are searched for an intro unattended - the scan is
-        // the one moment the app knows something new arrived. Films drop out in getSeasonsOf.
+        // What just arrived is put down as waiting for a marker search - the scan is the one
+        // moment the app knows something new came in. Nothing is started here: the result screen
+        // (and Settings, for whoever wasn't looking) asks first, see PendingMarkerSearchCard - a
+        // first scan of a big library means hours of reading the server in the background, which
+        // is the user's call. Declined, the lists just stay. Films drop out in getSeasonsOf.
         android.util.Log.i("LibraryScanWorker", "scan done: ${result.totalIndexed} indexed, ${result.newlyAddedStableIds.size} new")
-        if (result.newlyAddedStableIds.isNotEmpty() && settingsRepository.autoIntroAfterScan.first()) {
+        if (result.newlyAddedStableIds.isNotEmpty()) {
             val app = applicationContext as com.illusion.app.IllusionApplication
             val seasons = app.libraryRepository.getSeasonsOf(result.newlyAddedStableIds.toList())
             android.util.Log.i("LibraryScanWorker", "auto intro: ${result.newlyAddedStableIds.size} new items in ${seasons.size} seasons")
             if (seasons.isNotEmpty()) {
                 com.illusion.app.data.intro.AutoIntroQueue(applicationContext).add(seasons)
-                WorkScheduler.enqueueAutoIntroDetect(applicationContext)
             }
-            // New films get their credits and post-credits scenes searched the same way.
+            // New films wait for their credits and post-credits scenes the same way.
             val films = app.libraryRepository.getFilmsWithoutCredits(result.newlyAddedStableIds.toList())
             android.util.Log.i("LibraryScanWorker", "auto credits: ${films.size} new films")
             if (films.isNotEmpty()) {
                 com.illusion.app.data.credits.AutoPostCreditsQueue(applicationContext).add(films)
-                WorkScheduler.enqueueAutoPostCreditsDetect(applicationContext)
             }
         }
         // Both lists are capped, but a scan that added a hundred items AND removed dozens of

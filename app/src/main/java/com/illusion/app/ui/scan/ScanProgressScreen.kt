@@ -380,6 +380,13 @@ fun ScanProgressScreen(
                                     }
                                 }
                             }
+                            // The scan only notes what's new as waiting for a marker search;
+                            // whether to spend the background time on it is asked here.
+                            com.illusion.app.ui.common.PendingMarkerSearchCard(
+                                refreshKey = workInfo?.id,
+                                modifier = Modifier.padding(top = 12.dp),
+                                dismissible = true
+                            )
                             if (newlyAddedItems.isNotEmpty()) {
                                 Text(
                                     stringResource(R.string.scan_progress_newly_added_title),

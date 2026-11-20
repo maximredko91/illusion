@@ -154,7 +154,6 @@ class SettingsViewModel(
     val glassEffectEnabled: Flow<Boolean> = settingsRepository.glassEffectEnabled
     val posterAccentEnabled: Flow<Boolean> = settingsRepository.posterAccentEnabled
     val parallaxEnabled: Flow<Boolean> = settingsRepository.parallaxEnabled
-    val autoIntroAfterScan: Flow<Boolean> = settingsRepository.autoIntroAfterScan
     val accentColor: Flow<com.illusion.app.domain.model.AccentColor> = settingsRepository.accentColor
     val themeMode: Flow<com.illusion.app.domain.model.ThemeMode> = settingsRepository.themeMode
     val playerMode: Flow<PlayerMode> = settingsRepository.playerMode
@@ -207,10 +206,6 @@ class SettingsViewModel(
 
     fun setParallaxEnabled(enabled: Boolean) {
         viewModelScope.launch { settingsRepository.setParallaxEnabled(enabled) }
-    }
-
-    fun setAutoIntroAfterScan(enabled: Boolean) {
-        viewModelScope.launch { settingsRepository.setAutoIntroAfterScan(enabled) }
     }
 
     fun setGlassEffectEnabled(enabled: Boolean) {

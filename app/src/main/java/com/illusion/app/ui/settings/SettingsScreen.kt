@@ -278,8 +278,6 @@ fun SettingsScreen(
     onPosterAccentEnabledChange: (Boolean) -> Unit,
     parallaxEnabled: Flow<Boolean>,
     onParallaxEnabledChange: (Boolean) -> Unit,
-    autoIntroAfterScan: Flow<Boolean>,
-    onAutoIntroAfterScanChange: (Boolean) -> Unit,
     onGlassEffectEnabledChange: (Boolean) -> Unit,
     accentColor: Flow<com.illusion.app.domain.model.AccentColor>,
     onAccentColorChange: (com.illusion.app.domain.model.AccentColor) -> Unit,
@@ -341,7 +339,6 @@ fun SettingsScreen(
     val glassEffectOn by glassEffectEnabled.collectAsState(initial = false)
     val posterAccentOn by posterAccentEnabled.collectAsState(initial = true)
     val parallaxOn by parallaxEnabled.collectAsState(initial = true)
-    val autoIntroOn by autoIntroAfterScan.collectAsState(initial = true)
     val currentAccentColor by accentColor.collectAsState(initial = com.illusion.app.domain.model.AccentColor.ILLUSION)
     val currentThemeMode by themeMode.collectAsState(initial = com.illusion.app.domain.model.ThemeMode.SYSTEM)
     // Same effective-dark logic as IllusionTheme itself - the accent swatches need to preview
@@ -700,14 +697,11 @@ fun SettingsScreen(
                                         Text(stringResource(R.string.settings_rescan_force_now_action))
                                     }
                                 }
-                                SettingsDivider()
-                                VisualEffectToggle(
-                                    title = stringResource(R.string.settings_auto_intro_after_scan),
-                                    description = stringResource(R.string.settings_auto_intro_after_scan_description),
-                                    checked = autoIntroOn,
-                                    onCheckedChange = onAutoIntroAfterScanChange
-                                )
                             }
+                            com.illusion.app.ui.common.PendingMarkerSearchCard(
+                                refreshKey = isScanRunning,
+                                modifier = Modifier.padding(top = 12.dp)
+                            )
                             LastScanRemovalsCard(refreshKey = isScanRunning)
                         }
                     }

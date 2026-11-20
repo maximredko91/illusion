@@ -577,8 +577,12 @@
     <string name="player_cast_forward">Вперёд на 10 секунд</string>
     <string name="player_cast_volume">Громкость телевизора</string>
     <string name="player_settings_section_post_credits">Сцены после титров</string>
-    <string name="settings_auto_intro_after_scan">Искать метки после сканирования</string>
-    <string name="settings_auto_intro_after_scan_description">Приложение само ищет заставку в сезонах с новыми сериями (около 20 секунд на сезон), титры новых серий (около 10 секунд на серию), а у новых фильмов — титры и сцены после них (около 20 секунд на фильм, не во время просмотра). Работает в фоне и читает файлы с сервера; после первого сканирования большой библиотеки может идти долго.</string>
+    <string name="markers_pending_title">Поиск меток</string>
+    <string name="markers_pending_text">Без меток: сезонов — %1$d, фильмов — %2$d. Приложение может само найти заставки, титры и сцены после титров: около 20–30 секунд на сезон и на фильм. Работает в фоне, читает файлы с сервера и ждёт, пока вы что-то смотрите; для большой библиотеки это часы.</string>
+    <string name="markers_pending_running">Идёт поиск меток в фоне. Осталось: сезонов — %1$d, фильмов — %2$d. Найденное появляется в карточках, в блоке «Автоматические метки».</string>
+    <string name="markers_pending_start">Искать в фоне</string>
+    <string name="markers_pending_later">Не сейчас</string>
+    <string name="markers_pending_later_hint">Вернуться к этому можно в Настройках, рядом с пересканированием.</string>
     <string name="settings_last_removed_title">Убрано при последнем сканировании</string>
     <string name="settings_last_removed_description">%1$s из библиотеки убрано элементов: %2$d. Этих файлов уже не было на сервере.</string>
     <string name="settings_last_removed_action">Показать список</string>

@@ -230,6 +230,16 @@ object WorkScheduler {
      * purpose - both use the hardware video decoder (the intro one for its picture fallback), so
      * they run one after the other instead of competing for it.
      */
+    /** Starts the search over everything waiting in the two queues - seasons first, then films. */
+    fun enqueuePendingMarkerSearch(context: Context) {
+        enqueueAutoIntroDetect(context)
+        enqueueAutoPostCreditsDetect(context)
+    }
+
+    /** The queued search's work, for showing that it's running - see PendingMarkerSearchCard. */
+    fun pendingMarkerSearchWorkInfo(context: Context) =
+        WorkManager.getInstance(context).getWorkInfosForUniqueWorkFlow("auto_intro_detect")
+
     fun enqueueAutoPostCreditsDetect(context: Context) {
         val request = OneTimeWorkRequestBuilder<PostCreditsDetectWorker>()
             .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())

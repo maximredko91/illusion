@@ -7,7 +7,7 @@ import java.io.File
 data class SeasonKey(val seriesStableId: String, val seasonNumber: Int)
 
 /**
- * Seasons waiting for the automatic intro search that follows a library scan (see
+ * Seasons waiting for the intro/credits search a library scan offers (see
  * LibraryScanWorker and IntroDetectWorker.drainQueue).
  *
  * A plain file rather than WorkManager input data or a Room table: a first-ever scan can add
@@ -22,6 +22,9 @@ class AutoIntroQueue(context: Context) {
         if (seasons.isEmpty()) return
         synchronized(LOCK) { write(LinkedHashSet(read()).apply { addAll(seasons) }) }
     }
+
+    /** How many seasons are waiting - for the "search markers?" offer. */
+    fun count(): Int = synchronized(LOCK) { read().size }
 
     fun peek(): SeasonKey? = synchronized(LOCK) { read().firstOrNull() }
 

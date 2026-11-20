@@ -18,6 +18,9 @@ class AutoPostCreditsQueue(context: Context) {
         synchronized(LOCK) { write(LinkedHashSet(read()).apply { addAll(stableIds) }) }
     }
 
+    /** How many films are waiting - for the "search markers?" offer. */
+    fun count(): Int = synchronized(LOCK) { read().size }
+
     fun peek(): String? = synchronized(LOCK) { read().firstOrNull() }
 
     fun remove(stableId: String) {
