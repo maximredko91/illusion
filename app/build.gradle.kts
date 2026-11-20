@@ -246,6 +246,9 @@ dependencies {
     implementation(libs.androidx.media3.ui)
     implementation(libs.androidx.media3.session)
     implementation(libs.androidx.media3.cast)
+    // On-device text recognition (bundled Latin model, no network): the credits search tells
+    // credits from scenes by whether a frame is full of words - see data/credits.
+    implementation(libs.mlkit.text.recognition)
     implementation(libs.androidx.media3.effect)
     implementation(libs.androidx.media3.datasource)
 

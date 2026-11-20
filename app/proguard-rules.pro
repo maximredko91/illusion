@@ -34,3 +34,6 @@
     java.nio.ByteBuffer data;
     long decoderPrivate;
 }
+
+# ML Kit text recognition (credits search). Its component lookup returned null under R8 without this.
+-keep class com.google.mlkit.** { *; }

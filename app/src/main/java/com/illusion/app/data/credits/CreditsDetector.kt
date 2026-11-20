@@ -11,6 +11,11 @@ import com.illusion.app.data.repository.SmbSourceRepository
 import com.illusion.app.data.scan.SmbMediaDataSource
 import com.illusion.app.data.smb.SmbClient
 import com.illusion.app.domain.model.PostCreditsScene
+import com.google.android.gms.tasks.Tasks
+import com.google.mlkit.vision.common.InputImage
+import com.google.mlkit.vision.text.TextRecognition
+import com.google.mlkit.vision.text.TextRecognizer
+import com.google.mlkit.vision.text.latin.TextRecognizerOptions
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -80,37 +85,48 @@ class CreditsDetector(
             }
         }
 
-    /** One frame every [STEP_MS] over the last [windowMs] of the file; null if interrupted. */
+    /** What one frame looks like: mostly black, and how many words the text recogniser read in it. */
+    private class Look(val black: Boolean, val words: Int)
+
+    /**
+     * One frame every [STEP_MS] over the last [windowMs] of the file; null if interrupted. With a
+     * [recognizer] the frames are taken large enough for the roll's small print to be read.
+     */
     private fun sampleTail(
         retriever: MediaMetadataRetriever,
         durationMs: Long,
         windowMs: Long,
+        recognizer: TextRecognizer?,
         onProgress: (Float) -> Unit,
         isCancelled: () -> Boolean
-    ): List<FrameSample>? {
-        val samples = ArrayList<FrameSample>()
+    ): List<Pair<Long, Look>>? {
+        val looks = ArrayList<Pair<Long, Look>>()
         var timeMs = durationMs - windowMs
         while (timeMs < durationMs - 1000) {
             if (isCancelled() || PlaybackActivity.isActive) return null
             // Sync frames only on the coarse pass: decoding from the previous keyframe for every
             // sample would multiply the work, and a frame a second or two off is fine at this step.
-            classify(retriever, timeMs, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)?.let { samples += FrameSample(timeMs, it) }
+            look(retriever, timeMs, MediaMetadataRetriever.OPTION_CLOSEST_SYNC, recognizer)?.let { looks += timeMs to it }
             timeMs += STEP_MS
             onProgress(1f - (durationMs - timeMs).coerceAtLeast(0).toFloat() / windowMs)
         }
-        // 'C' credit-like, '.' picture, one character per sample - the whole story of a scan at a
-        // glance when a title comes out wrong.
-        Log.i(TAG, "window ${windowMs / 1000} s, ${samples.size} frames: " + samples.joinToString("") { if (it.creditLike) "C" else "." })
-        return samples
+        // One character per sample - the whole story of a scan at a glance when a title comes out
+        // wrong. 'C' mostly black, '.' picture; then the word counts as base-36 digits (z = 35+).
+        Log.i(TAG, "window ${windowMs / 1000} s, ${looks.size} frames: " + looks.joinToString("") { if (it.second.black) "C" else "." })
+        if (recognizer != null) {
+            Log.i(TAG, "words: " + looks.joinToString("") { Character.forDigit(it.second.words.coerceAtMost(35), 36).toString() })
+        }
+        return looks
     }
 
     private fun scanEpisode(retriever: MediaMetadataRetriever, isCancelled: () -> Boolean): Long? {
         val durationMs = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: return null
         val windowMs = minOf(EPISODE_WINDOW_MS, durationMs * 3 / 10)
-        val samples = sampleTail(retriever, durationMs, windowMs, {}, isCancelled) ?: return null
+        val samples = sampleTail(retriever, durationMs, windowMs, null, {}, isCancelled)
+            ?.map { (timeMs, look) -> FrameSample(timeMs, look.black) } ?: return null
         val coarse = findEpisodeCreditsStart(samples, durationMs) ?: return null
         val previousMs = samples.lastOrNull { it.timeMs < coarse }?.timeMs ?: coarse
-        return refine(retriever, previousMs, coarse, upperIsCredit = true, isCancelled)?.second
+        return refine(retriever, previousMs, coarse, upperIsCredit = true, null, isCancelled)?.second
     }
 
     private fun scan(retriever: MediaMetadataRetriever, onProgress: (Float) -> Unit, isCancelled: () -> Boolean): CreditsScanOutcome {
@@ -118,45 +134,67 @@ class CreditsDetector(
             ?: return CreditsScanOutcome.NotFound
         if (durationMs < MIN_DURATION_MS) return CreditsScanOutcome.NotFound
         val windowMs = minOf(MAX_WINDOW_MS, durationMs * 3 / 10)
-        val samples = sampleTail(retriever, durationMs, windowMs, onProgress, isCancelled)
-            ?: return CreditsScanOutcome.Interrupted
+        // A device where the recogniser can't be created still gets the search by blackness.
+        val recognizer = runCatching { TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS) }
+            .onFailure { Log.w(TAG, "no text recogniser", it) }.getOrNull()
+        try {
+            val looks = sampleTail(retriever, durationMs, windowMs, recognizer, onProgress, isCancelled)
+                ?: return CreditsScanOutcome.Interrupted
 
-        val coarse = findCreditsLayout(samples, durationMs) ?: return CreditsScanOutcome.NotFound
+            // Credits are frames full of words; a scene has next to none. That reads coloured and
+            // animated titles as titles and a dark scene as a scene, which "mostly black" gets
+            // the wrong way round both times (Eternals: the first scene was lost inside the
+            // "credits" and the titles before it passed for the film). Blackness stays as the
+            // fallback for when the words show no roll at all - print too small to read, a
+            // script the Latin model doesn't know.
+            val byText = recognizer?.let {
+                findCreditsLayout(looks.map { (timeMs, look) -> FrameSample(timeMs, look.words >= MIN_CREDIT_WORDS) }, durationMs)
+            }
+            val samples = looks.map { (timeMs, look) ->
+                FrameSample(timeMs, if (byText != null) look.words >= MIN_CREDIT_WORDS else look.black)
+            }
+            val coarse = byText ?: findCreditsLayout(samples, durationMs) ?: return CreditsScanOutcome.NotFound
+            val refineWith = recognizer.takeIf { byText != null }
+            Log.i(TAG, if (byText != null) "layout by text" else "layout by blackness")
 
-        // Each boundary is only known to the sampling step; narrow it with a few exact frames.
-        fun previousSampleMs(boundaryMs: Long) = samples.lastOrNull { it.timeMs < boundaryMs }?.timeMs ?: boundaryMs
-        val creditsStartMs = refine(retriever, previousSampleMs(coarse.creditsStartMs), coarse.creditsStartMs, upperIsCredit = true, isCancelled)
-            ?.second ?: return CreditsScanOutcome.Interrupted
-        // A scene's sound often starts before its picture: the music fades and a voice-over begins
-        // over the still-black screen. On the first film this was tried on, that was 15 seconds of
-        // narration before the first frame - invisible to a search that only looks at pictures. So
-        // every scene start is moved back by a fixed lead-in (20 s at first; cut to 5 after Eternals,
-        // where the picture start was exact and the user got 20 s of roll): a little credits music is a
-        // cheap price for never cutting into the scene itself. Never back past the credits start or
-        // the previous scene's end.
-        var earliestMs = creditsStartMs
-        val scenes = coarse.scenes.map { scene ->
-            // The LOWER bound of the bisect (the last frame still known to be credits).
-            val pictureStartMs = refine(retriever, previousSampleMs(scene.startMs), scene.startMs, upperIsCredit = false, isCancelled)
-                ?.first ?: return CreditsScanOutcome.Interrupted
-            val startMs = (pictureStartMs - SCENE_LEAD_IN_MS).coerceAtLeast(earliestMs)
-            earliestMs = scene.endMs ?: pictureStartMs
-            PostCreditsScene(startMs, scene.endMs)
+            // Each boundary is only known to the sampling step; narrow it with a few exact frames.
+            fun previousSampleMs(boundaryMs: Long) = samples.lastOrNull { it.timeMs < boundaryMs }?.timeMs ?: boundaryMs
+            val creditsStartMs = refine(retriever, previousSampleMs(coarse.creditsStartMs), coarse.creditsStartMs, upperIsCredit = true, refineWith, isCancelled)
+                ?.second ?: return CreditsScanOutcome.Interrupted
+            // A scene's sound often starts before its picture: the music fades and a voice-over
+            // begins over the still-black screen. On the first film this was tried on, that was 15
+            // seconds of narration before the first frame - invisible to a search that only looks
+            // at pictures. So every scene start is moved back by a fixed lead-in (20 s at first;
+            // cut to 5 after Eternals, where the picture start was exact and the user got 20 s of
+            // roll). Never back past the credits start or the previous scene's end.
+            var earliestMs = creditsStartMs
+            val scenes = coarse.scenes.map { scene ->
+                // The LOWER bound of the bisect (the last frame still known to be credits).
+                val pictureStartMs = refine(retriever, previousSampleMs(scene.startMs), scene.startMs, upperIsCredit = false, refineWith, isCancelled)
+                    ?.first ?: return CreditsScanOutcome.Interrupted
+                val startMs = (pictureStartMs - SCENE_LEAD_IN_MS).coerceAtLeast(earliestMs)
+                earliestMs = scene.endMs ?: pictureStartMs
+                PostCreditsScene(startMs, scene.endMs)
+            }
+            Log.i(TAG, "credits from $creditsStartMs ms, scenes: $scenes")
+            return CreditsScanOutcome.Found(CreditsLayout(creditsStartMs, scenes))
+        } finally {
+            runCatching { recognizer?.close() }
         }
-        Log.i(TAG, "credits from $creditsStartMs ms, scenes: $scenes")
-        return CreditsScanOutcome.Found(CreditsLayout(creditsStartMs, scenes))
     }
 
     /**
      * Bisects between [lowMs] and [highMs], where the frame at [highMs] is known to be credit-like
-     * or not ([upperIsCredit]) and the one at [lowMs] the opposite. Returns the narrowed
-     * (low, high) pair, or null if the scan was interrupted.
+     * or not ([upperIsCredit]) and the one at [lowMs] the opposite. Credit-like means words when a
+     * [recognizer] is given (the layout was found by text), blackness otherwise. Returns the
+     * narrowed (low, high) pair, or null if the scan was interrupted.
      */
     private fun refine(
         retriever: MediaMetadataRetriever,
         lowMs: Long,
         highMs: Long,
         upperIsCredit: Boolean,
+        recognizer: TextRecognizer?,
         isCancelled: () -> Boolean
     ): Pair<Long, Long>? {
         var low = lowMs
@@ -165,20 +203,24 @@ class CreditsDetector(
             if (isCancelled() || PlaybackActivity.isActive) return null
             if (high - low < 1000) return low to high
             val middle = (low + high) / 2
-            val creditLike = classify(retriever, middle, MediaMetadataRetriever.OPTION_CLOSEST) ?: return low to high
+            val look = look(retriever, middle, MediaMetadataRetriever.OPTION_CLOSEST, recognizer) ?: return low to high
+            val creditLike = if (recognizer != null) look.words >= MIN_CREDIT_WORDS else look.black
             if (creditLike == upperIsCredit) high = middle else low = middle
         }
         return low to high
     }
 
     /** Null when the retriever has no frame for that time (past the last frame, a decode error). */
-    private fun classify(retriever: MediaMetadataRetriever, timeMs: Long, option: Int): Boolean? {
+    private fun look(retriever: MediaMetadataRetriever, timeMs: Long, option: Int, recognizer: TextRecognizer?): Look? {
+        // Small is enough to judge blackness; reading the roll's print needs a real frame.
+        val width = if (recognizer != null) TEXT_FRAME_WIDTH else FRAME_WIDTH
+        val height = if (recognizer != null) TEXT_FRAME_HEIGHT else FRAME_HEIGHT
         val frame = runCatching {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
-                retriever.getScaledFrameAtTime(timeMs * 1000, option, FRAME_WIDTH, FRAME_HEIGHT)
+                retriever.getScaledFrameAtTime(timeMs * 1000, option, width, height)
             } else {
                 retriever.getFrameAtTime(timeMs * 1000, option)?.let { original ->
-                    original.scale(FRAME_WIDTH, FRAME_HEIGHT).also { if (it !== original) original.recycle() }
+                    original.scale(width, height).also { if (it !== original) original.recycle() }
                 }
             }
         }.getOrNull() ?: return null
@@ -191,9 +233,15 @@ class CreditsDetector(
         }
         val pixels = IntArray(readable.width * readable.height)
         readable.getPixels(pixels, 0, readable.width, 0, 0, readable.width, readable.height)
-        val creditLike = isCreditLikeFrame(pixels, readable.width, readable.height)
+        val black = isCreditLikeFrame(pixels, readable.width, readable.height)
+        // Words of two letters or more: stray marks the recogniser makes out of scenery don't count.
+        val words = if (recognizer == null) 0 else runCatching {
+            Tasks.await(recognizer.process(InputImage.fromBitmap(readable, 0))).textBlocks.sumOf { block ->
+                block.lines.sumOf { line -> line.elements.count { element -> element.text.count(Char::isLetter) >= 2 } }
+            }
+        }.onFailure { Log.w(TAG, "text recognition failed", it) }.getOrDefault(0)
         readable.recycle()
-        return creditLike
+        return Look(black, words)
     }
 
     private companion object {
@@ -219,5 +267,9 @@ class CreditsDetector(
 
         const val FRAME_WIDTH = 160
         const val FRAME_HEIGHT = 90
+
+        /** Frame size for reading text: at 160x90 the roll's small print is a grey smear. */
+        const val TEXT_FRAME_WIDTH = 640
+        const val TEXT_FRAME_HEIGHT = 360
     }
 }

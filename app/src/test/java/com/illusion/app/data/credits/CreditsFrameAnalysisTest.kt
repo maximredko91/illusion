@@ -52,6 +52,24 @@ class CreditsFrameAnalysisTest {
     }
 
     @Test
+    fun wordCountsReadColouredTitlesAndADarkSceneTheRightWayRound() {
+        // Words per frame over the last 25 minutes of Eternals, as logged on the device (base 36,
+        // z = 35+): coloured titles, a dark mid-credits scene, the roll, a second scene, end cards.
+        // By blackness the first scene was lost; by words both come out where the user says they are.
+        val words = "000000000000000000000000000000000000000003000000000000000000000080000000000000002000000000050000000010000020" +
+            "000000000000000000000000000000000000e7857186476554202233222533333100060000000000000000000000057354" +
+            "z".repeat(70) + "dz000000000000000570ztut"
+        val samples = words.mapIndexed { index, char -> FrameSample(index * STEP, Character.digit(char, 36) >= MIN_CREDIT_WORDS) }
+        val layout = findCreditsLayout(samples, words.length * STEP)
+        assertNotNull(layout)
+        assertEquals(144 * STEP, layout!!.creditsStartMs)
+        assertEquals(
+            listOf(PostCreditsScene(173 * STEP, 201 * STEP), PostCreditsScene(278 * STEP, 296 * STEP)),
+            layout.scenes
+        )
+    }
+
+    @Test
     fun logoInsideTheCreditsIsNotAScene() {
         // two bright samples (10 s) in the middle of the roll - shorter than a scene
         val layout = layout(".".repeat(6) + "C".repeat(20) + ".." + "C".repeat(20))

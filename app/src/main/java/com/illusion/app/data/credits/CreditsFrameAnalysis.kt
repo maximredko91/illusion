@@ -152,6 +152,13 @@ private fun runsOf(flags: BooleanArray, value: Boolean): List<Pair<Int, Int>> {
  * whose black comes out as 16 rather than 0. */
 private const val BLACK_LUMA = 20
 
+/**
+ * How many words make a frame a credits frame when the search goes by text. Two, not more: an
+ * animated title card often carries a single name plus a role, and the roll itself reads as
+ * dozens. Lone frames of scenery with a sign in them are dealt with by the run lengths below.
+ */
+const val MIN_CREDIT_WORDS = 2
+
 /** A dark stretch shorter than this is a fade or a night shot, not a piece of the credits. */
 const val MIN_CREDIT_RUN_MS = 20_000L
 
